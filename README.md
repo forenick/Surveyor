@@ -150,4 +150,4 @@ Open an [issue](../../issues/new/choose). For bugs, add your Surveyor version an
 ### Credits
 Made by [forenick](https://github.com/forenick).
 
-I use AI tools to help me with reviewing my code, clean up the messy logic, and speed up some setup for larger features. Everything is still reviewed, tested and tweaked by me to make sure it runs smoothly! :)
+AI Disclosure: I use AI tools to help me with reviewing my code and clean up messy logic. 
