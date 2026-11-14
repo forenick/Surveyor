@@ -273,6 +273,7 @@ public final class LiveHud {
 		Totals thisShaft = shaft != null ? Totals.of(shaft, patterns) : lastShaft;
 		Double shaftCoins = shaft != null ? MoneyStats.net(money.live(shaft)) : lastShaftCoins;
 		data = HudData.live(totals, allTime, thisShaft, journal.spawnTimerMillis(now), shaft, now, ShaftNames.defaults())
+				.lastShaft(lastEntry, ShaftNames.defaults())
 				.money(new HudData.Money(shaftCoins, sessionCoins, allTimeCoins, coinsUpTo))
 				.game(game(client, now));
 		prepared = null;

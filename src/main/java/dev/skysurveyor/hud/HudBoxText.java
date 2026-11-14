@@ -2,24 +2,26 @@ package dev.skysurveyor.hud;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import dev.skysurveyor.hud.HudExpr.Node;
+import dev.skysurveyor.hud.HudExpr.Val;
 import dev.skysurveyor.hud.HudLayout.Box;
 import dev.skysurveyor.hud.HudLayout.Line;
 import dev.skysurveyor.hud.HudValue.Range;
 
 public final class HudBoxText {
-	private static final String TITLE_STYLE = "§e§l";
-	private static final Pattern TAG = Pattern.compile("\\{([a-z_]+)((?::[a-z_]+)*)}");
-	private static final Pattern ANY_TAG = Pattern.compile("\\{[^{}]*}");
+	// anything in { }, HudExpr reads it
+	private static final Pattern TAG = Pattern.compile("\\{([^{}]*)}");
 	// &k left out on purpose
 	private static final String STYLES = "lonm";
 	// display choice, 3 HUD refreshes
 	private static final long WAIT_STEP_MILLIS = 600;
 	// unknown § codes, font skips them. text between = measured, not drawn
-	static final String HIDE_START = "§\uE000";
-	static final String HIDE_END = "§\uE001";
+	static final String HIDE_START = "§";
+	static final String HIDE_END = "§";
 	private static final Pattern HIDDEN = Pattern.compile(Pattern.quote(HIDE_START) + ".*?" + Pattern.quote(HIDE_END));
 
 	private HudBoxText() {
@@ -29,8 +31,9 @@ public final class HudBoxText {
 	public static List<String> lines(Box box, HudData data, boolean example) {
 		List<String> lines = new ArrayList<>();
 		if (box.showTitle) {
-			String title = tags(box.title, data, example).strip();
-			if (!title.isEmpty()) lines.add(TITLE_STYLE + title);
+			String style = box.titleBoldOrDefault() ? "§l" : "";
+			String title = tags(box.title, data, example, box.titleColorOrDefault(), style).strip();
+			if (!title.isEmpty()) lines.add("§" + box.titleColorOrDefault() + style + title);
 		}
 		for (Line line : box.lines) {
 			if (!line.shown) continue;
@@ -49,24 +52,64 @@ public final class HudBoxText {
 	private static String rawLine(Box box, Line line, HudData data, boolean example) {
 		HudValue hudValue = line.hudValue();
 		if (hudValue == null) return null;
-		String rule = HudColors.color(line, data, example);
-		if (line.advanced && line.text != null) return free(box, line, rule, data, example);
+		if (line.advancedMode()) {
+			HudExpr.Values values = values(data, example);
+			Map<String, String> colors = HudRules.colors(HudRules.parse(line.advancedRules()), values);
+			return free(box, line, line.advancedText(box), colors, data, example);
+		}
 		String label = "§" + (line.labelColor != null ? line.labelColor : box.labelColor) + (box.labelBold ? "§l" : "");
-		String value = "§" + (rule != null ? rule : line.valueColor != null ? line.valueColor : box.valueColor)
-				+ (box.valueBold ? "§l" : "");
-		return label + line.prefix + value + text(hudValue, line.range, line.format, data, example);
+		String color = line.valueColor != null ? line.valueColor : box.valueColor;
+		String styles = box.valueBold ? "§l" : "";
+		Range range = line.range();
+		String prefix = range == Range.SHAFT && !data.inShaft() ? lastShaft(line.prefix) : line.prefix;
+		String text = line.dash() && !data.inShaft() && hudValue.followsShaft(range) ? HudFormat.MISSING
+				: text(hudValue, range, line.format, data, example);
+		return label + prefix + "§" + color + styles + paint(text, color, styles);
+	}
+
+	static HudExpr.Values values(HudData data, boolean example) {
+		return example ? data::getOrExample : data::get;
+	}
+
+	// shaft range shows the last one outside, labels say so
+	static String lastShaft(String text) {
+		return text.replace("This shaft", "Last shaft").replace("this shaft", "last shaft").replace("THIS SHAFT", "LAST SHAFT");
+	}
+
+	// styles kept, a colour code resets them
+	static String paint(String text, String color, String styles) {
+		if (text.indexOf(HudData.PAINT) < 0 && text.indexOf(HudData.BACK) < 0) return text;
+		StringBuilder out = new StringBuilder();
+		for (int i = 0; i < text.length(); i++) {
+			char c = text.charAt(i);
+			if (c == HudData.PAINT && i + 1 < text.length()) {
+				out.append('§').append(text.charAt(++i)).append(styles);
+			} else if (c == HudData.BACK) {
+				out.append('§').append(color).append(styles);
+			} else {
+				out.append(c);
+			}
+		}
+		return out.toString();
 	}
 
 	static String tags(String text, HudData data, boolean example) {
+		return tags(text, data, example, "e", "§l");
+	}
+
+	// box titles. color + styles = the title's, for painted values. missing = left out
+	static String tags(String text, HudData data, boolean example, String color, String styles) {
 		if (text.indexOf('{') < 0) return text;
 		Matcher matcher = TAG.matcher(text);
 		StringBuilder out = new StringBuilder();
 		while (matcher.find()) {
-			Tag tag = Tag.parse(matcher.group(1), matcher.group(2));
+			HudExpr.Parsed parsed = parseTag(matcher.group(1));
 			String replacement = matcher.group();
-			if (tag != null) {
-				Object v = value(tag.value(), tag.range(), data, example);
-				replacement = v == null ? "" : formatted(tag.value(), tag.range(), tag.format(), v);
+			if (parsed.error() == null && parsed.node() instanceof Val v && value(v.value(), v.range(), data, example) == null) {
+				replacement = "";
+			} else if (parsed.error() == null) {
+				String shown = tagText(parsed.node(), data, example);
+				if (shown != null) replacement = shown.equals(HudFormat.MISSING) ? "" : paint(shown, color, styles);
 			}
 			matcher.appendReplacement(out, Matcher.quoteReplacement(replacement));
 		}
@@ -74,14 +117,27 @@ public final class HudBoxText {
 		return out.toString();
 	}
 
-	// &r = box label colour, &v = box value colour, unknown tags stay as typed
-	static String free(Box box, Line line, String rule, HudData data, boolean example) {
-		String text = line.text;
+	// one tag as shown. null = cant show it (text in maths), stays as typed
+	static String tagText(Node node, HudData data, boolean example) {
+		if (node instanceof Val v && (v.format() == null || HudFormat.names(v.value().kind()).contains(v.format()))) {
+			return text(v.value(), v.range(), HudExpr.index(v.value().kind(), v.format()), data, example);
+		}
+		try {
+			HudExpr.Result r = HudExpr.eval(node, values(data, example));
+			if (r.type() != HudExpr.Type.TEXT && r.value() == null && r.waiting()) return waiting(data.now());
+			return HudExpr.text(r);
+		} catch (HudExpr.Error e) {
+			return null;
+		}
+	}
+
+	// &r = box label colour, &v = box value colour, unknown tags stay as typed. colors = rule key -> colour
+	static String free(Box box, Line line, String text, Map<String, String> colors, HudData data, boolean example) {
+		boolean shaftTag = false;
 		String color = box.labelColor;
 		StringBuilder styles = new StringBuilder(box.labelBold ? "l" : "");
 		StringBuilder out = new StringBuilder("§").append(color).append(codes(styles));
 		Matcher tags = TAG.matcher(text);
-		Range own = rule == null ? null : ruleRange(line);
 		int i = 0;
 		while (i < text.length()) {
 			char c = text.charAt(i);
@@ -118,12 +174,19 @@ public final class HudBoxText {
 				}
 			}
 			if (c == '{' && tags.region(i, text.length()).lookingAt()) {
-				Tag tag = Tag.parse(tags.group(1), tags.group(2));
-				if (tag != null) {
-					boolean colored = rule != null && tag.value() == line.hudValue() && tag.range() == own;
-					if (colored) out.append('§').append(rule).append(codes(styles));
-					out.append(tag.text(data, example));
-					if (colored) out.append('§').append(color).append(codes(styles));
+				HudExpr.Parsed parsed = parseTag(tags.group(1));
+				if (parsed.error() == null && !shaftTag) {
+					shaftTag = HudExpr.values(parsed.node()).stream().anyMatch(v -> v.range() == Range.SHAFT);
+				}
+				// outside a shaft w/ Outside "-"
+				boolean dash = parsed.error() == null && line.dash() && !data.inShaft() && followsShaft(parsed.node());
+				String shown = parsed.error() != null ? null : dash ? HudFormat.MISSING : tagText(parsed.node(), data, example);
+				if (shown != null) {
+					// a - gets no rule colour
+					String rule = shown.equals(HudFormat.MISSING) ? null : colors.get(HudExpr.key(parsed.node()));
+					if (rule != null) out.append('§').append(rule).append(codes(styles));
+					out.append(paint(shown, rule != null ? rule : color, codes(styles)));
+					if (rule != null) out.append('§').append(color).append(codes(styles));
 					i = tags.end();
 					continue;
 				}
@@ -131,56 +194,115 @@ public final class HudBoxText {
 			out.append(c);
 			i++;
 		}
-		return out.toString();
+		// values never say "this shaft", so the drawn line is safe to swap
+		return shaftTag && !data.inShaft() ? lastShaft(out.toString()) : out.toString();
 	}
 
-	public static List<String> unknownTags(String text) {
-		List<String> unknown = new ArrayList<>();
-		Matcher any = ANY_TAG.matcher(text);
+	static boolean followsShaft(Node node) {
+		return HudExpr.values(node).stream().anyMatch(v -> v.value().followsShaft(v.range()));
+	}
+
+	// no value in it = not a tag, old text had f.e. {5}
+	private static HudExpr.Parsed parseTag(String inner) {
+		HudExpr.Parsed parsed = HudExpr.parse(inner);
+		return parsed.error() == null && HudExpr.literal(parsed.node()) ? new HudExpr.Parsed(null, "no value in it") : parsed;
+	}
+
+	// {tag}: what's wrong, for the line page. text in maths counts too
+	public static List<String> problems(String text) {
+		List<String> problems = new ArrayList<>();
+		Matcher tags = TAG.matcher(text);
 		for (int i = 0; i < text.length(); i++) {
 			char c = text.charAt(i);
 			if (c == '&' && i + 1 < text.length() && escaped(text.charAt(i + 1))) {
 				i++;
-			} else if (c == '{' && any.region(i, text.length()).lookingAt()) {
-				Matcher tag = TAG.matcher(any.group());
-				if (!tag.matches() || Tag.parse(tag.group(1), tag.group(2)) == null) unknown.add(any.group());
-				i = any.end() - 1;
+			} else if (c == '{') {
+				if (!tags.region(i, text.length()).lookingAt()) {
+					problems.add(text.substring(i, Math.min(text.length(), i + 12)) + ": a { has no }");
+					break;
+				}
+				HudExpr.Parsed parsed = parseTag(tags.group(1));
+				String error = parsed.error();
+				if (error == null) {
+					try {
+						HudExpr.eval(parsed.node(), HudExpr.NONE);
+					} catch (HudExpr.Error e) {
+						error = e.getMessage();
+					}
+				}
+				if (error != null) problems.add(tags.group() + ": " + error);
+				i = tags.end() - 1;
 			}
 		}
-		return unknown;
+		return problems;
+	}
+
+	// tags as written, each once: values + maths a rule can colour
+	public static List<String> numberTags(String text) {
+		List<String> found = new ArrayList<>();
+		for (Node node : nodes(text)) {
+			try {
+				if (HudExpr.eval(node, HudExpr.NONE).type() == HudExpr.Type.TEXT) continue;
+			} catch (HudExpr.Error e) {
+				continue;
+			}
+			String plain = HudExpr.plain(node);
+			if (!found.contains(plain)) found.add(plain);
+		}
+		return found;
+	}
+
+	static List<Node> nodes(String text) {
+		List<Node> nodes = new ArrayList<>();
+		Matcher tags = TAG.matcher(text);
+		for (int i = 0; i < text.length(); i++) {
+			char c = text.charAt(i);
+			if (c == '&' && i + 1 < text.length() && escaped(text.charAt(i + 1))) {
+				i++;
+			} else if (c == '{' && tags.region(i, text.length()).lookingAt()) {
+				HudExpr.Parsed parsed = parseTag(tags.group(1));
+				if (parsed.error() == null) nodes.add(parsed.node());
+				i = tags.end() - 1;
+			}
+		}
+		return nodes;
 	}
 
 	private static boolean escaped(char next) {
 		return next == '&' || next == '{';
 	}
 
-	// a tag a colour rule on own can compare against
-	public static boolean isLimitTag(String text, HudValue own) {
-		Tag tag = numberTag(text);
-		return tag != null && HudColors.comparable(own, tag.value());
+	// whats in a whole "{...}", null = not one tag
+	static String unbrace(String text) {
+		Matcher matcher = TAG.matcher(text);
+		return matcher.matches() ? matcher.group(1) : null;
 	}
 
-	static Tag numberTag(String text) {
-		Matcher matcher = TAG.matcher(text.strip());
-		if (!matcher.matches()) return null;
-		Tag tag = Tag.parse(matcher.group(1), matcher.group(2));
-		return tag != null && tag.value().hasNumber() ? tag : null;
+	// a tag an old colour rule on own can compare against
+	public static boolean isLimitTag(String text, HudValue own) {
+		String inner = unbrace(text.strip());
+		if (inner == null) return false;
+		HudExpr.Parsed parsed = HudExpr.parse(inner);
+		return parsed.error() == null && parsed.node() instanceof Val v && v.value().hasNumber() && HudColors.comparable(own, v.value());
 	}
 
 	public static String tag(HudValue value, Range range, int format) {
-		return Tag.of(value, range, format);
+		StringBuilder tag = new StringBuilder("{").append(value.tag());
+		if (range != null && range != value.defaultRange()) tag.append(':').append(range.tagName());
+		if (format > 0 && format < HudFormat.names(value.kind()).size()) {
+			tag.append(':').append(HudFormat.names(value.kind()).get(format));
+		}
+		return tag.append('}').toString();
 	}
 
-	// free text: range of the first tag w/ the lines own value
+	// pre 0.23 custom text: range of the first tag w/ the lines own value
 	public static Range ruleRange(Line line) {
 		HudValue value = line.hudValue();
-		if (!line.advanced || line.text == null || value == null) return line.range;
-		Matcher tags = TAG.matcher(line.text);
-		while (tags.find()) {
-			Tag tag = Tag.parse(tags.group(1), tags.group(2));
-			if (tag != null && tag.value() == value) return tag.range();
+		if (!line.advanced || line.text == null || value == null) return line.range();
+		for (Node node : nodes(line.text)) {
+			if (node instanceof Val v && v.value() == value) return v.range();
 		}
-		return line.range;
+		return line.range();
 	}
 
 	// own colours as codes, box colours stay live (&v). label escaped, its typed as is
@@ -189,7 +311,7 @@ public final class HudBoxText {
 		String label = line.labelColor == null ? "" : "&" + line.labelColor + (box.labelBold ? "&l" : "");
 		String valueCode = line.valueColor == null ? "&v" : "&" + line.valueColor + (box.valueBold ? "&l" : "");
 		String prefix = line.prefix.replace("&", "&&").replace("{", "&{");
-		return label + prefix + valueCode + Tag.of(value, line.range, line.format);
+		return label + prefix + valueCode + tag(value, line.range(), line.format);
 	}
 
 	private static String codes(CharSequence styles) {
@@ -204,7 +326,7 @@ public final class HudBoxText {
 	}
 
 	// rates wait for 1 saved shaft + JournalStats.MIN_RATE_MILLIS
-	private static boolean rate(HudValue value, Range range) {
+	static boolean rate(HudValue value, Range range) {
 		return value == HudValue.SHAFTS_PER_HOUR || (range == Range.PER_HOUR && value.hasRange(range));
 	}
 
@@ -265,36 +387,5 @@ public final class HudBoxText {
 
 	public static String suffix(HudValue value, Range range) {
 		return range == Range.PER_HOUR ? "/h" : value.unit();
-	}
-
-	record Tag(HudValue value, Range range, int format) {
-		static Tag parse(String id, String options) {
-			HudValue value = HudValue.byId(id);
-			if (value == null) return null;
-			Range range = value.defaultRange();
-			int format = 0;
-			for (String option : options.split(":")) {
-				if (option.isEmpty()) continue;
-				Range r = Range.byTagName(option);
-				int f = HudFormat.names(value.kind()).indexOf(option);
-				if (value.hasRange(r)) range = r;
-				else if (f >= 0) format = f;
-				else return null;
-			}
-			return new Tag(value, range, format);
-		}
-
-		static String of(HudValue value, Range range, int format) {
-			StringBuilder tag = new StringBuilder("{").append(value.id());
-			if (range != null && range != value.defaultRange()) tag.append(':').append(range.tagName());
-			if (format > 0 && format < HudFormat.names(value.kind()).size()) {
-				tag.append(':').append(HudFormat.names(value.kind()).get(format));
-			}
-			return tag.append('}').toString();
-		}
-
-		String text(HudData data, boolean example) {
-			return HudBoxText.text(value, range, format, data, example);
-		}
 	}
 }

@@ -85,11 +85,16 @@ public final class HudLayout {
 		public boolean shown = true;
 		public int format;
 		public Range range;
-		// text kept when switched off
+		// mode, Easy = false. text + colorRules kept in Easy
 		public boolean advanced;
 		public String text;
+		// pre 0.23, read as typed rules till the line is edited
 		public boolean readyRule;
 		public List<ColorRule> rules;
+		// null = false, shaft values show the last shaft outside one
+		public Boolean dashOutside;
+		// typed rules, 1 a line. null = never set (old rules or the preset)
+		public List<String> colorRules;
 
 		public Line() {
 		}
@@ -100,14 +105,77 @@ public final class HudLayout {
 
 		Line(HudValue value, String prefix, boolean shown, int format) {
 			this.value = value.id();
-			this.prefix = prefix == null ? value.defaultPrefix() : prefix;
+			this.range = value.defaultRange();
+			this.prefix = prefix == null ? value.defaultPrefix(range) : prefix;
 			this.shown = shown;
 			this.format = format;
-			this.range = value.defaultRange();
+			// not in Line(), gson uses that one
+			this.valueColor = value.defaultColor();
+		}
+
+		// null in old files = the default range, kept null so the file stays the same
+		public Range range() {
+			HudValue value = hudValue();
+			if (value == null) return range;
+			return value.hasRange(range) ? range : value.defaultRange();
+		}
+
+		public boolean dash() {
+			return Boolean.TRUE.equals(dashOutside);
+		}
+
+		// a label nobody typed follows the range
+		public void setRange(Range range) {
+			HudValue value = hudValue();
+			if (value != null && (value.defaultPrefix(range()).equals(prefix) || value.oldDefaultPrefix(prefix))) {
+				prefix = value.defaultPrefix(range);
+			}
+			this.range = range;
 		}
 
 		public HudValue hudValue() {
 			return HudValue.byId(value);
+		}
+
+		public boolean advancedMode() {
+			return advanced || oldRules();
+		}
+
+		// rules from before 0.23 on an Easy line: shows as Advanced, looks the same
+		private boolean oldRules() {
+			return !advanced && colorRules == null && (rules != null || readyRule);
+		}
+
+		public String advancedText(Box box) {
+			return oldRules() || text == null ? HudBoxText.basicText(box, this) : text;
+		}
+
+		public List<String> advancedRules() {
+			if (colorRules != null) return colorRules;
+			if (rules == null && !readyRule) return List.of();
+			return HudRules.fromOld(hudValue(), HudBoxText.ruleRange(this), rules, readyRule);
+		}
+
+		// 1st edit on the line page writes the typed form, just opening it changes nothing
+		public void settle(Box box) {
+			boolean old = oldRules();
+			String start = advancedText(box);
+			// preset only when turning Advanced on, old advanced lines had none
+			List<String> typed = colorRules != null || rules != null || readyRule ? advancedRules()
+					: advancedMode() ? List.of() : HudRules.preset(hudValue());
+			text = start;
+			colorRules = new ArrayList<>(typed);
+			rules = null;
+			readyRule = false;
+			if (old) advanced = true;
+		}
+
+		// Reset: the Easy look + the preset rules
+		public void resetAdvanced(Box box) {
+			text = HudBoxText.basicText(box, this);
+			colorRules = new ArrayList<>(HudRules.preset(hudValue()));
+			rules = null;
+			readyRule = false;
 		}
 	}
 
@@ -152,6 +220,18 @@ public final class HudLayout {
 		Float x;
 		Float y;
 		Visibility visibility;
+		// null = yellow, nulls stay out of the file
+		public String titleColor;
+		// null = bold
+		public Boolean titleBold;
+
+		public String titleColorOrDefault() {
+			return titleColor != null ? titleColor : "e";
+		}
+
+		public boolean titleBoldOrDefault() {
+			return titleBold == null || titleBold;
+		}
 
 		// shaft wins over mines
 		public boolean visible(boolean inMines, boolean inShaft) {
@@ -201,10 +281,10 @@ public final class HudLayout {
 	public static List<Preset> presets() {
 		return List.of(
 				new Preset("Spawn", "Spawn timer and average spawn", HudLayout::spawnBox),
-				new Preset("Session", "Shafts, shafts per hour, powder and Fine", HudLayout::sessionBox),
+				new Preset("Session", "Shafts, shafts per hour, powder and corpse Fine", HudLayout::sessionBox),
 				new Preset("Current shaft", "Time inside, corpses, cold and campfires", HudLayout::shaftBox),
-				new Preset("All-time totals", "Shafts, powder and Fine, all-time", HudLayout::allTimeBox),
-				new Preset("Money", "Coins this shaft, this session, per hour and per shaft", HudLayout::moneyBox),
+				new Preset("All-time totals", "Shafts, powder and corpse Fine, all-time", HudLayout::allTimeBox),
+				new Preset("Money", "Coins this shaft, this session, per hour and avg per shaft", HudLayout::moneyBox),
 				new Preset("Performance", "FPS, ping and TPS", HudLayout::performanceBox));
 	}
 
@@ -239,20 +319,18 @@ public final class HudLayout {
 	private static Box allTimeBox() {
 		Box box = box("all_time", "All-time", true, true, Background.DARK, Align.LEFT, Anchor.START, 0, Anchor.MIDDLE, 0);
 		for (HudValue value : List.of(HudValue.SESSION_SHAFTS, HudValue.SESSION_POWDER, HudValue.SESSION_CORPSE_FINE)) {
-			Line line = new Line(value);
-			line.range = Range.ALL_TIME;
-			box.lines.add(line);
+			// box title says all-time already
+			box.lines.add(rangeLine(value, value.defaultPrefix(), Range.ALL_TIME));
 		}
 		return box;
 	}
 
 	private static Box moneyBox() {
 		Box box = box("money", "Money", true, true, Background.DARK, Align.LEFT, Anchor.END, 0, Anchor.MIDDLE, 0);
-		box.valueColor = "6";
 		box.lines.add(rangeLine(HudValue.COINS, "This shaft: ", Range.SHAFT));
 		box.lines.add(rangeLine(HudValue.COINS, "Session: ", Range.SESSION));
 		box.lines.add(rangeLine(HudValue.COINS, "Per hour: ", Range.PER_HOUR));
-		box.lines.add(rangeLine(HudValue.COINS_PER_SHAFT, "Per shaft: ", Range.SESSION));
+		box.lines.add(rangeLine(HudValue.COINS_PER_SHAFT, "Avg per shaft: ", Range.SESSION));
 		return box;
 	}
 
@@ -321,6 +399,7 @@ public final class HudLayout {
 		if (box.align == null) box.align = Align.LEFT;
 		if (!isColor(box.labelColor)) box.labelColor = "7";
 		if (!isColor(box.valueColor)) box.valueColor = "f";
+		if (box.titleColor != null && !isColor(box.titleColor)) box.titleColor = null;
 		box.scale = clamp(box.scale == 0 ? 1 : box.scale, MIN_SCALE, MAX_SCALE);
 		if (box.anchorX == null) box.anchorX = Anchor.START;
 		if (box.anchorY == null) box.anchorY = Anchor.START;
@@ -329,14 +408,14 @@ public final class HudLayout {
 		box.lines.removeIf(line -> line == null || line.hudValue() == null);
 		for (Line line : box.lines) {
 			HudValue value = line.hudValue();
-			if (line.prefix == null) line.prefix = value.defaultPrefix();
 			if (!isColor(line.labelColor)) line.labelColor = null;
 			if (!isColor(line.valueColor)) line.valueColor = null;
 			int formats = HudFormat.options(value.kind()).size();
 			if (line.format < 0 || line.format >= formats) line.format = 0;
 			// pre-range files have none, were all session values
-			if (!value.hasRange(line.range)) line.range = value.defaultRange();
-			if (HudColors.readyRule(value) == null) line.readyRule = false;
+			if (line.range != null && !value.hasRange(line.range)) line.range = value.defaultRange();
+			if (line.prefix == null) line.prefix = value.defaultPrefix(line.range());
+			if (HudRules.preset(value).isEmpty()) line.readyRule = false;
 			if (line.rules != null) {
 				line.rules.removeIf(rule -> rule == null);
 				for (ColorRule rule : line.rules) {
@@ -348,6 +427,7 @@ public final class HudLayout {
 				if (line.rules.isEmpty() || !value.hasNumber()) line.rules = null;
 			}
 			if (line.advanced && line.text == null) line.advanced = false;
+			if (line.colorRules != null) line.colorRules.removeIf(rule -> rule == null);
 		}
 	}
 

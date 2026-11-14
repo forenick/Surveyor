@@ -136,6 +136,8 @@ public final class HudFormat {
 	}
 
 	private static String time(long seconds, int format) {
+		// -0:13, not 0:-13
+		if (seconds < 0) return "-" + time(-seconds, format);
 		return switch (format) {
 			case 1 -> seconds >= 60 ? seconds / 60 + "m " + seconds % 60 + "s" : seconds + "s";
 			case 2 -> seconds + "s";

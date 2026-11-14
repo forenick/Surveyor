@@ -2,6 +2,42 @@
 
 [SemVer](https://semver.org). Betas are `X.Y.Z-beta.N` (GitHub pre-releases).
 
+## 0.23.0-beta.2 (2026-11-14)
+- Each HUD line has an Easy and an Advanced mode.
+- Advanced: type the whole line with colours, values and maths, f.e. `{coins / shafts}`.
+- Advanced lines can show several values.
+- Colour rules are typed, one a line, f.e. `{cold} <= -80 &c`, with maths on both sides.
+- Colour rules can use > >= < <= = and !=.
+- Value list beside the line page: click a value, option, colour or sign to type it.
+- Short value names in text: `{spawn}`, `{avg_spawn}`, `{shafts}`, `{cold}` and more. Old names still work.
+- + Rule types a rule for the first value in the text.
+- Mistakes in the text or rules say what's wrong.
+- Numbers in rules can be typed as 1,5M, 150k, 90s or 1m 30s.
+- Turning Advanced on starts with that line's ready-made rules, like Cold yellow at -50 and red at -80.
+- Old lines with colour rules show as Advanced and look the same.
+- Shaft lines show the last shaft while you're outside one: shaft type, time inside, corpses, Cold, campfires.
+- "Outside" choice on shaft lines: last shaft or -.
+- New HUD lines get their own value colour: coins gold, powder and Cold aqua, corpse Fine blue, campfires gold.
+- Corpse types and the shaft type show in their own colours on the HUD.
+- New lines and presets have no colour rules on.
+- Money preset has white boxes with gold coin lines.
+- Box titles can have their own colour and bold.
+- Lines with their own colour show a colour square in the box's line list.
+- "All lines" next to the box's Labels or Values colour puts it on every line.
+- Colour menu can set a line back to its value's default colour.
+- A line's label follows its range unless you typed your own, f.e. "All-time coins".
+- Clearer HUD labels: Avg coins per shaft, Corpse Fine, Time inside, Clock.
+- All-time Avg coins per shaft says "All-time avg coins/shaft:".
+- Powder is now "Glacite Powder from shafts", labelled "Shaft powder".
+- "Session" in Add line is now "Totals".
+- Average spawn has Shaft, Session and All-time ranges.
+- No format choice for FPS, Ping and Campfires.
+- Negative times show as -0:13.
+- Onyx shows in gray instead of dark gray.
+- Hovering a value in Add line explains what it counts.
+- Help card behind the ? in the Edit HUD toolbar.
+- Edit HUD is lighter while a line page is open.
+
 ## 0.23.0-beta.1 (2026-11-14)
 - Tungsten mined in Tungsten shafts and Umber in Umber shafts count as Mined metal.
 - Metal tier setting: Enchanted, Tungsten or Umber, or Refined.

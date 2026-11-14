@@ -14,11 +14,12 @@ public final class ShaftNames {
 	// littlefoots den, LITT_L
 	public static final String LITTLEFOOT = "L";
 
-	private static final Pattern COLOR = Pattern.compile("\\s*#([0-9A-Fa-f]{6})(?![0-9A-Za-z])");
+	private static final Pattern COLOR = Pattern.compile("\\s*#([0-9A-Fa-f]{6})(?:\\s+&([0-9a-f]))?(?![0-9A-Za-z])");
 
 	private static ShaftNames defaults;
 
-	private record Type(String name, int rgb) {
+	// hudColor null = none given
+	private record Type(String name, int rgb, Character hudColor) {
 	}
 
 	private final Map<String, Type> types = new HashMap<>();
@@ -34,11 +35,15 @@ public final class ShaftNames {
 			int comment = name.indexOf('#');
 			if (comment >= 0) name = name.substring(0, comment);
 			int rgb = DEFAULT_RGB;
+			Character hudColor = null;
 			if (comma >= 0) {
 				Matcher color = COLOR.matcher(value.substring(comma + 1));
-				if (color.lookingAt()) rgb = Integer.parseInt(color.group(1), 16);
+				if (color.lookingAt()) {
+					rgb = Integer.parseInt(color.group(1), 16);
+					if (color.group(2) != null) hudColor = color.group(2).charAt(0);
+				}
 			}
-			types.put(line.substring(0, eq).strip(), new Type(name.strip(), rgb));
+			types.put(line.substring(0, eq).strip(), new Type(name.strip(), rgb, hudColor));
 		}
 	}
 
@@ -62,6 +67,12 @@ public final class ShaftNames {
 	public String name(String code) {
 		Type type = types.get(code);
 		return type == null ? code : type.name();
+	}
+
+	// § code for the HUD, null = none
+	public Character hudColor(String code) {
+		Type type = types.get(code);
+		return type == null ? null : type.hudColor();
 	}
 
 	public int rgb(String code) {

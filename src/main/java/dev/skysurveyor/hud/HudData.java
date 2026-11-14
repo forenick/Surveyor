@@ -30,11 +30,25 @@ public final class HudData {
 	private final Map<Key, Object> values = new HashMap<>();
 	// real but empty (zeros before the first shaft), editor shows examples
 	private final Set<Key> placeholders = new HashSet<>();
+	// private use chars, HudBoxText swaps them for § codes w/ the right styles
+	static final char PAINT = '\uE003';
+	static final char BACK = '\uE002';
+
 	private long now;
+	private boolean inShaft;
 	private SessionTotals session = SessionTotals.NONE;
 
 	public long now() {
 		return now;
+	}
+
+	public boolean inShaft() {
+		return inShaft;
+	}
+
+	// colour, then back to the value colour
+	static String paint(Character color, String text) {
+		return color == null ? text : PAINT + String.valueOf(color) + text + BACK;
 	}
 
 	public Object get(HudValue value, Range range) {
@@ -67,21 +81,37 @@ public final class HudData {
 		return this;
 	}
 
-	public record Totals(long shafts, long powder, double fine) {
+	// spawnMillis over timedSpawns shafts, for the avg
+	public record Totals(long shafts, long powder, double fine, long spawnMillis, long timedSpawns) {
 		public static final Totals NONE = new Totals(0, 0, 0);
 
+		public Totals(long shafts, long powder, double fine) {
+			this(shafts, powder, fine, 0, 0);
+		}
+
 		public Totals plus(Totals other) {
-			return new Totals(shafts + other.shafts, powder + other.powder, fine + other.fine);
+			return new Totals(shafts + other.shafts, powder + other.powder, fine + other.fine,
+					spawnMillis + other.spawnMillis, timedSpawns + other.timedSpawns);
+		}
+
+		public Long averageSpawn() {
+			return timedSpawns == 0 ? null : spawnMillis / timedSpawns;
 		}
 
 		public static Totals of(List<JournalEntry> entries, TextPatterns patterns) {
 			long powder = 0;
 			double fine = 0;
+			long spawn = 0;
+			long timed = 0;
 			for (JournalEntry entry : entries) {
 				powder += JournalStats.powder(entry);
 				fine += fine(entry.loots(), patterns);
+				if (entry.searchMillis() != null) {
+					spawn += entry.searchMillis();
+					timed++;
+				}
 			}
-			return new Totals(entries.size(), powder, fine);
+			return new Totals(entries.size(), powder, fine, spawn, timed);
 		}
 
 		public static Totals of(Shaft shaft, TextPatterns patterns) {
@@ -132,6 +162,9 @@ public final class HudData {
 			data.put(HudValue.SESSION_CORPSE_FINE, Range.SHAFT, thisShaft.fine());
 		}
 		data.put(HudValue.AVERAGE_SPAWN, session.averageSpawn());
+		data.put(HudValue.AVERAGE_SPAWN, Range.ALL_TIME, allTime.averageSpawn());
+		// spawn timer stops at the shafts own spawn while inside
+		if (shaft != null) data.put(HudValue.AVERAGE_SPAWN, Range.SHAFT, spawnTimer);
 		if (session.summary() != null) {
 			SessionSummary summary = session.summary();
 			data.put(HudValue.SHAFTS_PER_HOUR, summary.shaftsPerHour(now));
@@ -140,8 +173,12 @@ public final class HudData {
 			data.put(HudValue.SESSION_CORPSE_FINE, Range.PER_HOUR, summary.perHour(totals.fine(), now));
 		}
 		data.put(HudValue.SPAWN_TIMER, spawnTimer);
+		data.inShaft = shaft != null;
 		if (shaft != null) {
-			if (shaft.id() != null) data.put(HudValue.SHAFT_TYPE, names.name(shaft.id().type()));
+			if (shaft.id() != null) {
+				String type = shaft.id().type();
+				data.put(HudValue.SHAFT_TYPE, paint(names.hudColor(type), names.name(type)));
+			}
 			data.put(HudValue.SHAFT_TIME, Math.max(0, now - shaft.enteredAt()));
 			data.put(HudValue.SHAFT_CORPSES, corpses(shaft.corpses()));
 			if (shaft.cold() != null) data.cold(shaft.cold());
@@ -166,6 +203,18 @@ public final class HudData {
 			put(HudValue.COINS_PER_SHAFT, Range.ALL_TIME, money.allTime() / money.allTimeShafts());
 		}
 		return this;
+	}
+
+	// outside a shaft, the shaft values show the last one
+	public HudData lastShaft(JournalEntry last, ShaftNames names) {
+		if (inShaft || last == null) return this;
+		String type = last.shaftType();
+		if (type != null) put(HudValue.SHAFT_TYPE, paint(names.hudColor(type), names.name(type)));
+		put(HudValue.SHAFT_TIME, last.durationMillis());
+		put(HudValue.SHAFT_CORPSES, corpses(last.corpses()));
+		if (last.coldAtExit() != null) cold(last.coldAtExit());
+		put(HudValue.SHAFT_CAMPFIRES, (long) last.campfiresAt().size());
+		return put(HudValue.AVERAGE_SPAWN, Range.SHAFT, last.searchMillis());
 	}
 
 	// null = not known right now
@@ -196,15 +245,21 @@ public final class HudData {
 			if (corpses.stream().anyMatch(c -> c.type().equals(type))) types.add(type);
 		}
 		corpses.forEach(c -> types.add(c.type()));
-		return looted + "/" + corpses.size() + " " + String.join(", ", new ArrayList<>(types));
+		List<String> painted = new ArrayList<>();
+		for (String type : types) painted.add(paint(CorpseType.of(type) == null ? null : CorpseType.color(type).charAt(1), type));
+		return looted + "/" + corpses.size() + " " + String.join(", ", painted);
 	}
 
 	private static HudData example() {
-		return new HudData()
+		HudData example = new HudData();
+		example.inShaft = true;
+		return example
 				.put(HudValue.SESSION_SHAFTS, 6L)
 				.put(HudValue.SESSION_SHAFTS, Range.ALL_TIME, 412L)
 				.put(HudValue.SHAFTS_PER_HOUR, 19.4)
 				.put(HudValue.AVERAGE_SPAWN, 85_000L)
+				.put(HudValue.AVERAGE_SPAWN, Range.SHAFT, 102_000L)
+				.put(HudValue.AVERAGE_SPAWN, Range.ALL_TIME, 91_000L)
 				.put(HudValue.SESSION_POWDER, Range.SHAFT, 7_120L)
 				.put(HudValue.SESSION_POWDER, 43_436L)
 				.put(HudValue.SESSION_POWDER, Range.PER_HOUR, 137_166L)
@@ -214,9 +269,9 @@ public final class HudData {
 				.put(HudValue.SESSION_CORPSE_FINE, Range.PER_HOUR, 49.3)
 				.put(HudValue.SESSION_CORPSE_FINE, Range.ALL_TIME, 412.8)
 				.put(HudValue.SPAWN_TIMER, 102_000L)
-				.put(HudValue.SHAFT_TYPE, "Jade")
+				.put(HudValue.SHAFT_TYPE, paint('a', "Jade"))
 				.put(HudValue.SHAFT_TIME, 134_000L)
-				.put(HudValue.SHAFT_CORPSES, "2/4 Lapis, Umber")
+				.put(HudValue.SHAFT_CORPSES, "2/4 " + paint('9', "Lapis") + ", " + paint('6', "Umber"))
 				.cold(-12)
 				.put(HudValue.SHAFT_CAMPFIRES, 1L)
 				.put(HudValue.COINS, Range.SHAFT, 2_431_000.0)
@@ -233,5 +288,10 @@ public final class HudData {
 	// package private for tests
 	HudData cold(int cold) {
 		return put(HudValue.SHAFT_COLD, (long) cold);
+	}
+
+	// package private for tests
+	HudData set(HudValue value, Range range, Object v) {
+		return put(value, range, v);
 	}
 }
