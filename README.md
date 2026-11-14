@@ -150,4 +150,4 @@ Open an [issue](../../issues/new/choose). For bugs, add your Surveyor version an
 ### Credits
 Made by [forenick](https://github.com/forenick).
 
-Before you ask, Yes i did use some AI to make this mod. Specifically, Claude (Anthropic). Claude if u read this ur the goat
+I use AI tools to help me with reviewing my code, clean up the messy logic, and speed up some setup for larger features. Everything is still reviewed, tested and tweaked by me to make sure it runs smoothly! :)
