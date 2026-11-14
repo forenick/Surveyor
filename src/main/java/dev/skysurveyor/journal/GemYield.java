@@ -2,8 +2,10 @@ package dev.skysurveyor.journal;
 
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 
+import dev.skysurveyor.data.Ladder;
 import dev.skysurveyor.detection.Shaft;
 import dev.skysurveyor.detection.TextPatterns;
 
@@ -11,8 +13,12 @@ import dev.skysurveyor.detection.TextPatterns;
 // silent gemstone spread in the tail is missing, slight undercount
 // mob drops of the same gem count as mined (research/07)
 public record GemYield(String gem, long rough, long flawed, long fine, long tailRough, long tailFlawed) {
+	private static final int ROUGH = 0;
+	private static final int FLAWED = 1;
+	private static final int FINE = 2;
+	private static final int FLAWLESS = 3;
 	// 80:1 per step (research/05)
-	public static final int RECIPE = 80;
+	public static final int RECIPE = (int) Ladder.gem().per(FINE, FLAWLESS);
 
 	// incl estimated tail
 	public double fineEquivalent() {
@@ -24,7 +30,7 @@ public record GemYield(String gem, long rough, long flawed, long fine, long tail
 	}
 
 	private static double toFine(long rough, long flawed, long fine) {
-		return toFine("Rough", rough) + toFine("Flawed", flawed) + fine;
+		return Ladder.gem().in(new long[] {rough, flawed, fine, 0}, FINE);
 	}
 
 	// quality from gem.item, anything else counts as fine
@@ -35,8 +41,8 @@ public record GemYield(String gem, long rough, long flawed, long fine, long tail
 	// how many of this quality make 1 fine
 	public static double countPerFine(String quality) {
 		return switch (quality) {
-			case "Rough" -> (double) (RECIPE * RECIPE);
-			case "Flawed" -> (double) RECIPE;
+			case "Rough" -> Ladder.gem().per(ROUGH, FINE);
+			case "Flawed" -> Ladder.gem().per(FLAWED, FINE);
 			default -> 1;
 		};
 	}
@@ -44,18 +50,20 @@ public record GemYield(String gem, long rough, long flawed, long fine, long tail
 	public static GemYield of(Shaft shaft, TextPatterns patterns) {
 		if (shaft.id() == null) return null;
 		String type = shaft.id().type();
-		Totals mined = new Totals();
-		mined.add(shaft.sacksAdded(), type, patterns, 1);
-		mined.add(shaft.notMinedInSacks(), type, patterns, -1);
-		Totals tail = new Totals();
-		tail.add(shaft.pristineSinceSacks(), type, patterns, 1);
-		String gem = mined.gem != null ? mined.gem : tail.gem;
+		Function<String, String> gemOf = item -> {
+			Matcher m = shaftGem(item, type, patterns);
+			return m == null ? null : m.group("gem");
+		};
+		MinedCount mined = MinedCount.of(Ladder.gem(), gemOf, shaft.sacksAdded(), shaft.notMinedInSacks());
+		MinedCount tail = MinedCount.of(Ladder.gem(), gemOf, shaft.pristineSinceSacks(), Map.of());
+		String gem = mined.material() != null ? mined.material() : tail.material();
 		if (gem == null) return null;
 
-		long rough = Math.max(0, mined.rough);
-		long flawed = Math.max(0, mined.flawed);
-		long tailRough = flawed > 0 ? Math.round(tail.flawed * (double) rough / flawed) : 0;
-		return new GemYield(gem, rough, flawed, Math.max(0, mined.fine), tailRough, tail.flawed);
+		long rough = mined.at(ROUGH);
+		long flawed = mined.at(FLAWED);
+		long tailFlawed = tail.counts()[FLAWED];
+		long tailRough = flawed > 0 ? Math.round(tailFlawed * (double) rough / flawed) : 0;
+		return new GemYield(gem, rough, flawed, mined.at(FINE), tailRough, tailFlawed);
 	}
 
 	public static boolean isShaftGem(String item, String type, TextPatterns patterns) {
@@ -67,25 +75,5 @@ public record GemYield(String gem, long rough, long flawed, long fine, long tail
 		if (type == null) return null;
 		Matcher m = patterns.match("gem.item", item);
 		return m != null && m.group("gem").toUpperCase(Locale.ROOT).startsWith(type) ? m : null;
-	}
-
-	private static final class Totals {
-		String gem;
-		long rough;
-		long flawed;
-		long fine;
-
-		void add(Map<String, Long> items, String type, TextPatterns patterns, int sign) {
-			items.forEach((item, count) -> {
-				Matcher m = shaftGem(item, type, patterns);
-				if (m == null) return;
-				gem = m.group("gem");
-				switch (m.group("quality")) {
-					case "Rough" -> rough += sign * count;
-					case "Flawed" -> flawed += sign * count;
-					default -> fine += sign * count;
-				}
-			});
-		}
 	}
 }

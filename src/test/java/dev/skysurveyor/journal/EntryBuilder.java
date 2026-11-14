@@ -33,6 +33,7 @@ public final class EntryBuilder {
 	private Map<String, Long> otherDrops = Map.of();
 	private Map<String, ItemPrice> prices;
 	private List<Integer> campfireColds;
+	private MetalYield metal;
 
 	public static EntryBuilder entry() {
 		return new EntryBuilder();
@@ -45,13 +46,13 @@ public final class EntryBuilder {
 				.campfiresAt(e.campfiresAt()).coldAtExit(e.coldAtExit()).scrapFound(e.scrapFound())
 				.pristineProcs(e.pristineProcs()).pristineItems(e.pristineItems()).sacksAdded(e.sacksAdded())
 				.sacksRemoved(e.sacksRemoved()).gems(e.gems()).crystals(e.crystals()).otherDrops(e.otherDrops())
-				.prices(e.prices()).campfireColds(e.campfireColds());
+				.prices(e.prices()).campfireColds(e.campfireColds()).metal(e.metal());
 	}
 
 	public JournalEntry build() {
 		return new JournalEntry(version, sessionId, shaftId, enteredAt, durationMillis, exit, exitPowder, searchMillis, corpses,
 				extraCorpses, loots, mayhemBuffs, campfiresAt, coldAtExit, scrapFound, pristineProcs, pristineItems, sacksAdded,
-				sacksRemoved, gems, crystals, otherDrops, prices, campfireColds);
+				sacksRemoved, gems, crystals, otherDrops, prices, campfireColds, metal);
 	}
 
 	public EntryBuilder version(int value) {
@@ -171,6 +172,11 @@ public final class EntryBuilder {
 
 	public EntryBuilder campfireColds(List<Integer> value) {
 		campfireColds = value;
+		return this;
+	}
+
+	public EntryBuilder metal(MetalYield value) {
+		metal = value;
 		return this;
 	}
 }

@@ -5,6 +5,7 @@ import java.util.List;
 
 import dev.skysurveyor.settings.MoneySettings.Crystals;
 import dev.skysurveyor.settings.MoneySettings.GemTier;
+import dev.skysurveyor.settings.MoneySettings.MetalTier;
 import dev.skysurveyor.settings.MoneySettings.OldShafts;
 import dev.skysurveyor.settings.MoneySettings.SellPrice;
 import dev.skysurveyor.settings.Setting.Choice;
@@ -51,8 +52,8 @@ public final class SettingsList {
 	public static final List<Category> CATEGORIES = List.of(
 			new Category(MONEY, "Money", "money_icon", "How a shaft turns into coins, everywhere the journal and HUD show coins.", List.of(
 					new Section("Profile", List.of(
-							new Toggle("Ironman", "NPC sell prices only, gems as Fine. Items with no NPC price show without coins, keys and "
-									+ "campfires cost nothing. Selling and Gems settings don't apply.",
+							new Toggle("Ironman", "NPC sell prices only, gems as Fine, metal as Tungsten or Umber. Items with no NPC price "
+									+ "show without coins, keys and campfires cost nothing. Selling, Gems and Metal settings don't apply.",
 									s -> s.money().isIronman(), (s, v) -> s.withMoney(s.money().withIronman(v))))),
 					new Section("Selling", List.of(
 							new Choice<>("Sell price", "Price used for everything sold on the Bazaar.", List.of(
@@ -71,6 +72,13 @@ public final class SettingsList {
 											"A Perfect gem minus 5 Flawless of that gem."),
 									new Option<>(Crystals.ZERO, "Zero", "Crystals add no coins.")),
 									s -> s.money().crystals(), (s, v) -> s.withMoney(s.money().withCrystals(v))))),
+					new Section("Metal", List.of(
+							new Choice<>("Metal tier", "Tungsten mined in Tungsten shafts and Umber in Umber shafts count as this tier. "
+									+ "Metal from corpses keeps its own price.", List.of(
+											new Option<>(MetalTier.ENCHANTED, "Enchanted", "Every 160 count as 1 Enchanted. Crafting is free."),
+											new Option<>(MetalTier.RAW, "Tungsten or Umber", "The price of the metal you mined."),
+											new Option<>(MetalTier.REFINED, "Refined", "Every 160 Enchanted count as 1 Refined, an hour in the Forge.")),
+									s -> s.money().metalTier(), (s, v) -> s.withMoney(s.money().withMetalTier(v))))),
 					new Section("Old shafts", List.of(
 							new Choice<>("Prices for old shafts",
 									"Shafts since 0.14.0 saved their prices when they ended. Older shafts always use today's.", List.of(
@@ -102,5 +110,18 @@ public final class SettingsList {
 									s -> s.summary().seconds(), (s, v) -> s.withSummary(s.summary().withSeconds(v))))))));
 
 	private SettingsList() {
+	}
+
+	// a choices option label, f.e. for tooltips outside the settings page
+	public static String label(Object value) {
+		for (Category category : CATEGORIES) {
+			for (Setting setting : category.settings()) {
+				if (!(setting instanceof Choice<?> choice)) continue;
+				for (Option<?> option : choice.options()) {
+					if (option.value().equals(value)) return option.label();
+				}
+			}
+		}
+		return String.valueOf(value);
 	}
 }

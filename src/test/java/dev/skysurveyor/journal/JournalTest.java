@@ -15,6 +15,7 @@ import dev.skysurveyor.detection.RecordingReplay;
 import dev.skysurveyor.detection.ShaftEvent;
 import dev.skysurveyor.detection.ShaftTracker;
 import dev.skysurveyor.detection.TextPatterns;
+import dev.skysurveyor.settings.MoneySettings;
 import dev.skysurveyor.util.Format;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -226,7 +227,7 @@ class JournalTest {
 		assertNull(aqua.gems(), "Nick can't mine Aquamarine yet, so there are no Aquamarine gems");
 		assertEquals(5759 + 4791, aqua.corpsePowder());
 
-		String text = String.join("\n", SummaryText.lines(aqua, null, null, false));
+		String text = String.join("\n", SummaryText.lines(aqua, null, null, MoneySettings.DEFAULTS));
 		assertTrue(text.contains("§b§lAQUA_C  §7inside §f14s"), text);
 		assertTrue(text.contains("§9Lapis 2/2§7, §fTungsten 0/1"), text);
 		assertTrue(text.contains("§7Powder §f+12,060 §8(corpses 10,550, exit 1,510)"), text);

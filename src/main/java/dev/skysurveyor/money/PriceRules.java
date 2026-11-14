@@ -3,6 +3,7 @@ package dev.skysurveyor.money;
 import java.util.Locale;
 import java.util.regex.Matcher;
 
+import dev.skysurveyor.data.Ladder;
 import dev.skysurveyor.detection.TextPatterns;
 import dev.skysurveyor.journal.GemYield;
 import dev.skysurveyor.settings.MoneySettings;
@@ -33,6 +34,13 @@ public record PriceRules(ShaftValue.Prices prices, MoneySettings settings, ItemI
 		if (settings.isIronman() || settings.gemTier() == GemTier.FINE) return sell(gemId("FINE", gem));
 		Double flawless = sell(gemId("FLAWLESS", gem));
 		return flawless == null ? null : flawless / GemYield.RECIPE;
+	}
+
+	// mined metal only, corpse metal keeps its own price
+	public Double metalPerRaw(Ladder ladder) {
+		int tier = settings.metalTierUsed().tier();
+		Double price = sell(ids.id(ladder.name(tier, null)));
+		return price == null ? null : price / ladder.base(tier);
 	}
 
 	public Double crystal(String gem) {

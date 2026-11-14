@@ -2,6 +2,11 @@
 
 [SemVer](https://semver.org). Betas are `X.Y.Z-beta.N` (GitHub pre-releases).
 
+## 0.23.0-beta.1 (2026-11-14)
+- Tungsten mined in Tungsten shafts and Umber in Umber shafts count as Mined metal.
+- Metal tier setting: Enchanted, Tungsten or Umber, or Refined.
+- Metal line in the shaft summary and Metal mined in the shaft view.
+
 ## 0.22.0-beta.1 (2026-11-13)
 - Shaft summary as a toast. Chat, both or off in Settings.
 - Toast style, time and position, top right or anywhere in Edit HUD.

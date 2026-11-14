@@ -1,0 +1,19 @@
+{
+  "money": {
+    "sellPrice": "insta_sell",
+    "gemTier": "flawless",
+    "bazaarTax": 1.125,
+    "oldShafts": "that_day",
+    "crystals": "perfect_minus_flawless",
+    "ironman": false
+  },
+  "journal": {
+    "byDay": true
+  },
+  "summary": {
+    "show": "toast",
+    "style": "vanilla",
+    "position": "top_right",
+    "seconds": 20.0
+  }
+}

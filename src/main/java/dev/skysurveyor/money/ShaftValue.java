@@ -9,11 +9,13 @@ import java.util.Map;
 import java.util.Set;
 
 import dev.skysurveyor.data.CorpseType;
+import dev.skysurveyor.data.Ladder;
 import dev.skysurveyor.detection.CorpseLoot;
 import dev.skysurveyor.detection.ItemCount;
 import dev.skysurveyor.detection.TextPatterns;
 import dev.skysurveyor.journal.GemYield;
 import dev.skysurveyor.journal.JournalEntry;
+import dev.skysurveyor.journal.MetalYield;
 import dev.skysurveyor.settings.MoneySettings;
 import dev.skysurveyor.settings.MoneySettings.Crystals;
 import dev.skysurveyor.settings.MoneySettings.GemTier;
@@ -22,6 +24,7 @@ import dev.skysurveyor.settings.MoneySettings.GemTier;
 public record ShaftValue(List<Line> lines, List<CorpseValue> corpses) {
 	public enum Part {
 		MINED("Mined gems"),
+		MINED_METAL("Mined metal"),
 		OTHER("Other drops"),
 		CORPSES("Corpse loot"),
 		SCRAP("Suspicious Scrap"),
@@ -90,6 +93,17 @@ public record ShaftValue(List<Line> lines, List<CorpseValue> corpses) {
 					flawless ? fine / GemYield.RECIPE : fine, perFine == null ? null : perFine * fine));
 		}
 
+		MetalYield metal = entry.metal();
+		Ladder ladder = metal == null ? null : metal.ladder();
+		if (ladder != null) {
+			int tier = settings.metalTierUsed().tier();
+			Double perRaw = v.metalPerRaw(ladder);
+			lines.add(new Line(Part.MINED_METAL, ladder.name(tier, null), metal.in(tier),
+					perRaw == null ? null : perRaw * metal.in(MetalYield.RAW)));
+		} else if (metal != null) {
+			metal.items().forEach((item, count) -> lines.add(line(v, Part.MINED_METAL, item, count)));
+		}
+
 		otherDrops(entry, patterns).forEach((item, count) -> lines.add(line(v, Part.OTHER, item, count)));
 
 		Map<String, Long> loot = new LinkedHashMap<>();
@@ -138,7 +152,7 @@ public record ShaftValue(List<Line> lines, List<CorpseValue> corpses) {
 		return new ShaftValue(List.copyOf(lines), List.copyOf(corpses));
 	}
 
-	// every id the value could use, both gem tiers, so settings can change later
+	// every id the value could use, every gem + metal tier, so settings can change later
 	public static Map<String, ItemPrice> snapshot(JournalEntry entry, Prices prices, MoneySettings settings, ItemIds ids,
 			TextPatterns patterns) {
 		Set<String> used = new HashSet<>();
@@ -150,6 +164,13 @@ public record ShaftValue(List<Line> lines, List<CorpseValue> corpses) {
 			// ironman uses a subset of these ids
 			of(entry, recording, settings.withGemTier(tier).withCrystals(Crystals.PERFECT_MINUS_FLAWLESS).withIronman(false), ids,
 					patterns);
+		}
+		Ladder ladder = entry.metal() == null ? null : entry.metal().ladder();
+		if (ladder != null) {
+			for (int tier = 0; tier < ladder.tiers(); tier++) {
+				String id = ids.id(ladder.name(tier, null));
+				if (id != null) used.add(id);
+			}
 		}
 		Map<String, ItemPrice> saved = new HashMap<>();
 		for (String id : used) {

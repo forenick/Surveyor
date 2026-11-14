@@ -19,6 +19,7 @@ import dev.skysurveyor.money.ItemPrice;
 // crystals, otherDrops, prices null in entries before 0.14.0
 // prices = by skyblock id at the end of the shaft, empty when there were none
 // campfireColds = cold before each campfire use, null in entries before 0.22.0, null items = no cold line
+// metal = shafts own metal, null = none or before 0.23.0 (those keep it in otherDrops)
 public record JournalEntry(
 		int version,
 		long sessionId,
@@ -43,7 +44,8 @@ public record JournalEntry(
 		List<String> crystals,
 		Map<String, Long> otherDrops,
 		Map<String, ItemPrice> prices,
-		List<Integer> campfireColds) {
+		List<Integer> campfireColds,
+		MetalYield metal) {
 	public static final int VERSION = 1;
 
 	public static JournalEntry of(Shaft shaft, long sessionId, Long searchMillis, TextPatterns patterns) {
@@ -58,21 +60,22 @@ public record JournalEntry(
 				new LinkedHashMap<>(shaft.pristineItems()), new LinkedHashMap<>(shaft.sacksAdded()), new LinkedHashMap<>(shaft.sacksRemoved()),
 				GemYield.of(shaft, patterns), List.copyOf(shaft.crystals()), otherDrops(shaft, patterns), null,
 				// list.copyOf hates nulls
-				Collections.unmodifiableList(new ArrayList<>(shaft.campfireColds())));
+				Collections.unmodifiableList(new ArrayList<>(shaft.campfireColds())), MetalYield.of(shaft));
 	}
 
 	public JournalEntry withPrices(Map<String, ItemPrice> prices) {
 		return new JournalEntry(version, sessionId, shaftId, enteredAt, durationMillis, exit, exitPowder, searchMillis,
 				corpses, extraCorpses, loots, mayhemBuffs, campfiresAt, coldAtExit, scrapFound, pristineProcs,
-				pristineItems, sacksAdded, sacksRemoved, gems, crystals, otherDrops, prices, campfireColds);
+				pristineItems, sacksAdded, sacksRemoved, gems, crystals, otherDrops, prices, campfireColds, metal);
 	}
 
-	// sacks minus corpse loot, supercrafts and the shafts own gem (thats GemYield)
+	// sacks minus corpse loot, supercrafts and the shafts own gem + metal (GemYield, MetalYield)
 	static Map<String, Long> otherDrops(Shaft shaft, TextPatterns patterns) {
 		Map<String, Long> drops = new LinkedHashMap<>(shaft.sacksAdded());
 		shaft.notMinedInSacks().forEach((item, count) -> drops.merge(item, -count, Long::sum));
 		String type = shaft.id() == null ? null : shaft.id().type();
-		drops.entrySet().removeIf(e -> e.getValue() <= 0 || GemYield.isShaftGem(e.getKey(), type, patterns));
+		drops.entrySet().removeIf(e -> e.getValue() <= 0 || GemYield.isShaftGem(e.getKey(), type, patterns)
+				|| MetalYield.isShaftMetal(e.getKey(), type));
 		return drops;
 	}
 

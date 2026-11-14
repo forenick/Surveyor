@@ -114,7 +114,7 @@ public final class LiveJournal {
 		SummarySettings.Show show = settings.get().summary().show();
 		if (show.chat()) {
 			var chat = Minecraft.getInstance().gui.hud.getChat();
-			for (String line : SummaryText.lines(entry, journal.session(), money.value(entry), money.settings().isIronman())) {
+			for (String line : SummaryText.lines(entry, journal.session(), money.value(entry), money.settings())) {
 				chat.addClientSystemMessage(Component.literal(line));
 			}
 		}

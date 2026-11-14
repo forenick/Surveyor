@@ -15,6 +15,6 @@ TITA = Titanium, #C8CCD2      # seen
 TOPA = Topaz, #F2D33A         # seen
 AMBE = Amber, #F28C28         # unconfirmed
 CITR = Citrine, #D9822B       # unconfirmed
-TUNG = Tungsten, #8A93A6      # unconfirmed
+TUNG = Tungsten, #8A93A6      # seen
 UMBE = Umber, #8B5A2B         # unconfirmed
 FAIR = Vanguard, #55FFFF      # unconfirmed (the Fairy shaft, FAIR_1)

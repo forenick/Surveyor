@@ -132,9 +132,11 @@ class OldJournalTest {
 		for (JournalEntry entry : entries) {
 			double coins = ShaftValue.of(entry, ShaftValue.layered(entry.prices(), id -> null), settings, ids, patterns).net();
 			total += coins;
-			shafts.append(String.format(Locale.ROOT, "%d %s %s powder=%d corpses=%s gems=%s coins=%.1f%n", entry.enteredAt(),
+			// metal only when set, so lines from before 0.23.0 stay the same
+			String metal = entry.metal() == null ? "" : " metal=" + entry.metal();
+			shafts.append(String.format(Locale.ROOT, "%d %s %s powder=%d corpses=%s gems=%s%s coins=%.1f%n", entry.enteredAt(),
 					entry.shaftId(), entry.exit(), JournalStats.powder(entry), JournalStats.corpses(entry),
-					entry.gems(), coins));
+					entry.gems(), metal, coins));
 		}
 		out.append(String.format(Locale.ROOT, "coins %.1f%n", total));
 		return out.append(shafts).toString();

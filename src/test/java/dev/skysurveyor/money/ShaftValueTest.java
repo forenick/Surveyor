@@ -13,12 +13,14 @@ import dev.skysurveyor.detection.TextPatterns;
 import dev.skysurveyor.journal.EntryBuilder;
 import dev.skysurveyor.journal.GemYield;
 import dev.skysurveyor.journal.JournalEntry;
+import dev.skysurveyor.journal.MetalYield;
 import dev.skysurveyor.journal.SummaryText;
 import dev.skysurveyor.money.ShaftValue.Line;
 import dev.skysurveyor.money.ShaftValue.Part;
 import dev.skysurveyor.settings.MoneySettings;
 import dev.skysurveyor.settings.MoneySettings.Crystals;
 import dev.skysurveyor.settings.MoneySettings.GemTier;
+import dev.skysurveyor.settings.MoneySettings.MetalTier;
 import dev.skysurveyor.settings.MoneySettings.OldShafts;
 import dev.skysurveyor.settings.MoneySettings.SellPrice;
 
@@ -123,12 +125,12 @@ class ShaftValueTest {
 		assertTrue(value(fine).unpriced().stream().anyMatch(l -> l.item().equals("Flawed Onyx Gemstone")), "no fine onyx price");
 
 		MoneySettings offer = new MoneySettings(SellPrice.SELL_OFFER, GemTier.FLAWLESS, 1.125, OldShafts.THAT_DAY,
-				Crystals.PERFECT_MINUS_FLAWLESS, false);
+				Crystals.PERFECT_MINUS_FLAWLESS, false, MetalTier.ENCHANTED);
 		assertEquals(325_000 * TAX, value(offer).total(Part.MINED), 1e-6);
 		assertEquals(-2_800_000, value(offer).total(Part.KEYS), 1e-6, "keys stay insta-buy");
 
 		MoneySettings noTax = new MoneySettings(SellPrice.INSTA_SELL, GemTier.FLAWLESS, 0.0, OldShafts.THAT_DAY,
-				Crystals.ZERO, false);
+				Crystals.ZERO, false, MetalTier.ENCHANTED);
 		assertEquals(300_000, value(noTax).total(Part.MINED), 1e-6);
 		assertEquals(0, value(noTax).total(Part.CRYSTALS), 1e-6);
 		assertFalse(value(noTax).unpriced().stream().anyMatch(l -> l.part() == Part.CRYSTALS));
@@ -144,7 +146,7 @@ class ShaftValueTest {
 		// npc, no bazaar tax
 		assertEquals(100 + 10, value.total(Part.OTHER), 1e-6);
 		MoneySettings offer = new MoneySettings(SellPrice.SELL_OFFER, GemTier.FLAWLESS, 1.125, OldShafts.THAT_DAY,
-				Crystals.ZERO, false);
+				Crystals.ZERO, false, MetalTier.ENCHANTED);
 		assertEquals(400 * TAX + 10, ShaftValue.of(withDrops, PRICES::get, offer, IDS, PATTERNS).total(Part.OTHER), 1e-6);
 	}
 
@@ -230,7 +232,7 @@ class ShaftValueTest {
 
 	@Test
 	void chatSummaryLine() {
-		List<String> lines = SummaryText.lines(entry(), null, value(MoneySettings.DEFAULTS), false);
+		List<String> lines = SummaryText.lines(entry(), null, value(MoneySettings.DEFAULTS), MoneySettings.DEFAULTS);
 		String coins = lines.stream().filter(l -> l.contains("Coins")).findFirst().orElseThrow();
 		assertEquals(" §7Coins §6+58.4M §8(gems 296.6k, other 98.9k, corpses 60.1M, scrap 276.9k, crystals 3.0M, keys -2.8M,"
 				+ " campfires -2.5M) §c1 item without a price", coins);
@@ -272,5 +274,84 @@ class ShaftValueTest {
 		assertEquals("§8no NPC price", CoinBreakdown.noPrice(true));
 		assertEquals("§82 items with no NPC price", CoinBreakdown.unpriced(2, true));
 		assertEquals("§c1 item without a price", CoinBreakdown.unpriced(1, false));
+	}
+
+	// 92 raw + 2 enchanted = 412 raw, corpse loot has 8 enchanted
+	private static JournalEntry metalEntry() {
+		return EntryBuilder.from(entry()).shaftId("TUNG_1").gems(null).crystals(List.of())
+				.metal(new MetalYield("Tungsten", 92, 2, 0)).build();
+	}
+
+	private static final Map<String, ItemPrice> METAL_PRICES = metalPrices();
+
+	private static Map<String, ItemPrice> metalPrices() {
+		Map<String, ItemPrice> prices = new HashMap<>(PRICES);
+		prices.put("TUNGSTEN", new ItemPrice(60.0, 70.0, null, 10.0));
+		prices.put("REFINED_TUNGSTEN", bz(1_700_000, 1_800_000));
+		return prices;
+	}
+
+	private static ShaftValue metalValue(MoneySettings settings) {
+		return ShaftValue.of(metalEntry(), METAL_PRICES::get, settings, IDS, PATTERNS);
+	}
+
+	@Test
+	void minedMetalAtTheMetalTier() {
+		ShaftValue enchanted = metalValue(MoneySettings.DEFAULTS);
+		assertEquals(new Line(Part.MINED_METAL, "Enchanted Tungsten", 412 / 160.0, 412 / 160.0 * 10_000 * TAX),
+				enchanted.lines().getFirst());
+		assertEquals(0, enchanted.total(Part.MINED), "no gems");
+		assertEquals(412 * 60 * TAX, metalValue(MoneySettings.DEFAULTS.withMetalTier(MetalTier.RAW)).total(Part.MINED_METAL), 1e-6);
+		assertEquals(412 / 25_600.0 * 1_700_000 * TAX,
+				metalValue(MoneySettings.DEFAULTS.withMetalTier(MetalTier.REFINED)).total(Part.MINED_METAL), 1e-6);
+		// npc 10 per raw, refined setting ignored
+		assertEquals(4_120, metalValue(MoneySettings.DEFAULTS.withIronman(true).withMetalTier(MetalTier.REFINED))
+				.total(Part.MINED_METAL), 1e-6);
+	}
+
+	@Test
+	void corpseMetalKeepsItsOwnPrice() {
+		double corpses = metalValue(MoneySettings.DEFAULTS).total(Part.CORPSES);
+		assertEquals(corpses, metalValue(MoneySettings.DEFAULTS.withMetalTier(MetalTier.RAW)).total(Part.CORPSES), 1e-6);
+		assertEquals(corpses, metalValue(MoneySettings.DEFAULTS.withMetalTier(MetalTier.REFINED)).total(Part.CORPSES), 1e-6);
+		assertEquals(value(MoneySettings.DEFAULTS).total(Part.CORPSES), corpses, 1e-6);
+	}
+
+	@Test
+	void metalLineMissingPriceIsUnpriced() {
+		ShaftValue value = ShaftValue.of(metalEntry(), PRICES::get, MoneySettings.DEFAULTS.withMetalTier(MetalTier.RAW), IDS, PATTERNS);
+		assertTrue(value.unpriced().contains(new Line(Part.MINED_METAL, "Tungsten", 412, null)));
+	}
+
+	@Test
+	void snapshotSavesEveryMetalTier() {
+		Map<String, ItemPrice> saved = ShaftValue.snapshot(metalEntry(), METAL_PRICES::get, MoneySettings.DEFAULTS, IDS, PATTERNS);
+		assertTrue(saved.keySet().containsAll(List.of("TUNGSTEN", "ENCHANTED_TUNGSTEN", "REFINED_TUNGSTEN")), saved.keySet().toString());
+		ShaftValue layered = ShaftValue.of(metalEntry(), ShaftValue.layered(saved, id -> null),
+				MoneySettings.DEFAULTS.withMetalTier(MetalTier.REFINED), IDS, PATTERNS);
+		assertEquals(metalValue(MoneySettings.DEFAULTS.withMetalTier(MetalTier.REFINED)).net(), layered.net(), 1e-6);
+	}
+
+	// ladders.txt renamed later, saved metal still counts
+	@Test
+	void metalWithoutLadderKeepsEachTier() {
+		JournalEntry entry = EntryBuilder.from(metalEntry()).metal(new MetalYield("Mithril", 5, 2, 0)).build();
+		ShaftValue value = ShaftValue.of(entry, METAL_PRICES::get, MoneySettings.DEFAULTS, IDS, PATTERNS);
+		assertEquals(List.of("Mithril", "Enchanted Mithril"),
+				value.lines().stream().filter(l -> l.part() == Part.MINED_METAL).map(Line::item).toList());
+		assertEquals("5 Mithril, 2 Enchanted Mithril", entry.metal().text(MetalYield.ENCHANTED));
+	}
+
+	@Test
+	void metalSummaryAndCounts() {
+		List<String> lines = SummaryText.lines(metalEntry(), null, metalValue(MoneySettings.DEFAULTS), MoneySettings.DEFAULTS);
+		assertTrue(lines.contains(" §7Metal §f≈2.6 Enchanted Tungsten"), lines.toString());
+		assertTrue(lines.stream().anyMatch(l -> l.contains("(metal 25.5k, other")), lines.toString());
+		List<String> raw = SummaryText.lines(metalEntry(), null, null, MoneySettings.DEFAULTS.withMetalTier(MetalTier.RAW));
+		assertTrue(raw.contains(" §7Metal §f412 Tungsten"), raw.toString());
+		assertFalse(String.join("\n", SummaryText.lines(entry(), null, null, MoneySettings.DEFAULTS)).contains("Metal"));
+		assertEquals("412", CoinBreakdown.count(Part.MINED_METAL, "Tungsten", 412));
+		assertEquals("≈2.6", CoinBreakdown.count(Part.MINED_METAL, "Enchanted Tungsten", 412 / 160.0));
+		assertEquals("≈0.1", CoinBreakdown.count(Part.MINED, "Flawless Jade Gemstone", 0.125));
 	}
 }

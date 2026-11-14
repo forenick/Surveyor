@@ -1,0 +1,6 @@
+# tiers low to high, number = how many of the tier below
+# gem 80:1 (research/05), metal 160:1 (neu ENCHANTED_*, REFINED_* recipes)
+# key = shaft code, gem = every gem shaft ({gem} = the gems name)
+gem  = Rough {gem} Gemstone, 80 Flawed {gem} Gemstone, 80 Fine {gem} Gemstone, 80 Flawless {gem} Gemstone
+TUNG = Tungsten, 160 Enchanted Tungsten, 160 Refined Tungsten
+UMBE = Umber, 160 Enchanted Umber, 160 Refined Umber

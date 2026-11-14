@@ -232,7 +232,7 @@ class OldConfigTest {
 		assertFalse(summary.has("style"));
 	}
 
-	// what 0.22.0-alpha.15 wrote on a first start, key order + layout
+	// what 0.22.0-alpha.15 wrote on a first start, key order + layout. metalTier new at the end since 0.23.0
 	@Test
 	void newFileLooksTheSame(@TempDir Path tmp) throws Exception {
 		new ConfigFile(tmp).reloadIfChanged();
@@ -244,7 +244,8 @@ class OldConfigTest {
 				    "bazaarTax": 1.125,
 				    "oldShafts": "that_day",
 				    "crystals": "perfect_minus_flawless",
-				    "ironman": false
+				    "ironman": false,
+				    "metalTier": "enchanted"
 				  },
 				  "journal": {
 				    "byDay": true

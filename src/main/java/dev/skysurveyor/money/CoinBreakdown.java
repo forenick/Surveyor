@@ -7,6 +7,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
 
+import dev.skysurveyor.data.Ladder;
 import dev.skysurveyor.journal.JournalStats.Drops;
 import dev.skysurveyor.journal.JournalStats.ItemDrop;
 import dev.skysurveyor.money.MoneyStats.CorpseCoins;
@@ -186,7 +187,7 @@ public final class CoinBreakdown {
 
 	private static List<Row> itemRows(Part part, Map<String, ItemCoins> items) {
 		List<Row> rows = new ArrayList<>();
-		items.forEach((item, coins) -> rows.add(new Row(count(part, coins.count()) + " " + item, coins.coins())));
+		items.forEach((item, coins) -> rows.add(new Row(count(part, item, coins.count()) + " " + item, coins.coins())));
 		return rows;
 	}
 
@@ -229,8 +230,10 @@ public final class CoinBreakdown {
 		return percent == 0 ? "<1%" : percent + "%";
 	}
 
-	private static String count(Part part, double count) {
-		if (part == Part.MINED) return "≈" + Format.decimal(count);
+	// mined = ≈ like fine gems, raw metal stays whole
+	public static String count(Part part, String item, double count) {
+		boolean approx = part == Part.MINED || part == Part.MINED_METAL && Ladder.metal(item) == null;
+		if (approx) return "≈" + Format.decimal(count);
 		return Format.number(Math.round(count));
 	}
 

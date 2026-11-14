@@ -64,6 +64,7 @@ import dev.skysurveyor.money.ShaftValue.Line;
 import dev.skysurveyor.money.ShaftValue.Part;
 import dev.skysurveyor.settings.MoneySettings;
 import dev.skysurveyor.settings.Setting;
+import dev.skysurveyor.settings.SettingsList;
 import dev.skysurveyor.util.Format;
 
 // mc font only so pack fonts work
@@ -606,12 +607,18 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 			detail.child(grid);
 		}
 
-		detail.child(section("Gems mined"));
-		if (entry.gems() == null) {
-			detail.child(wrapped("§8None"));
-		} else {
+		if (entry.gems() != null) {
+			detail.child(section("Gems mined"));
 			detail.child(wrapped("§f≈" + Format.decimal(entry.gems().fineEquivalent()) + " Fine " + entry.gems().gem()));
 			if (entry.pristineProcs() > 0) detail.child(wrapped("§8" + entry.pristineProcs() + " pristine procs"));
+		} else if (entry.metal() == null) {
+			// metal shafts skip the empty gems section
+			detail.child(section("Gems mined"));
+			detail.child(wrapped("§8None"));
+		}
+		if (entry.metal() != null) {
+			detail.child(section("Metal mined"));
+			detail.child(wrapped("§f" + entry.metal().text(Surveyor.MONEY.settings().metalTierUsed().tier())));
 		}
 		coinsSection(entry, value);
 	}
@@ -639,7 +646,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 			List<Component> tooltip = new ArrayList<>();
 			tooltip.add(Component.literal("§f" + part.displayName()));
 			for (Line line : lines) {
-				tooltip.add(Component.literal("§7" + count(line) + " " + line.item() + "  "
+				tooltip.add(Component.literal("§7" + CoinBreakdown.count(line.part(), line.item(), line.count()) + " " + line.item() + "  "
 						+ (used ? "§8used" : line.coins() == null ? CoinBreakdown.noPrice(ironman) : CoinBreakdown.coins(line.coins()))));
 			}
 			String total = used ? "§7" + Math.round(lines.stream().mapToDouble(Line::count).sum()) + " used"
@@ -652,11 +659,12 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		List<Component> how = ironman
 				? List.of(Component.literal("§fHow coins are counted"),
 						Component.literal("§7Ironman: NPC sell prices"),
-						Component.literal("§7Gems as Fine"),
+						Component.literal("§7Gems as Fine, metal as Tungsten or Umber"),
 						Component.literal("§7Keys and campfires cost nothing"),
 						Component.literal("§8Change it in Settings"))
 				: List.of(Component.literal("§fHow coins are counted"),
 						Component.literal("§7Gems as " + (settings.gemTier() == MoneySettings.GemTier.FINE ? "Fine" : "Flawless")),
+						Component.literal("§7Metal as " + SettingsList.label(settings.metalTier())),
 						Component.literal("§7Sold by " + (settings.sellPrice() == MoneySettings.SellPrice.INSTA_SELL ? "insta-sell" : "sell offer")
 								+ ", " + Setting.Number.format(settings.bazaarTax()) + "% Bazaar tax"),
 						Component.literal("§7Keys and campfires at insta-buy"),
@@ -692,11 +700,6 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 
 	private static FlowLayout tipRow(String key, String value, List<Component> tooltip) {
 		return withTooltip(keyValue(key, value), tooltip);
-	}
-
-	private static String count(Line line) {
-		if (line.part() == Part.MINED) return "≈" + Format.decimal(line.count());
-		return Format.number(Math.round(line.count()));
 	}
 
 	private static String lootTitle(List<CorpseLoot> loots) {

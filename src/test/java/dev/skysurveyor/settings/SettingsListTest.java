@@ -72,7 +72,7 @@ class SettingsListTest {
 	@Test
 	void everyMoneyFieldHasASetting() {
 		MoneySettings changed = new MoneySettings(MoneySettings.SellPrice.SELL_OFFER, MoneySettings.GemTier.FINE, 2.0,
-				MoneySettings.OldShafts.TODAY, MoneySettings.Crystals.ZERO, true);
+				MoneySettings.OldShafts.TODAY, MoneySettings.Crystals.ZERO, true, MoneySettings.MetalTier.REFINED);
 		Settings all = Settings.DEFAULTS.withMoney(changed);
 		assertFalse(money().isDefault(all));
 		assertEquals(Settings.DEFAULTS, money().reset(all));
@@ -127,5 +127,11 @@ class SettingsListTest {
 		assertEquals("Insta-sell", named("Sell price").defaultText());
 		assertEquals("Flawless", named("Gem tier").defaultText());
 		assertEquals("On", named("Group by day").defaultText());
+	}
+
+	@Test
+	void labelsComeFromTheOptions() {
+		assertEquals("Tungsten or Umber", SettingsList.label(MoneySettings.MetalTier.RAW));
+		assertEquals("Enchanted", SettingsList.label(MoneySettings.MetalTier.ENCHANTED));
 	}
 }

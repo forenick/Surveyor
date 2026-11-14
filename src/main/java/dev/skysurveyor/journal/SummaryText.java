@@ -12,11 +12,12 @@ import dev.skysurveyor.money.CoinBreakdown;
 import dev.skysurveyor.money.Coins;
 import dev.skysurveyor.money.ShaftValue;
 import dev.skysurveyor.money.ShaftValue.Part;
+import dev.skysurveyor.settings.MoneySettings;
 import dev.skysurveyor.util.Format;
 
 public final class SummaryText {
 	private static final String RULE = "§8§m                                                  ";
-	private static final Map<Part, String> PART_NAMES = Map.of(Part.MINED, "gems", Part.OTHER, "other",
+	private static final Map<Part, String> PART_NAMES = Map.of(Part.MINED, "gems", Part.MINED_METAL, "metal", Part.OTHER, "other",
 			Part.CORPSES, "corpses", Part.SCRAP, "scrap", Part.CRYSTALS, "crystals", Part.KEYS, "keys",
 			Part.CAMPFIRES, "campfires");
 
@@ -24,7 +25,7 @@ public final class SummaryText {
 	}
 
 	// session already incl entry, null = no session line. value null = no prices yet
-	public static List<String> lines(JournalEntry entry, Journal.Session session, ShaftValue value, boolean ironman) {
+	public static List<String> lines(JournalEntry entry, Journal.Session session, ShaftValue value, MoneySettings money) {
 		List<String> lines = new ArrayList<>();
 		lines.add(RULE);
 		lines.add(" §b§l" + (entry.shaftId() == null ? "Mineshaft" : entry.shaftId())
@@ -36,6 +37,7 @@ public final class SummaryText {
 			lines.add(" §7Gems §f≈" + Format.decimal(entry.gems().fineEquivalent())
 					+ " Fine " + entry.gems().gem() + " §8(" + Format.number(entry.pristineProcs()) + " pristine procs)");
 		}
+		if (entry.metal() != null) lines.add(" §7Metal §f" + entry.metal().text(money.metalTierUsed().tier()));
 		long corpsePowder = entry.corpsePowder();
 		long powder = corpsePowder + entry.exitPowder();
 		if (powder > 0) {
@@ -45,7 +47,7 @@ public final class SummaryText {
 			lines.add(" §7Powder §f+" + Format.number(powder) + parts);
 		}
 		if (!entry.campfiresAt().isEmpty()) lines.add(" §7Campfires §f" + entry.campfiresAt().size());
-		String coins = coins(value, ironman);
+		String coins = coins(value, money.isIronman());
 		if (coins != null) lines.add(coins);
 
 		if (session != null) lines.add(" §7Session " + session(session));
