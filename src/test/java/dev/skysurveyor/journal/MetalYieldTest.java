@@ -68,14 +68,13 @@ class MetalYieldTest {
 		leave();
 		assertNull(entries.getFirst().metal());
 
-		JournalFile file = new JournalFile(dir.resolve("journal.jsonl"));
+		JournalFile file = new JournalFile(dir.resolve("journal.jsonl"), Runnable::run);
 		file.append(entries.getFirst());
 		file.append(EntryBuilder.from(entries.getFirst()).metal(new MetalYield("Tungsten", 48_211, 2, 0)).build());
-		file.close();
 		List<String> lines = Files.readAllLines(dir.resolve("journal.jsonl"));
 		assertFalse(lines.get(0).contains("metal"), lines.get(0));
 		assertTrue(lines.get(1).endsWith(",\"metal\":{\"metal\":\"Tungsten\",\"raw\":48211,\"enchanted\":2,\"refined\":0}}"), lines.get(1));
-		assertEquals(new MetalYield("Tungsten", 48_211, 2, 0), new JournalFile(dir.resolve("journal.jsonl")).read().get(1).metal());
+		assertEquals(new MetalYield("Tungsten", 48_211, 2, 0), new JournalFile(dir.resolve("journal.jsonl"), Runnable::run).read().get(1).metal());
 	}
 
 	@Test
@@ -85,10 +84,28 @@ class MetalYieldTest {
 		assertEquals(48_531 / 160.0, metal.in(MetalYield.ENCHANTED), 1e-9);
 		assertEquals(48_531 / 25_600.0, metal.in(MetalYield.REFINED), 1e-9);
 		assertEquals("48,531 Tungsten", metal.text(MetalYield.RAW));
-		assertEquals("≈303.3 Enchanted Tungsten", metal.text(MetalYield.ENCHANTED));
-		assertEquals("≈1.9 Refined Tungsten", metal.text(MetalYield.REFINED));
+		assertEquals("303.3 Enchanted Tungsten", metal.text(MetalYield.ENCHANTED));
+		assertEquals("1.9 Refined Tungsten", metal.text(MetalYield.REFINED));
+		assertEquals("48,531", metal.amount(MetalYield.RAW));
+		assertEquals("303.3", metal.amount(MetalYield.ENCHANTED));
+		assertEquals("303.3 Enchanted", metal.shortText(MetalYield.ENCHANTED));
+		assertEquals("1.9 Refined", metal.shortText(MetalYield.REFINED));
+		assertEquals("48,531 Tungsten", metal.shortText(MetalYield.RAW));
 		assertEquals(25_600, Ladder.metalOf("UMBE").base(MetalYield.REFINED));
 		assertNull(Ladder.metalOf("JADE"));
+	}
+
+	@Test
+	void mostMetalByRawCount() {
+		JournalEntry tungsten = EntryBuilder.entry().shaftId("TUNG_1").metal(new MetalYield("Tungsten", 30_000, 0, 0)).build();
+		JournalEntry umber = EntryBuilder.entry().shaftId("UMBE_1").metal(new MetalYield("Umber", 1_000, 200, 0)).build();
+		JournalEntry gems = EntryBuilder.entry().shaftId("JADE_1").build();
+		assertEquals(umber, best("shaft_metal", List.of(tungsten, umber, gems)).entry());
+		assertNull(best("shaft_metal", List.of(gems)).entry());
+	}
+
+	private static PersonalBests.Result best(String stat, List<JournalEntry> entries) {
+		return PersonalBests.best(new PersonalBests.Def(stat, null, null, null), entries, JournalStats.sessions(entries), e -> null);
 	}
 
 	// same numbers as before the ladder

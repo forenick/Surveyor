@@ -191,15 +191,32 @@ class JournalTest {
 	}
 
 	@Test
+	void miningAfterTheLastShaftKeepsTheSessionAfterRestart() {
+		at(0).hit(true);
+		at(MINUTE).chat(WOW);
+		visitShaft(MINUTE + 3_000, "JADE_1");
+
+		Journal restarted = new Journal(TextPatterns.defaults(), () -> true, entry -> {
+		});
+		restarted.resume(entries);
+		// mined outside till 20 min, then restarted
+		restarted.resumeActivity(0, 20 * MINUTE);
+		assertEquals(0, restarted.activeSession(30 * MINUTE).id());
+		restarted.resumeActivity(0, 10 * MINUTE);
+		assertEquals(0, restarted.activeSession(30 * MINUTE).id(), "older activity doesnt move it back");
+		restarted.resumeActivity(5, 50 * MINUTE);
+		assertNull(restarted.activeSession(40 * MINUTE), "other session ignored");
+	}
+
+	@Test
 	void fileRoundTrip(@TempDir Path dir) throws IOException {
 		Path recording = RecordingReplay.RECORDINGS.resolve("2026-11-11_14-13-53.jsonl");
 		assumeTrue(Files.exists(recording), "Recording not available: " + recording);
 		replay(recording);
 		assertEquals(2, entries.size());
 
-		JournalFile file = new JournalFile(dir.resolve("skysurveyor").resolve("journal.jsonl"));
+		JournalFile file = new JournalFile(dir.resolve("skysurveyor").resolve("journal.jsonl"), Runnable::run);
 		entries.forEach(file::append);
-		file.close();
 		assertEquals(entries, file.read());
 	}
 

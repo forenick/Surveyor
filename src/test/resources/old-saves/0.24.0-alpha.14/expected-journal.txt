@@ -1,0 +1,84 @@
+shafts 75
+sessions 15
+time 17667570
+powder 616549
+looted {Lapis=95, Umber=2, Tungsten=1}
+seen {Lapis=98, Umber=50, Tungsten=55, Vanguard=6}
+types {PERI={1=4, 2=2, C=1}, JADE={1=7}, ONYX={1=4, 2=1, C=1}, RUBY={1=2, 2=1, C=3}, JASP={1=2, C=4}, TOPA={1=6}, FAIR={1=6}, TITA={1=5}, AQUA={1=1, 2=1, C=3}, AMBE={1=5}, AMET={1=4}, SAPP={1=4}, TUNG={1=3}, LITT={L=2}, CITR={1=1, 2=1}, OPAL={C=1}}
+average spawn 85967
+coins 105323650.0
+1794413802805 PERI_1 BYE powder=1000 corpses={Umber=CorpseCount[looted=0, total=3]} gems=null coins=0.0
+1794413874264 JADE_1 BYE powder=1000 corpses={Umber=CorpseCount[looted=0, total=1], Tungsten=CorpseCount[looted=0, total=2]} gems=null coins=0.0
+1794413927053 AMET_1 BYE powder=16287 corpses={Lapis=CorpseCount[looted=3, total=3], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=0.0
+1794414148591 TITA_1 BYE powder=12381 corpses={Lapis=CorpseCount[looted=2, total=2], Umber=CorpseCount[looted=0, total=1], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=0.0
+1794414468634 AQUA_C BYE powder=5934 corpses={Lapis=CorpseCount[looted=1, total=1], Tungsten=CorpseCount[looted=0, total=2]} gems=null coins=0.0
+1794414891062 ONYX_1 BYE powder=6834 corpses={Lapis=CorpseCount[looted=1, total=1], Umber=CorpseCount[looted=0, total=2], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=0.0
+1794428684815 ONYX_1 BYE powder=20258 corpses={Lapis=CorpseCount[looted=4, total=4]} gems=null coins=0.0
+1794428749992 TITA_1 BYE powder=5713 corpses={Lapis=CorpseCount[looted=1, total=1], Umber=CorpseCount[looted=0, total=2]} gems=null coins=0.0
+1794428862245 LITT_L BYE powder=5789 corpses={Lapis=CorpseCount[looted=1, total=1], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=0.0
+1794428960982 AMBE_1 BYE powder=19583 corpses={Lapis=CorpseCount[looted=3, total=3]} gems=GemYield[gem=Amber, rough=95449, flawed=23078, fine=0, tailRough=0, tailFlawed=0] coins=0.0
+1794431308546 TITA_1 BYE powder=11741 corpses={Lapis=CorpseCount[looted=2, total=2], Umber=CorpseCount[looted=0, total=1]} gems=null coins=0.0
+1794431565049 AMET_1 BYE powder=1000 corpses={Umber=CorpseCount[looted=0, total=1], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=0.0
+1794431641230 TITA_1 BYE powder=6745 corpses={Lapis=CorpseCount[looted=1, total=1], Umber=CorpseCount[looted=0, total=1], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=0.0
+1794431698910 AQUA_2 BYE powder=10951 corpses={Lapis=CorpseCount[looted=2, total=2], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=0.0
+1794432081168 RUBY_1 BYE powder=17680 corpses={Lapis=CorpseCount[looted=3, total=3], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=0.0
+1794432220292 JASP_C DEATH powder=11659 corpses={Lapis=CorpseCount[looted=2, total=2], Umber=CorpseCount[looted=0, total=1]} gems=GemYield[gem=Jasper, rough=98296, flawed=20094, fine=0, tailRough=1130, tailFlawed=231] coins=0.0
+1794433285457 JADE_1 BYE powder=7245 corpses={Lapis=CorpseCount[looted=1, total=1], Umber=CorpseCount[looted=0, total=2], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=0.0
+1794433554556 TUNG_1 BYE powder=16238 corpses={Lapis=CorpseCount[looted=3, total=3]} gems=null coins=0.0
+1794433606340 TOPA_1 BYE powder=12142 corpses={Lapis=CorpseCount[looted=2, total=2], Umber=CorpseCount[looted=0, total=1]} gems=null coins=0.0
+1794434013915 RUBY_1 BYE powder=6736 corpses={Lapis=CorpseCount[looted=1, total=1], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=0.0
+1794435012447 FAIR_1 BYE powder=1000 corpses={Vanguard=CorpseCount[looted=0, total=1]} gems=null coins=0.0
+1794435189157 FAIR_1 BYE powder=1000 corpses={Vanguard=CorpseCount[looted=0, total=1]} gems=null coins=0.0
+1794437965257 JADE_1 BYE powder=12641 corpses={Lapis=CorpseCount[looted=2, total=2]} gems=null coins=0.0
+1794438359059 SAPP_1 BYE powder=11186 corpses={Lapis=CorpseCount[looted=2, total=2], Umber=CorpseCount[looted=0, total=1]} gems=null coins=0.0
+1794439862238 AMBE_1 UNKNOWN powder=0 corpses={Lapis=CorpseCount[looted=0, total=2], Umber=CorpseCount[looted=0, total=1], Tungsten=CorpseCount[looted=0, total=1]} gems=GemYield[gem=Amber, rough=40, flawed=0, fine=0, tailRough=0, tailFlawed=0] coins=0.0
+1794441436997 AMBE_1 BYE powder=5378 corpses={Lapis=CorpseCount[looted=1, total=1], Tungsten=CorpseCount[looted=0, total=2]} gems=GemYield[gem=Amber, rough=4570, flawed=201, fine=0, tailRough=8390, tailFlawed=369] coins=0.0
+1794441687153 TITA_1 BYE powder=6623 corpses={Lapis=CorpseCount[looted=1, total=1], Umber=CorpseCount[looted=0, total=1]} gems=null coins=0.0
+1794510726550 AQUA_C BYE powder=11464 corpses={Lapis=CorpseCount[looted=2, total=2]} gems=null coins=0.0
+1794510760062 PERI_C BYE powder=5816 corpses={Lapis=CorpseCount[looted=1, total=1], Umber=CorpseCount[looted=0, total=2]} gems=GemYield[gem=Peridot, rough=0, flawed=0, fine=1, tailRough=0, tailFlawed=0] coins=0.0
+1794510856865 ONYX_1 BYE powder=5407 corpses={Lapis=CorpseCount[looted=1, total=1], Tungsten=CorpseCount[looted=0, total=2]} gems=null coins=0.0
+1794519460126 FAIR_1 BYE powder=1000 corpses={Vanguard=CorpseCount[looted=0, total=1]} gems=null coins=0.0
+1794519490530 JASP_1 DEATH powder=9438 corpses={Lapis=CorpseCount[looted=2, total=2], Umber=CorpseCount[looted=0, total=1]} gems=GemYield[gem=Jasper, rough=113846, flawed=24004, fine=0, tailRough=1793, tailFlawed=378] coins=16617044.9
+1794524063082 AMET_1 BYE powder=15743 corpses={Lapis=CorpseCount[looted=3, total=3], Tungsten=CorpseCount[looted=0, total=1]} gems=GemYield[gem=Amethyst, rough=320, flawed=40, fine=0, tailRough=0, tailFlawed=0] coins=432368.1
+1794524253287 OPAL_C BYE powder=5739 corpses={Lapis=CorpseCount[looted=1, total=1], Umber=CorpseCount[looted=0, total=1], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=108162.7
+1794524355952 CITR_1 BYE powder=11651 corpses={Lapis=CorpseCount[looted=2, total=2], Tungsten=CorpseCount[looted=0, total=1]} gems=GemYield[gem=Citrine, rough=0, flawed=0, fine=1, tailRough=0, tailFlawed=0] coins=198598.9
+1794570236336 JASP_1 DEATH powder=5174 corpses={Lapis=CorpseCount[looted=1, total=1], Umber=CorpseCount[looted=0, total=1], Tungsten=CorpseCount[looted=0, total=1]} gems=GemYield[gem=Jasper, rough=114977, flawed=21233, fine=0, tailRough=487, tailFlawed=90] coins=13186434.3
+1794605230368 TUNG_1 BYE powder=5916 corpses={Lapis=CorpseCount[looted=1, total=1], Umber=CorpseCount[looted=0, total=1], Tungsten=CorpseCount[looted=0, total=2]} gems=null coins=74796.0
+1794606003307 RUBY_C BYE powder=1010 corpses={Umber=CorpseCount[looted=0, total=1], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=4444.3
+1794606112818 JASP_C DEATH powder=9909 corpses={Lapis=CorpseCount[looted=2, total=2], Umber=CorpseCount[looted=0, total=1]} gems=GemYield[gem=Jasper, rough=110711, flawed=22061, fine=0, tailRough=1982, tailFlawed=395] coins=14434668.5
+1794662770649 AQUA_C BYE powder=12695 corpses={Lapis=CorpseCount[looted=2, total=2]} gems=GemYield[gem=Aquamarine, rough=0, flawed=0, fine=1, tailRough=0, tailFlawed=0] coins=397822.7
+1794662849270 AMBE_1 BYE powder=1000 corpses={Tungsten=CorpseCount[looted=0, total=2]} gems=null coins=0.0
+1794753902879 ONYX_2 BYE powder=5462 corpses={Lapis=CorpseCount[looted=1, total=1], Umber=CorpseCount[looted=0, total=2]} gems=null coins=104358.1
+1794755131227 SAPP_1 BYE powder=12085 corpses={Lapis=CorpseCount[looted=2, total=2], Tungsten=CorpseCount[looted=0, total=2]} gems=null coins=88215.4
+1794755170218 RUBY_C BYE powder=5797 corpses={Lapis=CorpseCount[looted=1, total=1], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=63367.8
+1794755271793 TOPA_1 BYE powder=7094 corpses={Lapis=CorpseCount[looted=1, total=1], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=36296.0
+1794755363587 TOPA_1 BYE powder=6832 corpses={Lapis=CorpseCount[looted=1, total=1], Tungsten=CorpseCount[looted=0, total=2]} gems=null coins=120885.3
+1794755463255 AQUA_1 BYE powder=1000 corpses={Umber=CorpseCount[looted=0, total=1], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=0.0
+1794755564094 AMBE_1 BYE powder=5836 corpses={Lapis=CorpseCount[looted=0, total=1], Umber=CorpseCount[looted=0, total=1], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=57524.8
+1794755696410 TOPA_1 BYE powder=5748 corpses={Lapis=CorpseCount[looted=1, total=1], Umber=CorpseCount[looted=0, total=1], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=140795.7
+1794755765854 FAIR_1 BYE powder=1000 corpses={Vanguard=CorpseCount[looted=0, total=1]} gems=null coins=0.0
+1794755833419 ONYX_C BYE powder=5333 corpses={Lapis=CorpseCount[looted=1, total=1], Umber=CorpseCount[looted=0, total=1], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=139648.6
+1794755924179 TUNG_1 BYE powder=7053 corpses={Lapis=CorpseCount[looted=1, total=1], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=670909.2
+1794756001690 PERI_2 BYE powder=17526 corpses={Lapis=CorpseCount[looted=3, total=3], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=326993.6
+1794756063095 PERI_1 BYE powder=10662 corpses={Lapis=CorpseCount[looted=2, total=2], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=283285.8
+1794756099297 PERI_1 BYE powder=12447 corpses={Lapis=CorpseCount[looted=2, total=2], Umber=CorpseCount[looted=0, total=1]} gems=null coins=315758.5
+1794756153600 CITR_2 BYE powder=1000 corpses={Tungsten=CorpseCount[looted=0, total=2]} gems=null coins=0.0
+1794756259345 JADE_1 BYE powder=1000 corpses={Umber=CorpseCount[looted=0, total=2]} gems=null coins=0.0
+1794756294576 PERI_1 BYE powder=5372 corpses={Lapis=CorpseCount[looted=1, total=1], Umber=CorpseCount[looted=0, total=1]} gems=null coins=185982.6
+1794756468303 JADE_1 BYE powder=6262 corpses={Lapis=CorpseCount[looted=1, total=1], Umber=CorpseCount[looted=0, total=2], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=33818.1
+1794756602858 TOPA_1 BYE powder=6495 corpses={Lapis=CorpseCount[looted=1, total=1], Umber=CorpseCount[looted=0, total=1], Tungsten=CorpseCount[looted=0, total=2]} gems=null coins=407828.7
+1794756668592 JADE_1 BYE powder=7157 corpses={Lapis=CorpseCount[looted=1, total=1], Umber=CorpseCount[looted=0, total=1]} gems=null coins=54279.8
+1794756722739 JASP_C DEATH powder=14511 corpses={Lapis=CorpseCount[looted=3, total=3]} gems=GemYield[gem=Jasper, rough=158005, flawed=35866, fine=0, tailRough=1084, tailFlawed=246] coins=23176872.2
+1794757568707 PERI_2 BYE powder=11882 corpses={Lapis=CorpseCount[looted=2, total=2], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=280290.8
+1794757661583 SAPP_1 BYE powder=1000 corpses={Umber=CorpseCount[looted=0, total=1], Tungsten=CorpseCount[looted=0, total=3]} gems=null coins=0.0
+1794757744894 FAIR_1 BYE powder=1000 corpses={Vanguard=CorpseCount[looted=0, total=1]} gems=null coins=0.0
+1794757838916 LITT_L BYE powder=16528 corpses={Lapis=CorpseCount[looted=3, total=3]} gems=null coins=424580.5
+1794757927258 FAIR_1 BYE powder=1000 corpses={Vanguard=CorpseCount[looted=0, total=1]} gems=null coins=0.0
+1794758014882 AMET_1 BYE powder=1000 corpses={Tungsten=CorpseCount[looted=0, total=2]} gems=null coins=0.0
+1794758174437 TOPA_1 BYE powder=11166 corpses={Lapis=CorpseCount[looted=2, total=2], Umber=CorpseCount[looted=0, total=1]} gems=GemYield[gem=Topaz, rough=0, flawed=0, fine=0, tailRough=0, tailFlawed=99] coins=227450.7
+1794758205053 RUBY_2 BYE powder=5424 corpses={Lapis=CorpseCount[looted=1, total=1], Umber=CorpseCount[looted=0, total=2]} gems=null coins=330859.9
+1794758296187 JASP_C BYE powder=40938 corpses={Umber=CorpseCount[looted=2, total=2], Tungsten=CorpseCount[looted=1, total=1]} gems=GemYield[gem=Jasper, rough=151849, flawed=33595, fine=0, tailRough=3661, tailFlawed=810] coins=16118186.6
+1794766241170 SAPP_1 BYE powder=18476 corpses={Lapis=CorpseCount[looted=3, total=3], Tungsten=CorpseCount[looted=0, total=1]} gems=GemYield[gem=Sapphire, rough=182780, flawed=40087, fine=0, tailRough=2211, tailFlawed=485] coins=15778013.9
+1794767003430 RUBY_C BYE powder=17921 corpses={Lapis=CorpseCount[looted=3, total=3]} gems=null coins=328183.3
+1794767078728 ONYX_1 BYE powder=1000 corpses={Umber=CorpseCount[looted=0, total=2]} gems=null coins=0.0
+1794767152244 JADE_1 BYE powder=6836 corpses={Lapis=CorpseCount[looted=1, total=1], Umber=CorpseCount[looted=0, total=1], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=174923.9

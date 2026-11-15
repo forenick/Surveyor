@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import com.google.gson.JsonParseException;
@@ -22,10 +23,14 @@ import dev.skysurveyor.hud.HudLayout.Box;
 import dev.skysurveyor.hud.HudLayout.Line;
 import dev.skysurveyor.hud.HudValue.Kind;
 import dev.skysurveyor.hud.HudValue.Range;
+import dev.skysurveyor.journal.BreakEntry;
+import dev.skysurveyor.journal.Breaks;
+import dev.skysurveyor.journal.EntryBuilder;
 import dev.skysurveyor.journal.JournalEntry;
 import dev.skysurveyor.journal.JournalFile;
 import dev.skysurveyor.journal.JournalStats;
 import dev.skysurveyor.journal.JournalStats.SessionSummary;
+import dev.skysurveyor.journal.MetalYield;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -88,6 +93,18 @@ class HudTest {
 				"no colour rules on the defaults");
 		assertEquals(List.of("§e§l§a§lJade§e§l Shaft", "§7Time inside: §f2:14", "§7Corpses: §f2/4 §9Lapis§f, §6Umber§f",
 				"§7Cold: §b-12❄", "§7Campfires: §61"), HudBoxText.lines(boxes.get(2), example, false));
+	}
+
+	@Test
+	void hintOnlyOnFirstStartTillTheEditorOpens() throws Exception {
+		HudLayout first = HudLayout.firstStart();
+		assertTrue(first.boxes.stream().allMatch(Box::hint));
+		assertFalse(HudLayout.defaults().toJson().contains("hint"), "reset all + presets get none");
+		HudLayout saved = HudLayout.fromJson(first.toJson());
+		assertTrue(saved.boxes.getFirst().hint());
+		assertTrue(saved.dropHints());
+		assertFalse(saved.dropHints());
+		assertEquals(HudLayout.defaults().toJson(), saved.toJson(), "dropped = plain defaults, no hint key");
 	}
 
 	@Test
@@ -317,16 +334,76 @@ class HudTest {
 
 	private static List<JournalEntry> realJournal() throws Exception {
 		Path path = Path.of(HudTest.class.getResource("/journal-2026-11-11.jsonl").toURI());
-		JournalFile file = new JournalFile(path);
+		JournalFile file = new JournalFile(path, Runnable::run);
 		List<JournalEntry> entries = file.load().join();
-		file.close();
 		return entries;
+	}
+
+	@Test
+	void longTimesGetHours() {
+		assertEquals("1:16:14", HudFormat.format(Kind.TIME, 0, 4_574_000L));
+		assertEquals("1h 16m", HudFormat.format(Kind.TIME, 1, 4_574_000L));
+		assertEquals("4574s", HudFormat.format(Kind.TIME, 2, 4_574_000L));
+		assertEquals("59:59", HudFormat.format(Kind.TIME, 0, 3_599_000L), "under an hour stays the same");
+	}
+
+	@Test
+	void typedValues() throws Exception {
+		List<JournalEntry> entries = realJournal();
+		long end = new JournalStats.SessionSummary(entries.getFirst().sessionId(), entries).end();
+		HudData data = live(entries, end);
+		long lapis = new JournalStats.SessionSummary(entries.getFirst().sessionId(), entries).looted("Lapis");
+		assertEquals(lapis, data.get(HudValue.CORPSES_LOOTED, Range.SESSION, "lapis"));
+		assertEquals(lapis, data.get(HudValue.CORPSES_LOOTED, Range.ALL_TIME, "lapis"));
+		assertEquals(lapis, data.get(HudValue.CORPSES_LOOTED, Range.SESSION), "lapis is the default");
+		long lastUmber = entries.getLast().corpses().stream().filter(c -> c.looted() && c.type().equals("Umber")).count();
+		assertEquals(lastUmber, data.get(HudValue.CORPSES_LOOTED, Range.SHAFT, "umber"), "the last shaft outside one");
+
+		data.extra(new HudData.Extra(Map.of("jasper", 3L, "umber", 0L), 60_000L, 5_000L, 4L));
+		Box box = new Box();
+		Line dry = new Line(HudValue.DRYSTREAK);
+		box.lines.add(dry);
+		assertEquals("§7Jasper dry: §d3", HudBoxText.lines(box, data, false).getFirst(), "jasper in its own colour");
+		dry.setTarget("umber");
+		assertEquals("§7Umber dry: §60", HudBoxText.lines(box, data, false).getFirst(), "label + colour follow the type");
+		dry.prefix = "Umb: ";
+		dry.setTarget("jade");
+		assertEquals("§7Umb: §a-", HudBoxText.lines(box, data, false).getFirst(), "typed label stays, no number = -");
+		assertEquals("Umb: &a{dry:jade}", HudBoxText.basicText(box, dry), "advanced starts w/ the type");
+		dry.setTarget("jasper");
+		assertNull(dry.target, "the default type isnt saved");
+		assertEquals(5_000L, data.get(HudValue.SINCE_LAST_SHAFT, null));
+		assertEquals(60_000L, data.get(HudValue.SESSION_TIME, null));
+		assertEquals(4L, data.get(HudValue.SHAFTS_TODAY, null));
 	}
 
 	private static HudData live(List<JournalEntry> entries, long now) {
 		TextPatterns patterns = TextPatterns.defaults();
 		return HudData.live(SessionTotals.of(entries, patterns), Totals.of(entries, patterns),
 				Totals.of(List.of(entries.getLast()), patterns), null, null, now, ShaftNames.defaults());
+	}
+
+	// made-up 20 min break after the last shaft, the live rates stop at 2 min of it
+	@Test
+	void liveRatesLeaveBreaksOut() throws Exception {
+		List<JournalEntry> entries = realJournal();
+		long end = entries.getLast().enteredAt() + entries.getLast().durationMillis();
+		long start = entries.getFirst().sessionId();
+		long now = end + 20 * 60_000;
+		List<BreakEntry> breaks = List.of(new BreakEntry(BreakEntry.VERSION, start, end, now));
+		long breakMillis = Breaks.counted(breaks, start, now);
+		assertEquals(18 * 60_000, breakMillis);
+		TextPatterns patterns = TextPatterns.defaults();
+		HudData data = HudData.live(SessionTotals.of(entries, patterns).withBreaks(breaks), Totals.of(entries, patterns), null, null, null, now,
+				ShaftNames.defaults()).money(new HudData.Money(null, 12_000_000.0, null, 0, 3_000_000.0, null, start, breakMillis));
+		long counted = now - start - breakMillis;
+		assertEquals(15_000_000.0 * 3_600_000 / counted, (double) data.get(HudValue.COINS, Range.PER_HOUR), 1e-6);
+		assertEquals(entries.size() * 3_600_000.0 / counted, (double) data.get(HudValue.SHAFTS_PER_HOUR, null), 1e-9);
+
+		// session w/o shafts yet: 30 min, 10 of it not counted
+		HudData noShafts = HudData.live(SessionTotals.NONE, Totals.NONE, null, null, null, start + 30 * 60_000, ShaftNames.defaults())
+				.money(new HudData.Money(null, null, null, 0, 3_000_000.0, 3_000_000.0, start, 10 * 60_000));
+		assertEquals(9_000_000.0, (double) noShafts.get(HudValue.COINS, Range.PER_HOUR), 1e-6);
 	}
 
 	@Test
@@ -615,6 +692,36 @@ class HudTest {
 	}
 
 	@Test
+	void outsideCoinsAddToSessionHourAndAllTime() throws Exception {
+		List<JournalEntry> entries = realJournal();
+		long end = entries.getLast().enteredAt() + entries.getLast().durationMillis();
+		long start = entries.getFirst().sessionId();
+		HudData data = live(entries, end).money(new HudData.Money(-250_000.0, 12_000_000.0, 40_000_000.0, 20, 3_000_000.0,
+				9_000_000.0, start));
+		SessionSummary session = new SessionSummary(start, entries);
+		assertEquals(-250_000.0, data.get(HudValue.COINS, Range.SHAFT));
+		assertEquals(15_000_000.0, data.get(HudValue.COINS, Range.SESSION));
+		assertEquals(49_000_000.0, data.get(HudValue.COINS, Range.ALL_TIME));
+		assertEquals(session.perHour(15_000_000, end), data.get(HudValue.COINS, Range.PER_HOUR));
+		assertEquals(3_000_000.0, data.get(HudValue.OUTSIDE_COINS, Range.SESSION));
+		assertEquals(session.perHour(3_000_000, end), data.get(HudValue.OUTSIDE_COINS, Range.PER_HOUR));
+		assertEquals(9_000_000.0, data.get(HudValue.OUTSIDE_COINS, Range.ALL_TIME));
+		// shafts only
+		assertEquals(12_000_000.0 / entries.size(), data.get(HudValue.COINS_PER_SHAFT, Range.SESSION));
+		assertEquals(2_000_000.0, data.get(HudValue.COINS_PER_SHAFT, Range.ALL_TIME));
+
+		// session w/o shafts yet, mined for 30 min
+		HudData noShafts = HudData.live(SessionTotals.NONE, Totals.NONE, null, null, null, start + 30 * 60_000, ShaftNames.defaults()).money(new HudData.Money(null, null, null, 0, 3_000_000.0, 3_000_000.0,
+				start));
+		assertEquals(3_000_000.0, noShafts.get(HudValue.COINS, Range.SESSION));
+		assertEquals(6_000_000.0, noShafts.get(HudValue.COINS, Range.PER_HOUR));
+		assertEquals(3_000_000.0, noShafts.getOrExample(HudValue.COINS, Range.SESSION), "real value, not the editor example");
+		Box box = new Box();
+		box.lines.add(new Line(HudValue.OUTSIDE_COINS));
+		assertEquals("§7Outside shafts: §63.0M", HudBoxText.lines(box, noShafts, false).getFirst());
+	}
+
+	@Test
 	void coinValues() throws Exception {
 		List<JournalEntry> entries = realJournal();
 		long end = entries.getLast().enteredAt() + entries.getLast().durationMillis();
@@ -664,7 +771,39 @@ class HudTest {
 
 	@Test
 	void totalsAddUp() {
-		assertEquals(new Totals(3, 30, 1.5), new Totals(1, 10, 0.5).plus(new Totals(2, 20, 1)));
+		assertEquals(new Totals(3, 30, 1.5, 480), new Totals(1, 10, 0.5, 160).plus(new Totals(2, 20, 1, 320)));
+	}
+
+	@Test
+	void minedMetalInTheTierSetting() {
+		List<JournalEntry> entries = List.of(
+				EntryBuilder.entry().shaftId("TUNG_1").metal(new MetalYield("Tungsten", 48_211, 2, 0)).build(),
+				EntryBuilder.entry().enteredAt(600_000).build(),
+				EntryBuilder.entry().shaftId("UMBE_1").enteredAt(1_200_000).metal(new MetalYield("Umber", 1_000, 0, 0)).build());
+		TextPatterns patterns = TextPatterns.defaults();
+		SessionTotals session = SessionTotals.of(entries, patterns);
+		Totals all = Totals.of(entries, patterns);
+		Totals last = Totals.of(List.of(entries.getLast()), patterns);
+		HudData enchanted = HudData.live(session, all, last, null, null, 1_260_000, ShaftNames.defaults(), MetalYield.ENCHANTED);
+		assertEquals(49_531 / 160.0, (Double) enchanted.get(HudValue.MINED_METAL, Range.SESSION), 1e-9, "both metals, gem shaft adds 0");
+		assertEquals(49_531 / 160.0, (Double) enchanted.get(HudValue.MINED_METAL, Range.ALL_TIME), 1e-9);
+		assertEquals(1_000 / 160.0, (Double) enchanted.get(HudValue.MINED_METAL, Range.SHAFT), 1e-9, "the last shaft outside one");
+		HudData raw = HudData.live(session, all, last, null, null, 1_260_000, ShaftNames.defaults(), MetalYield.RAW);
+		assertEquals(49_531.0, (Double) raw.get(HudValue.MINED_METAL, Range.SESSION), 1e-9);
+		assertEquals(49_531 / 25_600.0, (Double) HudData.live(session, all, last, null, null, 1_260_000, ShaftNames.defaults(),
+				MetalYield.REFINED).get(HudValue.MINED_METAL, Range.ALL_TIME), 1e-9);
+		assertEquals("mined_metal", HudValue.MINED_METAL.tag());
+		assertNotNull(HudData.EXAMPLE.get(HudValue.MINED_METAL, Range.PER_HOUR));
+
+		// saved lines load back the same, no .old backup
+		HudLayout layout = HudLayout.defaults();
+		for (Range range : HudValue.MINED_METAL.ranges()) {
+			Line line = new Line(HudValue.MINED_METAL);
+			line.range = range;
+			layout.boxes.getFirst().lines.add(line);
+		}
+		String json = layout.toJson();
+		assertEquals(json, HudLayout.fromJson(json).toJson());
 	}
 
 	// recording 3
@@ -838,7 +977,7 @@ class HudTest {
 		assertEquals("§7Last shaft's spawn: §f-", HudBoxText.lines(box, outside, false).getFirst());
 		spawn.setRange(Range.ALL_TIME);
 		assertEquals("§7All-time avg spawn: §f1:31", HudBoxText.lines(box, HudData.EXAMPLE, false).getFirst());
-		assertEquals(Long.valueOf(15), new Totals(2, 0, 0, 30, 2).averageSpawn());
+		assertEquals(Long.valueOf(15), new Totals(2, 0, 0, 30, 2, 0).averageSpawn());
 		assertNull(Totals.NONE.averageSpawn());
 	}
 

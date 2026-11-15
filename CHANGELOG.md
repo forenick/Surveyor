@@ -2,7 +2,45 @@
 
 [SemVer](https://semver.org). Betas are `X.Y.Z-beta.N` (GitHub pre-releases).
 
-## 0.23.0-beta.2 (2026-11-14)
+## 0.24.0 (2026-11-15)
+- Coins outside shafts: what you mine in the Dwarven Mines between shafts counts in session, day, Stats and HUD coins and Coins / h.
+- Coins outside shafts HUD line with Session, Per hour and All-time ranges.
+- Outside shafts row at the bottom of a session's shafts, and in the coins tooltips.
+- A session lasts until your last mining, not the end of its last shaft.
+- Per hour rates stop counting after 2 minutes without mining.
+- Hover a session's length to see how much was a break.
+- Time shafting on the Stats tab leaves breaks out.
+- A session says how many items went to the material stash while you mined.
+- Prices stay up to date during long shafts.
+- Session Coins tooltip shows where the coins came from, then Earned, Spent and Net.
+- Coins tooltips show how much Bazaar tax was taken off.
+- Coins breakdown tooltips list the most valuable items first.
+- Glossy Gemstones get their own row in the coins breakdown.
+- Keys and campfires setting: insta-buy, crafted from your own Enchanted Tungsten or Umber, or not counted.
+- A key saved by Resourceful costs nothing and the shaft says so.
+- Shaft table's Gems column is now Mined: Fine for gem shafts, metal in your Metal tier for metal shafts.
+- Mined amounts in the colour of the gem or metal, without the ≈.
+- Hover a Mined value to see the whole amount, f.e. 303.3 Enchanted Tungsten.
+- Sort the shafts in a session by clicking a column header.
+- Make your own personal bests on the Stats tab: pick a value, per shaft or per session, highest or lowest, and a shaft type.
+- Edit personal bests: drag to reorder, remove, rename, or reset to the default list.
+- Metal / shaft and Drystreak personal bests, f.e. Jasper dry 9 (longest 18).
+- Fastest spawn, Fastest session and Lapis / shaft are no longer in the default list.
+- Click anywhere on a personal best to open it.
+- Open sessions show your other sessions on the left, click one to switch. On small screens it folds to a strip.
+- Back button moved to the top of that list.
+- Arrows and chart bars in the journal light up when you hover them.
+- Stats chart types (bars or line) are saved.
+- Personal best HUD line: show any personal best from the Stats tab, f.e. `{pb:drystreak_jasp}`.
+- Typos in `{pb:...}` tags show an error with a suggestion.
+- Drystreak HUD line: shafts since your last shaft of a type you pick, f.e. `{dry:jasper}`.
+- Corpses looted HUD line per corpse type, f.e. `{looted:umber}`, with Shaft, Session, Per hour and All-time ranges.
+- Mined metal HUD line with Shaft, Session, Per hour and All-time ranges, in your Metal tier.
+- Session length, Time since last shaft and Shafts today HUD lines.
+- Times over an hour show hours, f.e. 1:16:00 or 1h 16m.
+- `/sv hud` opens the HUD editor.
+- New players see `(/sv hud)` under the default HUD boxes until they open the editor.
+- Recordings also save what Surveyor detected live.
 - Each HUD line has an Easy and an Advanced mode.
 - Advanced: type the whole line with colours, values and maths, f.e. `{coins / shafts}`.
 - Advanced lines can show several values.
@@ -37,13 +75,9 @@
 - Hovering a value in Add line explains what it counts.
 - Help card behind the ? in the Edit HUD toolbar.
 - Edit HUD is lighter while a line page is open.
-
-## 0.23.0-beta.1 (2026-11-14)
 - Tungsten mined in Tungsten shafts and Umber in Umber shafts count as Mined metal.
 - Metal tier setting: Enchanted, Tungsten or Umber, or Refined.
 - Metal line in the shaft summary and Metal mined in the shaft view.
-
-## 0.22.0-beta.1 (2026-11-13)
 - Shaft summary as a toast. Chat, both or off in Settings.
 - Toast style, time and position, top right or anywhere in Edit HUD.
 - Ironman setting: coins from NPC sell prices.

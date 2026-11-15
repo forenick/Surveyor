@@ -186,5 +186,40 @@ class HudExprTest {
 				HudTyping.option("{coins:all_time:comma} x", 22, HudValue.COINS, "plain"), "a format swaps the format");
 		assertEquals(new HudTyping.Edit("x {coins:shaft}", 15), HudTyping.option("x ", 2, HudValue.COINS, "shaft"));
 		assertEquals(new HudTyping.Edit("{spawn} {coins:plain}", 21), HudTyping.option("{spawn} ", 8, HudValue.COINS, "plain"));
+		assertEquals(new HudTyping.Edit("{looted:umber:session}", 22),
+				HudTyping.option("{looted:lapis:session}", 22, HudValue.CORPSES_LOOTED, "umber"), "a type swaps the type, goes first");
+		assertEquals(new HudTyping.Edit("{dry:vanguard}", 14), HudTyping.option("{dry}", 5, HudValue.DRYSTREAK, "vanguard"));
+	}
+
+	@Test
+	void personalBestTags() {
+		HudData data = HudData.EXAMPLE;
+		assertEquals("+10.0M", HudBoxText.tagText(HudExpr.parseOrThrow("pb:shaft_coins"), data, true));
+		assertEquals("26.5", HudBoxText.tagText(HudExpr.parseOrThrow("pb"), data, true), "first pb in the list");
+		assertEquals("-", HudBoxText.tagText(HudExpr.parseOrThrow("pb:shaft_cold_lowest"), data, true), "no made up example");
+		assertNull(error("pb:session_powder_jasp"), "a removed pb isnt a mistake, it shows -");
+		assertEquals("pb has no :shaft_powdr. Did you mean :shaft_powder?", error("pb:shaft_powdr"), "typo, not a pb key");
+		assertEquals("pb:drystreak_jasp", HudExpr.plain(HudExpr.parseOrThrow("pb:drystreak_jasp")));
+		assertEquals("Coins / shaft", HudValue.PERSONAL_BEST.targetName("shaft_coins"));
+		assertEquals("PB Jasper dry: ", HudValue.PERSONAL_BEST.defaultPrefix(null, "drystreak_jasp"));
+		assertEquals("9 (longest 18)", HudData.pbText(new dev.skysurveyor.journal.PersonalBests.Def("drystreak", "JASP", null, null),
+				new dev.skysurveyor.journal.PersonalBests.Result(18.0, null, null, 9L), 0));
+		assertEquals("1m 31s avg", HudData.pbText(new dev.skysurveyor.journal.PersonalBests.Def("session_spawn", null, null, null),
+				new dev.skysurveyor.journal.PersonalBests.Result(91_000.0, null, null, null), 0));
+	}
+
+	@Test
+	void shaftAndCorpseTypes() {
+		assertEquals("12", show("dry"), "jasper example");
+		assertEquals("-", show("dry:umber"), "no umber number");
+		assertEquals("12", HudBoxText.tagText(HudExpr.parseOrThrow("dry:umber"), HudData.EXAMPLE, true), "editor shows jaspers example");
+		assertEquals("dry:umber", HudExpr.plain(HudExpr.parseOrThrow("dry:umber")));
+		assertEquals("dry", HudExpr.plain(HudExpr.parseOrThrow("dry:jasper")), "default type left out");
+		assertEquals("looted:umber:all_time", HudExpr.plain(HudExpr.parseOrThrow("looted:all_time:umber")), "type, then range");
+		assertEquals("172", show("looted:all_time"));
+		assertEquals("looted has no :lapiz. Did you mean :lapis?", error("looted:lapiz"));
+		assertEquals("spawn has no :jasper", error("spawn:jasper"));
+		assertTrue(HudValue.DRYSTREAK.targets().containsAll(List.of("jasper", "vanguard", "jade")));
+		assertEquals(List.of("lapis", "umber", "tungsten", "vanguard"), HudValue.CORPSES_LOOTED.targets());
 	}
 }

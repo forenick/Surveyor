@@ -45,7 +45,7 @@ class JournalFileTest {
 		String text = String.join("\n", JADE, "{}", cut, "{\"corpses\":null,\"loots\":[]}", noExit, PERIDOT_0_2, TOPAZ) + "\n";
 		Files.writeString(path, text, StandardCharsets.UTF_8);
 
-		List<JournalEntry> entries = new JournalFile(path).read();
+		List<JournalEntry> entries = new JournalFile(path, Runnable::run).read();
 		assertEquals(List.of("JADE_1", "PERI_1", "TOPA_1"), entries.stream().map(JournalEntry::shaftId).toList());
 		// what crashed before: hud refresh + journal open
 		JournalStats.allTime(entries);
@@ -66,7 +66,7 @@ class JournalFileTest {
 		System.arraycopy(topaz, 0, all, jade.length + torn.length, topaz.length);
 		Files.write(path, all);
 
-		assertEquals(List.of("JADE_1", "TOPA_1"), new JournalFile(path).read().stream().map(JournalEntry::shaftId).toList());
+		assertEquals(List.of("JADE_1", "TOPA_1"), new JournalFile(path, Runnable::run).read().stream().map(JournalEntry::shaftId).toList());
 	}
 
 	@Test
@@ -76,10 +76,9 @@ class JournalFileTest {
 		String torn = JADE + "\n" + TOPAZ.substring(0, 300);
 		Files.writeString(path, torn, StandardCharsets.UTF_8);
 
-		JournalFile file = new JournalFile(path);
+		JournalFile file = new JournalFile(path, Runnable::run);
 		JournalEntry next = file.read().get(0).withPrices(null);
 		file.append(EntryBuilder.from(next).shaftId("AMBE_1").enteredAt(1794175000000L).build());
-		file.close();
 
 		assertEquals(List.of("JADE_1", "AMBE_1"), file.read().stream().map(JournalEntry::shaftId).toList());
 		String now = Files.readString(path, StandardCharsets.UTF_8);
@@ -90,10 +89,9 @@ class JournalFileTest {
 	@Test
 	void appendAddsNoBlankLines(@TempDir Path dir) throws IOException {
 		Path path = dir.resolve("skysurveyor").resolve("journal.jsonl");
-		JournalFile file = new JournalFile(path);
+		JournalFile file = new JournalFile(path, Runnable::run);
 		file.append(EntryBuilder.entry().shaftId("JADE_1").build());
 		file.append(EntryBuilder.entry().shaftId("TOPA_1").build());
-		file.close();
 
 		List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
 		assertEquals(2, lines.size());

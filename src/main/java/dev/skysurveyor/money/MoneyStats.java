@@ -7,15 +7,17 @@ import java.util.Map;
 import java.util.function.Function;
 
 import dev.skysurveyor.journal.JournalEntry;
-import dev.skysurveyor.journal.JournalStats;
 import dev.skysurveyor.journal.JournalStats.SessionSummary;
+import dev.skysurveyor.journal.MiningEntry;
 import dev.skysurveyor.money.ShaftValue.CorpseValue;
 import dev.skysurveyor.money.ShaftValue.Part;
 
 // values null = no prices at all yet
 // parts = all-time total per part, in Part order, items = the same per item. ironman = only npc prices, for the wording
-public record MoneyStats(Double coins, int valued, Map<Part, Double> parts, Map<String, CorpseCoins> corpses, Best bestShaft,
-		BestRate bestRate, Map<Part, Map<String, ItemCoins>> items, Map<String, TypeCoins> types, boolean ironman) {
+// coins = shafts only, outside = mining outside shafts (null = none or no prices), outsideItems per part like items
+public record MoneyStats(Double coins, int valued, Map<Part, Double> parts, Map<String, CorpseCoins> corpses,
+		Map<Part, Map<String, ItemCoins>> items, Map<String, TypeCoins> types, boolean ironman, Double outside,
+		Map<Part, Map<String, ItemCoins>> outsideItems) {
 	public record CorpseCoins(int corpses, double loot, double keys, int unpriced, Map<String, ItemCoins> items) {
 		public double net() {
 			return loot + keys;
@@ -46,14 +48,33 @@ public record MoneyStats(Double coins, int valued, Map<Part, Double> parts, Map<
 		}
 	}
 
-	public record Best(JournalEntry entry, double coins) {
-	}
-
-	public record BestRate(SessionSummary session, double perHour) {
-	}
-
 	public Double perShaft() {
 		return coins == null || valued == 0 ? null : coins / valued;
+	}
+
+	// shafts + outside
+	public Double total() {
+		return plus(coins, outside);
+	}
+
+	// positive parts + outside, after tax
+	public double income() {
+		double income = 0;
+		for (double part : parts.values()) if (part > 0) income += part;
+		if (outside != null && outside > 0) income += outside;
+		return income;
+	}
+
+	// keys, campfires, negative
+	public double costs() {
+		double costs = 0;
+		for (double part : parts.values()) if (part < 0) costs += part;
+		return costs;
+	}
+
+	// same entries valued w/o tax, so income + tax = what hypixels sell screens show
+	public static double tax(MoneyStats taxed, MoneyStats untaxed) {
+		return untaxed.income() - taxed.income();
 	}
 
 	public static Double net(ShaftValue value) {
@@ -72,20 +93,36 @@ public record MoneyStats(Double coins, int valued, Map<Part, Double> parts, Map<
 		return b == null ? a : a + b;
 	}
 
-	public static Double perHour(SessionSummary session, Function<JournalEntry, ShaftValue> values) {
-		Double coins = coins(session.entries(), values);
+	// null when none of them has a value
+	public static Double outside(List<MiningEntry> mining, Function<MiningEntry, Double> values) {
+		Double total = null;
+		for (MiningEntry entry : mining) total = plus(total, values.apply(entry));
+		return total;
+	}
+
+	// shafts + outside
+	public static Double session(SessionSummary session, Function<JournalEntry, ShaftValue> values, Function<MiningEntry, Double> outside) {
+		return plus(coins(session.entries(), values), outside(session.mining(), outside));
+	}
+
+	public static Double perHour(SessionSummary session, Function<JournalEntry, ShaftValue> values, Function<MiningEntry, Double> outside) {
+		Double coins = session(session, values, outside);
 		return coins == null ? null : session.perHour(coins, session.end());
 	}
 
-	public static MoneyStats of(List<JournalEntry> entries, List<SessionSummary> sessions,
-			Function<JournalEntry, ShaftValue> values, boolean ironman) {
+	public static MoneyStats of(List<JournalEntry> entries, Function<JournalEntry, ShaftValue> values, boolean ironman) {
+		return of(entries, values, List.of(), e -> null, ironman);
+	}
+
+	// outside null = no prices for that entry
+	public static MoneyStats of(List<JournalEntry> entries, Function<JournalEntry, ShaftValue> values, List<MiningEntry> mining,
+			Function<MiningEntry, List<ShaftValue.Line>> outside, boolean ironman) {
 		Double coins = null;
 		int valued = 0;
 		Map<Part, Double> parts = new EnumMap<>(Part.class);
 		Map<String, CorpseCoins> corpses = new LinkedHashMap<>();
 		Map<Part, Map<String, ItemCoins>> items = new EnumMap<>(Part.class);
 		Map<String, TypeCoins> types = new LinkedHashMap<>();
-		Best best = null;
 		for (JournalEntry entry : entries) {
 			ShaftValue value = values.apply(entry);
 			if (value == null) continue;
@@ -103,17 +140,18 @@ public record MoneyStats(Double coins, int valued, Map<Part, Double> parts, Map<
 						: new CorpseCoins(had.corpses() + 1, had.loot() + corpse.loot(), had.keys() + corpse.key(),
 								had.unpriced() + corpse.unpriced(), loot));
 			}
-			if (!value.lines().isEmpty() && (best == null || value.net() > best.coins())) best = new Best(entry, value.net());
 			String type = entry.shaftType();
 			if (type != null) types.put(type, plus(types.get(type), entry.variant(), value));
 		}
-		BestRate bestRate = null;
-		for (SessionSummary session : sessions) {
-			if (session.shafts() < JournalStats.MIN_SHAFTS_FOR_RATE_RECORD) continue;
-			Double rate = perHour(session, values);
-			if (rate != null && (bestRate == null || rate > bestRate.perHour())) bestRate = new BestRate(session, rate);
+		Double outsideCoins = null;
+		Map<Part, Map<String, ItemCoins>> outsideItems = new EnumMap<>(Part.class);
+		for (MiningEntry entry : mining) {
+			List<ShaftValue.Line> lines = outside.apply(entry);
+			if (lines == null) continue;
+			outsideCoins = plus(outsideCoins, MiningValue.total(lines));
+			for (ShaftValue.Line line : lines) add(outsideItems.computeIfAbsent(line.part(), part -> new LinkedHashMap<>()), line);
 		}
-		return new MoneyStats(coins, valued, parts, corpses, best, bestRate, items, types, ironman);
+		return new MoneyStats(coins, valued, parts, corpses, items, types, ironman, outsideCoins, outsideItems);
 	}
 
 	private static TypeCoins plus(TypeCoins had, String variant, ShaftValue value) {

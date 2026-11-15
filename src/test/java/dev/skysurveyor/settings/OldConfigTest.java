@@ -103,6 +103,29 @@ class OldConfigTest {
 		assertFalse(byDay(config), "only a real true turns it on");
 	}
 
+	@Test
+	void chartTypesSaveAndLoad(@TempDir Path tmp) throws Exception {
+		Path file = tmp.resolve("config.json");
+		Files.writeString(file, "{\"journal\": {\"byDay\": false}}");
+		ConfigFile config = new ConfigFile(tmp);
+		config.reloadIfChanged();
+		JournalSettings before = config.get().journal();
+		assertEquals(JournalSettings.ChartType.BARS, before.spawnChart(), "old file = bars");
+		config.save(ConfigSection.JOURNAL, before, before.withCoinChart(JournalSettings.ChartType.LINE));
+		JsonObject journal = JsonParser.parseString(Files.readString(file)).getAsJsonObject().getAsJsonObject("journal");
+		assertEquals("line", journal.get("coinChart").getAsString());
+		assertFalse(journal.has("spawnChart"), "only changes get written");
+		assertFalse(journal.get("byDay").getAsBoolean());
+		ConfigFile reloaded = new ConfigFile(tmp);
+		reloaded.reloadIfChanged();
+		assertEquals(JournalSettings.ChartType.LINE, reloaded.get().journal().coinChart());
+		assertFalse(byDay(reloaded));
+		Files.writeString(file, "{\"journal\": {\"spawnChart\": \"pie\", \"coinChart\": 3}}");
+		Files.setLastModifiedTime(file, FileTime.fromMillis(1_000));
+		reloaded.reloadIfChanged();
+		assertEquals(JournalSettings.DEFAULTS, reloaded.get().journal(), "weird values = defaults");
+	}
+
 	// a money edit made right before toggling by day still loads
 	@Test
 	void byDayDoesNotSwallowAnEdit(@TempDir Path tmp) throws Exception {
@@ -125,7 +148,7 @@ class OldConfigTest {
 
 	// the page only saves a by day that changed
 	private static void saveByDay(ConfigFile config, boolean value) {
-		config.save(ConfigSection.JOURNAL, new JournalSettings(!value), new JournalSettings(value));
+		config.save(ConfigSection.JOURNAL, JournalSettings.DEFAULTS.withByDay(!value), JournalSettings.DEFAULTS.withByDay(value));
 	}
 
 	private static JsonObject money(Path file) throws Exception {
@@ -169,7 +192,7 @@ class OldConfigTest {
 		MoneySettings a = MoneySettings.DEFAULTS.withGemTier(MoneySettings.GemTier.FINE);
 		MoneySettings b = a.withBazaarTax(2);
 		config.set(ConfigSection.MONEY, b);
-		config.set(ConfigSection.JOURNAL, new JournalSettings(false));
+		config.set(ConfigSection.JOURNAL, JournalSettings.DEFAULTS.withByDay(false));
 		config.save(ConfigSection.MONEY, MoneySettings.DEFAULTS, a);
 		saveByDay(config, true);
 		assertEquals(b, config.get().money());
@@ -232,7 +255,7 @@ class OldConfigTest {
 		assertFalse(summary.has("style"));
 	}
 
-	// what 0.22.0-alpha.15 wrote on a first start, key order + layout. metalTier new at the end since 0.23.0
+	// what 0.22.0-alpha.15 wrote on a first start, key order + layout. metalTier new at the end since 0.23.0, ownMetal since 0.24.0, chart types since 0.24.0-alpha.12
 	@Test
 	void newFileLooksTheSame(@TempDir Path tmp) throws Exception {
 		new ConfigFile(tmp).reloadIfChanged();
@@ -245,10 +268,13 @@ class OldConfigTest {
 				    "oldShafts": "that_day",
 				    "crystals": "perfect_minus_flawless",
 				    "ironman": false,
-				    "metalTier": "enchanted"
+				    "metalTier": "enchanted",
+				    "ownMetal": "insta_buy"
 				  },
 				  "journal": {
-				    "byDay": true
+				    "byDay": true,
+				    "spawnChart": "bars",
+				    "coinChart": "bars"
 				  },
 				  "summary": {
 				    "show": "toast",
@@ -291,7 +317,7 @@ class OldConfigTest {
 		for (String journal : new String[] {"5", "[]", "null", "{}", "{\"byDay\": null}", "{\"byDay\": []}", "{\"byDay\": {}}"}) {
 			Files.writeString(file, "{\"journal\": " + journal + ", \"summary\": {\"show\": \"chat\"}}");
 			Files.setLastModifiedTime(file, FileTime.fromMillis(time += 1_000));
-			config.set(ConfigSection.JOURNAL, new JournalSettings(false));
+			config.set(ConfigSection.JOURNAL, JournalSettings.DEFAULTS.withByDay(false));
 			config.set(ConfigSection.SUMMARY, SummarySettings.DEFAULTS);
 			config.reloadIfChanged();
 			assertTrue(byDay(config), journal);

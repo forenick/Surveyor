@@ -2,6 +2,7 @@ package dev.skysurveyor.hud;
 
 import java.util.List;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
@@ -12,11 +13,13 @@ import dev.skysurveyor.hud.HudLayout.Box;
 public final class HudRenderer {
 	static final int PADDING = 3;
 	private static final int LINE_GAP = 1;
+	private static final int HINT_GAP = 2;
 	private static final int DARK = 0x80000000;
 	private static final Identifier FRAME_BACKGROUND = Identifier.withDefaultNamespace("tooltip/background");
 	private static final Identifier FRAME_BORDER = Identifier.withDefaultNamespace("tooltip/frame");
 	// vanilla tooltip sprites overhang the text by 12px
 	private static final int FRAME_OVERHANG = 12;
+	private static final String HINT = "§7(/sv hud)";
 
 	public record Bounds(int x, int y, int width, int height) {
 		public boolean contains(double px, double py) {
@@ -38,8 +41,9 @@ public final class HudRenderer {
 	}
 
 	public static Bounds bounds(Font font, Box box, List<String> lines, int screenWidth, int screenHeight) {
-		int width = Math.round(innerWidth(font, lines) * box.scale);
-		int height = Math.round(innerHeight(font, lines) * box.scale);
+		float hintScale = hintScale(box);
+		int width = Math.round(Math.max(innerWidth(font, lines), hintWidth(font, box, hintScale) + 2 * PADDING) * box.scale);
+		int height = Math.round((innerHeight(font, lines) + hintHeight(font, box, hintScale)) * box.scale);
 		return new Bounds(box.anchorX.start(box.offsetX, width, screenWidth),
 				box.anchorY.start(box.offsetY, height, screenHeight), width, height);
 	}
@@ -51,8 +55,10 @@ public final class HudRenderer {
 			lineWidths[i] = font.width(lines.get(i));
 			widest = Math.max(widest, lineWidths[i]);
 		}
-		int width = widest + 2 * PADDING;
-		int height = innerHeight(font, lines);
+		float hintScale = hintScale(box);
+		int hintWidth = hintWidth(font, box, hintScale);
+		int width = Math.max(widest, hintWidth) + 2 * PADDING;
+		int height = innerHeight(font, lines) + hintHeight(font, box, hintScale);
 		graphics.pose().pushMatrix();
 		graphics.pose().translate(bounds.x(), bounds.y());
 		graphics.pose().scale(box.scale, box.scale);
@@ -74,6 +80,18 @@ public final class HudRenderer {
 			};
 			drawLine(graphics, font, line, x, y);
 			y += font.lineHeight + LINE_GAP;
+		}
+		if (hintWidth > 0) {
+			float x = PADDING + switch (box.align) {
+				case LEFT -> 0;
+				case CENTER -> (textWidth - hintWidth) / 2f;
+				case RIGHT -> textWidth - hintWidth;
+			};
+			graphics.pose().pushMatrix();
+			graphics.pose().translate(x, y - LINE_GAP + HINT_GAP);
+			graphics.pose().scale(hintScale, hintScale);
+			graphics.text(font, HINT, 0, 0, 0xFFFFFFFF, true);
+			graphics.pose().popMatrix();
 		}
 		graphics.pose().popMatrix();
 	}
@@ -97,6 +115,23 @@ public final class HudRenderer {
 			if (i % 2 == 0) graphics.text(font, pieces.get(i), x, y, 0xFFFFFFFF, true);
 			x += font.width(pieces.get(i));
 		}
+	}
+
+	// ~0.6x, rounded so font pixels stay whole screen pixels
+	private static float hintScale(Box box) {
+		if (!box.hint()) return 0;
+		float pixels = Minecraft.getInstance().getWindow().getGuiScale() * box.scale;
+		if (pixels <= 0) return 0.5f;
+		return Math.max(1, Math.round(pixels * 0.6f)) / pixels;
+	}
+
+	private static int hintWidth(Font font, Box box, float scale) {
+		return box.hint() ? (int) Math.ceil(font.width(HINT) * scale) : 0;
+	}
+
+	// below the last line, font height w/o the gap under it
+	private static int hintHeight(Font font, Box box, float scale) {
+		return box.hint() ? HINT_GAP + (int) Math.ceil((font.lineHeight - 1) * scale) : 0;
 	}
 
 	private static int innerWidth(Font font, List<String> lines) {

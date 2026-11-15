@@ -36,6 +36,10 @@ public sealed interface ShaftEvent {
 	record CorpseLooted(CorpseLoot loot) implements ShaftEvent {
 	}
 
+	// resourceful, unconfirmed text
+	record KeySaved() implements ShaftEvent {
+	}
+
 	// 0 or negative
 	record ColdChanged(int cold) implements ShaftEvent {
 	}

@@ -1,5 +1,6 @@
 package dev.skysurveyor.journal;
 
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
@@ -62,8 +63,22 @@ public record GemYield(String gem, long rough, long flawed, long fine, long tail
 		long rough = mined.at(ROUGH);
 		long flawed = mined.at(FLAWED);
 		long tailFlawed = tail.counts()[FLAWED];
-		long tailRough = flawed > 0 ? Math.round(tailFlawed * (double) rough / flawed) : 0;
-		return new GemYield(gem, rough, flawed, mined.at(FINE), tailRough, tailFlawed);
+		return new GemYield(gem, rough, flawed, mined.at(FINE), tailRough(tailFlawed, rough, flawed), tailFlawed);
+	}
+
+	// tail is flawed only, rough in the same ratio as reported
+	static long tailRough(long tailFlawed, long rough, long flawed) {
+		return flawed > 0 ? Math.round(tailFlawed * (double) rough / flawed) : 0;
+	}
+
+	// gem -> fine equivalent, in item order
+	public static Map<String, Double> fineByGem(Map<String, Long> items, TextPatterns patterns) {
+		Map<String, Double> gems = new LinkedHashMap<>();
+		items.forEach((item, count) -> {
+			Matcher m = patterns.match("gem.item", item);
+			if (m != null) gems.merge(m.group("gem"), toFine(m.group("quality"), count), Double::sum);
+		});
+		return gems;
 	}
 
 	public static boolean isShaftGem(String item, String type, TextPatterns patterns) {

@@ -8,7 +8,6 @@ import org.junit.jupiter.api.Test;
 
 import dev.skysurveyor.journal.EntryBuilder;
 import dev.skysurveyor.journal.JournalEntry;
-import dev.skysurveyor.journal.JournalStats;
 import dev.skysurveyor.journal.JournalStats.Drops;
 import dev.skysurveyor.journal.JournalStats.ItemDrop;
 import dev.skysurveyor.money.ShaftValue.CorpseValue;
@@ -34,7 +33,7 @@ class CoinBreakdownTest {
 				new Line(Part.KEYS, "Umber Key", 1, -400_000.0)),
 				List.of(new CorpseValue("Umber", 602_000, -400_000, 1, loot)));
 		List<JournalEntry> entries = List.of(entry(0), entry(120_000));
-		return MoneyStats.of(entries, JournalStats.sessions(entries), e -> value, false);
+		return MoneyStats.of(entries, e -> value, false);
 	}
 
 	@Test
@@ -49,10 +48,10 @@ class CoinBreakdownTest {
 
 	@Test
 	void detailedSharesAndCosts() {
-		List<String> lines = CoinBreakdown.detailed(stats(), null, 0, 1000);
+		List<String> lines = CoinBreakdown.detailed(stats(), null, 0, false, null, 1000);
 		// income 3M + 3.5k + 602k per shaft
 		assertTrue(lines.contains("§fMined gems §6+6.0M §883%"), lines.toString());
-		assertTrue(lines.contains("  §7≈201.0 Fine Jade Gemstone §6+6.0M"), lines.toString());
+		assertTrue(lines.contains("  §7201.0 Fine Jade Gemstone §6+6.0M"), lines.toString());
 		assertTrue(lines.contains("§fOther drops §6+7.0k §8<1%"), lines.toString());
 		assertTrue(lines.contains("  §72 Umber corpses §6+1.2M"), lines.toString());
 		assertTrue(lines.contains("§fKeys §c-800.0k"), "no share on costs");
@@ -60,14 +59,16 @@ class CoinBreakdownTest {
 		assertTrue(lines.contains("§c1 item without a price"));
 		assertEquals(CoinBreakdown.SHIFT_HINT, lines.getLast());
 		assertEquals("", lines.get(lines.size() - 2), "gap before the hint");
+		assertTrue(lines.stream().noneMatch(l -> l.contains("tax")), "no tax line w/o tax");
+		assertTrue(CoinBreakdown.detailed(stats(), null, 0, false, 70_000.0, 1000).contains("§7Bazaar tax taken off: 70.0k"));
 	}
 
 	@Test
 	void itemsCutToFit() {
 		MoneyStats stats = stats();
-		List<String> all = CoinBreakdown.detailed(stats, null, 0, 1000);
+		List<String> all = CoinBreakdown.detailed(stats, null, 0, false, null, 1000);
 		assertTrue(all.contains("  §71,280 Coal §6+2.0k"), "3 other drops all shown");
-		List<String> cut = CoinBreakdown.detailed(stats, null, 0, CoinBreakdown.height(all) - 1);
+		List<String> cut = CoinBreakdown.detailed(stats, null, 0, false, null, CoinBreakdown.height(all) - 1);
 		assertTrue(CoinBreakdown.height(cut) < CoinBreakdown.height(all));
 		assertTrue(cut.stream().anyMatch(l -> l.startsWith("  §8") && l.contains(" more ")), cut.toString());
 	}

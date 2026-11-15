@@ -72,7 +72,8 @@ class SettingsListTest {
 	@Test
 	void everyMoneyFieldHasASetting() {
 		MoneySettings changed = new MoneySettings(MoneySettings.SellPrice.SELL_OFFER, MoneySettings.GemTier.FINE, 2.0,
-				MoneySettings.OldShafts.TODAY, MoneySettings.Crystals.ZERO, true, MoneySettings.MetalTier.REFINED);
+				MoneySettings.OldShafts.TODAY, MoneySettings.Crystals.ZERO, true, MoneySettings.MetalTier.REFINED,
+				MoneySettings.OwnMetal.CRAFT);
 		Settings all = Settings.DEFAULTS.withMoney(changed);
 		assertFalse(money().isDefault(all));
 		assertEquals(Settings.DEFAULTS, money().reset(all));
@@ -80,7 +81,7 @@ class SettingsListTest {
 
 	@Test
 	void resetCategoryLeavesOthers() {
-		Settings changed = Settings.DEFAULTS.withJournal(new JournalSettings(false)).withMoney(MoneySettings.DEFAULTS.withGemTier(MoneySettings.GemTier.FINE));
+		Settings changed = Settings.DEFAULTS.withJournal(JournalSettings.DEFAULTS.withByDay(false)).withMoney(MoneySettings.DEFAULTS.withGemTier(MoneySettings.GemTier.FINE));
 		Settings reset = money().reset(changed);
 		assertEquals(MoneySettings.DEFAULTS, reset.money());
 		assertFalse(reset.journal().byDay());

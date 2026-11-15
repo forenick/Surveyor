@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import dev.skysurveyor.data.CorpseType;
 import dev.skysurveyor.detection.ShaftEvent.CampfirePlaced;
 import dev.skysurveyor.detection.ShaftEvent.CampfireUsed;
 import dev.skysurveyor.detection.ShaftEvent.CaveIn;
@@ -15,6 +16,7 @@ import dev.skysurveyor.detection.ShaftEvent.CrystalOwned;
 import dev.skysurveyor.detection.ShaftEvent.ExitBonus;
 import dev.skysurveyor.detection.ShaftEvent.ExtraCorpses;
 import dev.skysurveyor.detection.ShaftEvent.FrozeToDeath;
+import dev.skysurveyor.detection.ShaftEvent.KeySaved;
 import dev.skysurveyor.detection.ShaftEvent.MayhemBuff;
 import dev.skysurveyor.detection.ShaftEvent.Pristine;
 import dev.skysurveyor.detection.ShaftEvent.SacksChanged;
@@ -42,6 +44,12 @@ public final class Shaft {
 	private List<Corpse> corpses = List.of();
 	private int extraCorpses;
 	private final List<CorpseLoot> loots = new ArrayList<>();
+	// loot indexes whose key resourceful saved
+	private final List<Integer> keysSaved = new ArrayList<>();
+	// msg before its loot block, -1 = none
+	private long keySavedAt = -1;
+	private long lastKeyLootAt = -1;
+	private int lastKeyLoot = -1;
 	private final List<String> mayhemBuffs = new ArrayList<>();
 	private final List<Long> campfiresPlaced = new ArrayList<>();
 	// scoreboard still shows the cold from before the -50 (recording 1)
@@ -58,6 +66,8 @@ public final class Shaft {
 	// corpse loot + supercrafts wait here until a sacks msg reports them
 	private final Map<String, Long> notMinedPending = new LinkedHashMap<>();
 	private final Map<String, Long> notMinedInSacks = new LinkedHashMap<>();
+	// display choice, unconfirmed. loot block + msg come in the same click
+	static final long KEY_SAVED_WINDOW = 3_000;
 	// goes up on every change but cold, so callers can cache
 	private int version;
 
@@ -80,6 +90,19 @@ public final class Shaft {
 			case CorpseLooted looted -> {
 				loots.add(looted.loot());
 				looted.loot().items().forEach(item -> add(notMinedPending, item));
+				if (CorpseType.key(looted.loot().type()) != null) {
+					lastKeyLootAt = now;
+					lastKeyLoot = loots.size() - 1;
+					if (keySavedAt >= 0 && now - keySavedAt <= KEY_SAVED_WINDOW) keySaved();
+				}
+			}
+			case KeySaved saved -> {
+				// msg order vs the loot block unrecorded, so either way
+				if (lastKeyLootAt >= 0 && now - lastKeyLootAt <= KEY_SAVED_WINDOW && !keysSaved.contains(lastKeyLoot)) {
+					keySaved();
+				} else {
+					keySavedAt = now;
+				}
 			}
 			case Supercraft craft -> add(notMinedPending, craft.result());
 			case CampfirePlaced placed -> campfiresPlaced.add(now);
@@ -126,6 +149,12 @@ public final class Shaft {
 		version++;
 		leftAt = now;
 		exitReason = pendingExit == null ? ExitReason.UNKNOWN : pendingExit;
+	}
+
+	private void keySaved() {
+		keysSaved.add(lastKeyLoot);
+		keySavedAt = -1;
+		lastKeyLootAt = -1;
 	}
 
 	private static void add(Map<String, Long> totals, ItemCount item) {
@@ -177,6 +206,10 @@ public final class Shaft {
 
 	public List<CorpseLoot> loots() {
 		return Collections.unmodifiableList(loots);
+	}
+
+	public List<Integer> keysSaved() {
+		return Collections.unmodifiableList(keysSaved);
 	}
 
 	public List<String> mayhemBuffs() {

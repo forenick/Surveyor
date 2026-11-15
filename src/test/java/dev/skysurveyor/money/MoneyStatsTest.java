@@ -17,7 +17,6 @@ import dev.skysurveyor.money.ShaftValue.Part;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
 
 // made up coins, not real ones
 class MoneyStatsTest {
@@ -51,15 +50,13 @@ class MoneyStatsTest {
 		values.put(empty, new ShaftValue(List.of(), List.of()));
 
 		List<SessionSummary> sessions = JournalStats.sessions(entries);
-		MoneyStats stats = MoneyStats.of(entries, sessions, values::get, false);
+		MoneyStats stats = MoneyStats.of(entries, values::get, false);
 		assertEquals(14_000_000, stats.coins(), 1e-6);
 		assertEquals(7, stats.valued(), "the one without prices is left out, the empty one counts");
 		assertEquals(2_000_000, stats.perShaft(), 1e-6);
 		assertEquals(Map.of(Part.MINED, 14_000_000.0), stats.parts(), "lines summed per part");
-		assertSame(rich, stats.bestShaft().entry());
 		// 5M over 9 min (start to last shafts end)
-		assertSame(sessions.get(1), stats.bestRate().session());
-		assertEquals(5_000_000 * 60 / 9.0, stats.bestRate().perHour(), 1e-6);
+		assertEquals(5_000_000 * 60 / 9.0, MoneyStats.perHour(sessions.get(1), values::get, e -> null), 1e-6);
 
 		MoneyStats.CorpseCoins umber = stats.corpses().get("Umber");
 		assertEquals(6, umber.corpses());
@@ -73,11 +70,9 @@ class MoneyStatsTest {
 	@Test
 	void noPricesAtAll() {
 		List<JournalEntry> entries = List.of(entry(0, 0), entry(0, 120_000));
-		MoneyStats stats = MoneyStats.of(entries, JournalStats.sessions(entries), e -> null, false);
+		MoneyStats stats = MoneyStats.of(entries, e -> null, false);
 		assertNull(stats.coins());
 		assertNull(stats.perShaft());
-		assertNull(stats.bestShaft());
-		assertNull(stats.bestRate());
 		assertNull(MoneyStats.coins(entries, e -> null));
 		assertEquals(3.0, MoneyStats.plus(null, 3.0));
 		assertNull(MoneyStats.plus(null, null));

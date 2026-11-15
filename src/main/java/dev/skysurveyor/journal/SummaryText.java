@@ -17,8 +17,8 @@ import dev.skysurveyor.util.Format;
 
 public final class SummaryText {
 	private static final String RULE = "§8§m                                                  ";
-	private static final Map<Part, String> PART_NAMES = Map.of(Part.MINED, "gems", Part.MINED_METAL, "metal", Part.OTHER, "other",
-			Part.CORPSES, "corpses", Part.SCRAP, "scrap", Part.CRYSTALS, "crystals", Part.KEYS, "keys",
+	private static final Map<Part, String> PART_NAMES = Map.of(Part.MINED, "gems", Part.MINED_METAL, "metal", Part.GLOSSY, "glossy",
+			Part.OTHER, "other", Part.CORPSES, "corpses", Part.SCRAP, "scrap", Part.CRYSTALS, "crystals", Part.KEYS, "keys",
 			Part.CAMPFIRES, "campfires");
 
 	private SummaryText() {
@@ -34,7 +34,7 @@ public final class SummaryText {
 
 		if (!entry.corpses().isEmpty()) lines.add(" §7Corpses " + corpses(entry.corpses()));
 		if (entry.gems() != null) {
-			lines.add(" §7Gems §f≈" + Format.decimal(entry.gems().fineEquivalent())
+			lines.add(" §7Gems §f" + Format.decimal(entry.gems().fineEquivalent())
 					+ " Fine " + entry.gems().gem() + " §8(" + Format.number(entry.pristineProcs()) + " pristine procs)");
 		}
 		if (entry.metal() != null) lines.add(" §7Metal §f" + entry.metal().text(money.metalTierUsed().tier()));

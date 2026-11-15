@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiConsumer;
 
 import dev.skysurveyor.data.CorpseType;
 import dev.skysurveyor.data.Ladder;
@@ -19,12 +20,17 @@ import dev.skysurveyor.journal.MetalYield;
 import dev.skysurveyor.settings.MoneySettings;
 import dev.skysurveyor.settings.MoneySettings.Crystals;
 import dev.skysurveyor.settings.MoneySettings.GemTier;
+import dev.skysurveyor.settings.MoneySettings.OwnMetal;
 
 // rules in docs/money-design.md
 public record ShaftValue(List<Line> lines, List<CorpseValue> corpses) {
+	// mining fiesta drop, own row bc its worth so much
+	public static final String GLOSSY = "Glossy Gemstone";
+
 	public enum Part {
 		MINED("Mined gems"),
 		MINED_METAL("Mined metal"),
+		GLOSSY("Glossy Gemstones"),
 		OTHER("Other drops"),
 		CORPSES("Corpse loot"),
 		SCRAP("Suspicious Scrap"),
@@ -64,6 +70,10 @@ public record ShaftValue(List<Line> lines, List<CorpseValue> corpses) {
 	}
 
 	public double net() {
+		return net(lines);
+	}
+
+	static double net(List<Line> lines) {
 		return lines.stream().filter(l -> l.coins != null).mapToDouble(Line::coins).sum();
 	}
 
@@ -85,12 +95,7 @@ public record ShaftValue(List<Line> lines, List<CorpseValue> corpses) {
 		List<Line> lines = new ArrayList<>();
 
 		if (entry.gems() != null && entry.gems().fineEquivalent() > 0) {
-			double fine = entry.gems().fineEquivalent();
-			String gem = entry.gems().gem();
-			boolean flawless = !settings.isIronman() && settings.gemTier() == GemTier.FLAWLESS;
-			Double perFine = v.gemPerFine(gem);
-			lines.add(new Line(Part.MINED, (flawless ? "Flawless " : "Fine ") + gem + " Gemstone",
-					flawless ? fine / GemYield.RECIPE : fine, perFine == null ? null : perFine * fine));
+			lines.add(minedGem(v, settings, entry.gems().gem(), entry.gems().fineEquivalent()));
 		}
 
 		MetalYield metal = entry.metal();
@@ -104,12 +109,13 @@ public record ShaftValue(List<Line> lines, List<CorpseValue> corpses) {
 			metal.items().forEach((item, count) -> lines.add(line(v, Part.MINED_METAL, item, count)));
 		}
 
-		otherDrops(entry, patterns).forEach((item, count) -> lines.add(line(v, Part.OTHER, item, count)));
+		otherDrops(entry, patterns).forEach((item, count) -> lines.add(drop(v, item, count)));
 
 		Map<String, Long> loot = new LinkedHashMap<>();
 		Map<String, Long> keys = new LinkedHashMap<>();
 		List<CorpseValue> corpses = new ArrayList<>();
-		for (CorpseLoot corpse : entry.loots()) {
+		for (int i = 0; i < entry.loots().size(); i++) {
+			CorpseLoot corpse = entry.loots().get(i);
 			double lootCoins = 0;
 			int unpriced = 0;
 			List<Line> items = new ArrayList<>();
@@ -120,7 +126,8 @@ public record ShaftValue(List<Line> lines, List<CorpseValue> corpses) {
 				if (line.coins() == null) unpriced++;
 				else lootCoins += line.coins();
 			}
-			String key = CorpseType.key(corpse.type());
+			// resourceful: key kept, costs nothing
+			String key = entry.keySaved(i) ? null : CorpseType.key(corpse.type());
 			Double keyCost = null;
 			if (key != null) {
 				keys.merge(key, 1L, Long::sum);
@@ -155,23 +162,31 @@ public record ShaftValue(List<Line> lines, List<CorpseValue> corpses) {
 	// every id the value could use, every gem + metal tier, so settings can change later
 	public static Map<String, ItemPrice> snapshot(JournalEntry entry, Prices prices, MoneySettings settings, ItemIds ids,
 			TextPatterns patterns) {
+		return snapshot(prices, (recording, used) -> {
+			for (GemTier tier : GemTier.values()) {
+				for (OwnMetal own : OwnMetal.values()) {
+					// ironman uses a subset of these ids
+					of(entry, recording, settings.withGemTier(tier).withCrystals(Crystals.PERFECT_MINUS_FLAWLESS).withIronman(false)
+							.withOwnMetal(own), ids, patterns);
+				}
+			}
+			Ladder ladder = entry.metal() == null ? null : entry.metal().ladder();
+			if (ladder != null) {
+				for (int tier = 0; tier < ladder.tiers(); tier++) {
+					String id = ids.id(ladder.name(tier, null));
+					if (id != null) used.add(id);
+				}
+			}
+		});
+	}
+
+	// runs the valuing w/ prices that note every id asked for, keeps the found ones
+	static Map<String, ItemPrice> snapshot(Prices prices, BiConsumer<Prices, Set<String>> run) {
 		Set<String> used = new HashSet<>();
-		Prices recording = id -> {
+		run.accept(id -> {
 			used.add(id);
 			return prices.get(id);
-		};
-		for (GemTier tier : GemTier.values()) {
-			// ironman uses a subset of these ids
-			of(entry, recording, settings.withGemTier(tier).withCrystals(Crystals.PERFECT_MINUS_FLAWLESS).withIronman(false), ids,
-					patterns);
-		}
-		Ladder ladder = entry.metal() == null ? null : entry.metal().ladder();
-		if (ladder != null) {
-			for (int tier = 0; tier < ladder.tiers(); tier++) {
-				String id = ids.id(ladder.name(tier, null));
-				if (id != null) used.add(id);
-			}
-		}
+		}, used);
 		Map<String, ItemPrice> saved = new HashMap<>();
 		for (String id : used) {
 			ItemPrice price = prices.get(id);
@@ -192,6 +207,18 @@ public record ShaftValue(List<Line> lines, List<CorpseValue> corpses) {
 		String type = entry.shaftType();
 		drops.entrySet().removeIf(e -> e.getValue() <= 0 || GemYield.isShaftGem(e.getKey(), type, patterns));
 		return drops;
+	}
+
+	// fine gems (or flawless) as one line, like the setting says
+	static Line minedGem(PriceRules v, MoneySettings settings, String gem, double fine) {
+		boolean flawless = !settings.isIronman() && settings.gemTier() == GemTier.FLAWLESS;
+		Double perFine = v.gemPerFine(gem);
+		return new Line(Part.MINED, (flawless ? "Flawless " : "Fine ") + gem + " Gemstone", flawless ? fine / GemYield.RECIPE : fine,
+				perFine == null ? null : perFine * fine);
+	}
+
+	static Line drop(PriceRules v, String item, long count) {
+		return line(v, item.equals(GLOSSY) ? Part.GLOSSY : Part.OTHER, item, count);
 	}
 
 	private static Line line(PriceRules v, Part part, String item, long count) {

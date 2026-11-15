@@ -37,18 +37,22 @@ public final class HudTyping {
 		Matcher m = Pattern.compile("(?<![a-z_])(" + Pattern.quote(value.tag()) + "|" + Pattern.quote(value.id())
 				+ ")((?::[a-z_]+)*)(}?)$").matcher(before);
 		if (!m.find()) return type(text, cursor, value.tag() + ":" + option);
-		// range first, then the format
-		String range = isRange(value, option) ? option : null;
-		String format = range == null ? option : null;
+		// target, range, then the format
+		String target = value.hasTarget(option) ? option : null;
+		String range = target == null && isRange(value, option) ? option : null;
+		String format = target == null && range == null ? option : null;
 		for (String o : m.group(2).split(":")) {
 			if (o.isEmpty()) continue;
-			if (isRange(value, o)) {
+			if (value.hasTarget(o)) {
+				if (target == null) target = o;
+			} else if (isRange(value, o)) {
 				if (range == null) range = o;
 			} else if (format == null) {
 				format = o;
 			}
 		}
 		StringBuilder tag = new StringBuilder(m.group(1));
+		if (target != null) tag.append(':').append(target);
 		if (range != null) tag.append(':').append(range);
 		if (format != null) tag.append(':').append(format);
 		tag.append(m.group(3));

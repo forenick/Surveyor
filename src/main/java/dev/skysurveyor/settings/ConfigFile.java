@@ -48,22 +48,33 @@ final class ConfigFile {
 	// changed keys only, hand edits not loaded yet (or broken) + unknown keys stay.
 	// never sets memory, a queued older save would undo a newer one
 	<T> void save(ConfigSection<T> section, T before, T after) {
+		String key = section.key();
+		if (section.whole()) {
+			boolean defaults = after.equals(section.of(Settings.DEFAULTS));
+			save(json -> {
+				if (defaults) json.remove(key);
+				else json.add(key, GSON.toJsonTree(after));
+			});
+			return;
+		}
 		JsonObject old = GSON.toJsonTree(before).getAsJsonObject();
-		save(section.key(), part -> GSON.toJsonTree(after).getAsJsonObject().entrySet().forEach(e -> {
-			if (!Objects.equals(old.get(e.getKey()), e.getValue())) part.add(e.getKey(), e.getValue());
-		}));
+		save(json -> {
+			JsonObject part = json.has(key) && json.get(key).isJsonObject() ? json.getAsJsonObject(key) : new JsonObject();
+			GSON.toJsonTree(after).getAsJsonObject().entrySet().forEach(e -> {
+				if (!Objects.equals(old.get(e.getKey()), e.getValue())) part.add(e.getKey(), e.getValue());
+			});
+			json.add(key, part);
+		});
 	}
 
 	// rewrites the file, other values kept but json comments + layout arent
-	private void save(String key, Consumer<JsonObject> edit) {
+	private void save(Consumer<JsonObject> edit) {
 		try {
 			JsonObject json = Files.exists(file)
 					? JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8)).getAsJsonObject()
 					// memory, so a first save keeps page changes made before it
 					: json(memory.get());
-			JsonObject part = json.has(key) && json.get(key).isJsonObject() ? json.getAsJsonObject(key) : new JsonObject();
-			edit.accept(part);
-			json.add(key, part);
+			edit.accept(json);
 			// loadedMtime stays, so the next reload picks up other edits made before this
 			SafeWrite.write(file, GSON.toJson(json));
 			saveError = null;
@@ -76,7 +87,10 @@ final class ConfigFile {
 
 	private static JsonObject json(Settings settings) {
 		JsonObject json = new JsonObject();
-		for (ConfigSection<?> section : ConfigSection.ALL) json.add(section.key(), GSON.toJsonTree(section.of(settings)));
+		for (ConfigSection<?> section : ConfigSection.ALL) {
+			if (section.whole() && section.isDefault(settings)) continue;
+			json.add(section.key(), GSON.toJsonTree(section.of(settings)));
+		}
 		return json;
 	}
 

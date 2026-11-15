@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 class JournalStatsTest {
 	private static List<JournalEntry> realJournal() throws IOException, URISyntaxException {
 		Path path = Path.of(JournalStatsTest.class.getResource("/journal-2026-11-11.jsonl").toURI());
-		return new JournalFile(path).read();
+		return new JournalFile(path, Runnable::run).read();
 	}
 
 	@Test
@@ -108,11 +108,11 @@ class JournalStatsTest {
 		assertEquals(2, stats.sessions());
 		assertEquals(43_436 + 50_000, stats.powder());
 		assertEquals(Map.of("Lapis", 9, "Vanguard", 1), stats.looted());
-		assertEquals("JADE_C", stats.mostPowder().entry().shaftId());
-		assertEquals(3, stats.mostLapis().value());
-		assertEquals("AMET_1", stats.mostLapis().entry().shaftId());
+		assertEquals("JADE_C", best("shaft_powder", entries).entry().shaftId());
+		assertEquals(3, best("shaft_lapis", entries).value());
+		assertEquals("AMET_1", best("shaft_lapis", entries).entry().shaftId());
 		// file still has 0.2.0 times
-		assertEquals("PERI_1", stats.fastest().shaftId());
+		assertEquals("PERI_1", best("shaft_spawn", entries).entry().shaftId());
 		assertEquals(Map.of("1", 1, "C", 1), stats.types().get("JADE"));
 		assertEquals(Map.of("C", 1), stats.types().get("AQUA"));
 		assertEquals(7, stats.typedShafts());
@@ -122,11 +122,11 @@ class JournalStatsTest {
 		assertEquals(9, stats.corpsesSeen().get("Lapis"));
 		assertEquals(List.of("Lapis", "Umber", "Tungsten", "Vanguard"), List.copyOf(stats.corpsesSeen().keySet()));
 		// 1 min session too short for a rate
-		assertEquals(realJournal().getFirst().sessionId(), stats.bestRate().id());
+		assertEquals(realJournal().getFirst().sessionId(), best("session_rate", entries).session().id());
 		// added session: 1 timed spawn, too few
-		assertEquals(realJournal().getFirst().sessionId(), stats.fastestSession().id());
-		assertEquals(6, stats.mostShafts().shafts());
-		assertNull(stats.mostGems());
+		assertEquals(realJournal().getFirst().sessionId(), best("session_spawn", entries).session().id());
+		assertEquals(6, best("session_shafts", entries).value());
+		assertNull(best("shaft_gems", entries).value());
 		List<JournalStats.SessionSummary> sessions = JournalStats.sessions(entries);
 		assertEquals(30_000L, JournalStats.recentAverage(sessions, 1));
 		assertEquals(JournalStats.averageSearch(entries), JournalStats.recentAverage(sessions, 5));
@@ -141,9 +141,13 @@ class JournalStatsTest {
 		for (int i = 0; i < 4; i++) {
 			entries.add(entry(later, later + 60_000 + i * 90_000L, "JADE_1", 30_000L, 1_000, List.of()));
 		}
-		assertEquals(realJournal().getFirst().sessionId(), JournalStats.allTime(entries).bestRate().id());
+		assertEquals(realJournal().getFirst().sessionId(), best("session_rate", entries).session().id());
 		entries.add(entry(later, later + 340_000, "JADE_1", 30_000L, 1_000, List.of()));
-		assertEquals(later, JournalStats.allTime(entries).bestRate().id());
+		assertEquals(later, best("session_rate", entries).session().id());
+	}
+
+	private static PersonalBests.Result best(String stat, List<JournalEntry> entries) {
+		return PersonalBests.best(new PersonalBests.Def(stat, null, null, null), entries, JournalStats.sessions(entries), e -> null);
 	}
 
 	private static JournalEntry entry(long session, long entered, String id, Long search, long exitPowder, List<Corpse> corpses) {
@@ -161,6 +165,30 @@ class JournalStatsTest {
 		assertEquals(List.of(-94, -80), campfires.colds());
 		assertEquals(-87.0, campfires.averageCold());
 		assertNull(JournalStats.campfires(List.of(old)).averageCold());
+	}
+
+	@Test
+	void drystreaksCountShaftsSinceTheLastOne() {
+		List<JournalEntry> entries = List.of(at("JASP_1", 0), at("JADE_1", 0), at("JASP_C", 0), at("RUBY_2", 0), at("JADE_2", 0));
+		Map<String, Long> dry = JournalStats.drystreaks(entries, List.of("JASP", "JADE", "RUBY", "FAIR"));
+		assertEquals(2L, dry.get("JASP"), "crystal counts as jasper");
+		assertEquals(0L, dry.get("JADE"));
+		assertEquals(1L, dry.get("RUBY"));
+		assertEquals(5L, dry.get("FAIR"), "never seen = every shaft");
+	}
+
+	@Test
+	void shaftsTodayByWhenTheyEnded() {
+		java.time.ZoneId zone = java.time.ZoneOffset.UTC;
+		long day = java.time.LocalDate.of(2026, 11, 14).atStartOfDay(zone).toInstant().toEpochMilli();
+		// ends just after midnight = today
+		List<JournalEntry> entries = List.of(at("JADE_1", day - 3_600_000), at("JADE_1", day - 10_000), at("JADE_1", day + 1_000));
+		assertEquals(2, JournalStats.shaftsOn(entries, java.time.LocalDate.of(2026, 11, 14), zone));
+		assertEquals(1, JournalStats.shaftsOn(entries, java.time.LocalDate.of(2026, 11, 13), zone));
+	}
+
+	private static JournalEntry at(String id, long entered) {
+		return EntryBuilder.entry().shaftId(id).enteredAt(entered).durationMillis(20_000).build();
 	}
 
 	private static JournalEntry withCampfires(List<Long> at, List<Integer> colds) {

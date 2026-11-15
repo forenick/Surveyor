@@ -2,6 +2,7 @@ package dev.skysurveyor.money;
 
 import java.nio.file.Path;
 import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -9,11 +10,13 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 
 import dev.skysurveyor.detection.Shaft;
 import dev.skysurveyor.detection.ShaftEvent;
 import dev.skysurveyor.detection.TextPatterns;
 import dev.skysurveyor.journal.JournalEntry;
+import dev.skysurveyor.journal.MiningEntry;
 import dev.skysurveyor.settings.LiveSettings;
 import dev.skysurveyor.settings.MoneySettings;
 import dev.skysurveyor.settings.MoneySettings.OldShafts;
@@ -36,6 +39,9 @@ public final class LiveMoney {
 	private PriceFeed feed;
 	// client thread only, saved entries only (live ones would pile up). cleared when changes() moves
 	private final Map<JournalEntry, ShaftValue> values = new IdentityHashMap<>();
+	private final Map<MiningEntry, List<ShaftValue.Line>> miningValues = new IdentityHashMap<>();
+	private final Map<JournalEntry, ShaftValue> untaxedValues = new IdentityHashMap<>();
+	private final Map<MiningEntry, List<ShaftValue.Line>> untaxedMining = new IdentityHashMap<>();
 	private int valuesAt = -1;
 	// client thread only, live value until the shaft or prices change
 	private Shaft liveShaft;
@@ -104,8 +110,14 @@ public final class LiveMoney {
 
 	public JournalEntry withPrices(JournalEntry entry) {
 		PriceBook book = book();
-		if (!freshForSnapshot(book, entry.enteredAt() + entry.durationMillis())) return entry.withPrices(Map.of());
+		if (!freshForSnapshot(book, entry.endedAt())) return entry.withPrices(Map.of());
 		return entry.withPrices(ShaftValue.snapshot(entry, book::get, settings(), ids(), TextPatterns.defaults()));
+	}
+
+	public MiningEntry withPrices(MiningEntry entry) {
+		PriceBook book = book();
+		if (!freshForSnapshot(book, entry.at())) return entry.withPrices(Map.of());
+		return entry.withPrices(MiningValue.snapshot(entry, book::get, settings(), ids(), TextPatterns.defaults()));
 	}
 
 	// no bazaar = npc/bin only, would undercut gems for good
@@ -115,15 +127,72 @@ public final class LiveMoney {
 
 	// null = no prices at all yet. saved entries only, cached
 	public ShaftValue value(JournalEntry entry) {
-		int now = changes.get();
-		if (now != valuesAt) {
-			values.clear();
-			valuesAt = now;
-		}
-		if (values.containsKey(entry)) return values.get(entry);
-		ShaftValue value = compute(entry);
-		values.put(entry, value);
+		return cached(values, entry, e -> compute(e, settings()));
+	}
+
+	// same w/o bazaar tax, for the tax line. cached
+	public ShaftValue untaxed(JournalEntry entry) {
+		MoneySettings untaxed = untaxedSettings();
+		return untaxed == null ? value(entry) : cached(untaxedValues, entry, e -> compute(e, untaxed));
+	}
+
+	public List<ShaftValue.Line> untaxedLines(MiningEntry entry) {
+		MoneySettings untaxed = untaxedSettings();
+		return untaxed == null ? lines(entry) : cached(untaxedMining, entry, e -> computeLines(e, untaxed));
+	}
+
+	// false = untaxed values are the same, no tax line to work out
+	public boolean taxed() {
+		return untaxedSettings() != null;
+	}
+
+	// null = no tax to take off
+	private MoneySettings untaxedSettings() {
+		MoneySettings settings = settings();
+		return settings.isIronman() || settings.bazaarTax() == 0 ? null : settings.withBazaarTax(0);
+	}
+
+	// containsKey bc null = no prices is cached too
+	private <K, V> V cached(Map<K, V> map, K key, Function<K, V> compute) {
+		clearIfChanged();
+		if (map.containsKey(key)) return map.get(key);
+		V value = compute.apply(key);
+		map.put(key, value);
 		return value;
+	}
+
+	private void clearIfChanged() {
+		int now = changes.get();
+		if (now == valuesAt) return;
+		values.clear();
+		miningValues.clear();
+		untaxedValues.clear();
+		untaxedMining.clear();
+		valuesAt = now;
+	}
+
+	// null = no prices at all yet. saved entries only, cached
+	public Double value(MiningEntry entry) {
+		return total(lines(entry));
+	}
+
+	// per item, null = no prices at all yet. saved entries only, cached
+	public List<ShaftValue.Line> lines(MiningEntry entry) {
+		return cached(miningValues, entry, e -> computeLines(e, settings()));
+	}
+
+	// uncached, any thread
+	public Double compute(MiningEntry entry) {
+		return total(computeLines(entry, settings()));
+	}
+
+	private static Double total(List<ShaftValue.Line> lines) {
+		return lines == null ? null : MiningValue.total(lines);
+	}
+
+	private List<ShaftValue.Line> computeLines(MiningEntry entry, MoneySettings settings) {
+		ShaftValue.Prices prices = prices(entry.prices(), settings);
+		return prices == null ? null : MiningValue.lines(entry, prices, settings, ids(), TextPatterns.defaults());
 	}
 
 	// shaft still going, todays prices
@@ -140,20 +209,28 @@ public final class LiveMoney {
 
 	// uncached, any thread
 	public ShaftValue compute(JournalEntry entry) {
+		return compute(entry, settings());
+	}
+
+	private ShaftValue compute(JournalEntry entry, MoneySettings settings) {
+		ShaftValue.Prices prices = prices(entry.prices(), settings);
+		return prices == null ? null : ShaftValue.of(entry, prices, settings, ids(), TextPatterns.defaults());
+	}
+
+	// null = no prices at all yet
+	private ShaftValue.Prices prices(Map<String, ItemPrice> saved, MoneySettings settings) {
 		PriceBook book = book();
-		MoneySettings settings = settings();
-		boolean saved = usesSavedPrices(entry, settings);
-		if (book.isEmpty() && !saved) return null;
-		ShaftValue.Prices prices = saved ? ShaftValue.layered(entry.prices(), book::get) : book::get;
-		return ShaftValue.of(entry, prices, settings, ids(), TextPatterns.defaults());
+		boolean useSaved = usesSavedPrices(saved, settings);
+		if (book.isEmpty() && !useSaved) return null;
+		return useSaved ? ShaftValue.layered(saved, book::get) : book::get;
 	}
 
 	public boolean usesSavedPrices(JournalEntry entry) {
-		return usesSavedPrices(entry, settings());
+		return usesSavedPrices(entry.prices(), settings());
 	}
 
-	private static boolean usesSavedPrices(JournalEntry entry, MoneySettings settings) {
-		return settings.oldShafts() == OldShafts.THAT_DAY && entry.prices() != null && !entry.prices().isEmpty();
+	private static boolean usesSavedPrices(Map<String, ItemPrice> saved, MoneySettings settings) {
+		return settings.oldShafts() == OldShafts.THAT_DAY && saved != null && !saved.isEmpty();
 	}
 
 	// shutdown not shutdownNow, queued config saves must still run

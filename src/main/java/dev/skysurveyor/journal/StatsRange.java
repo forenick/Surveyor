@@ -2,6 +2,7 @@ package dev.skysurveyor.journal;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 
 import dev.skysurveyor.journal.JournalStats.SessionSummary;
 
@@ -38,9 +39,10 @@ public enum StatsRange {
 		};
 	}
 
-	public static List<JournalEntry> entries(List<SessionSummary> newestFirst) {
-		List<JournalEntry> entries = new ArrayList<>();
-		for (SessionSummary session : newestFirst.reversed()) entries.addAll(session.entries());
-		return entries;
+	// oldest first, f.e. flat(sessions, SessionSummary::entries)
+	public static <T> List<T> flat(List<SessionSummary> newestFirst, Function<SessionSummary, List<T>> part) {
+		List<T> all = new ArrayList<>();
+		for (SessionSummary session : newestFirst.reversed()) all.addAll(part.apply(session));
+		return all;
 	}
 }

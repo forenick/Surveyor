@@ -40,7 +40,7 @@ class OldJournalTest {
 		return OldSaves.withFile("journal.jsonl").stream().map(dir -> DynamicTest.dynamicTest(dir.getFileName().toString(), () -> {
 			List<String> lines = Files.readAllLines(dir.resolve("journal.jsonl"), StandardCharsets.UTF_8).stream()
 					.filter(line -> !line.isBlank()).toList();
-			List<JournalEntry> entries = new JournalFile(dir.resolve("journal.jsonl")).read();
+			List<JournalEntry> entries = new JournalFile(dir.resolve("journal.jsonl"), Runnable::run).read();
 			assertEquals(lines.size(), entries.size(), "every shaft loads");
 			for (int i = 0; i < lines.size(); i++) {
 				JournalEntry entry = entries.get(i);
@@ -75,7 +75,7 @@ class OldJournalTest {
 	@TestFactory
 	Stream<DynamicTest> oldShaftsShowTheSameNumbers() {
 		return OldSaves.withFile("journal.jsonl").stream().map(dir -> DynamicTest.dynamicTest(dir.getFileName().toString(), () -> {
-			List<JournalEntry> entries = new JournalFile(dir.resolve("journal.jsonl")).read();
+			List<JournalEntry> entries = new JournalFile(dir.resolve("journal.jsonl"), Runnable::run).read();
 			OldSaves.assertExpected(dir, "expected-journal.txt", numbers(entries, settings(dir)));
 		}));
 	}
@@ -85,15 +85,14 @@ class OldJournalTest {
 		Path file = tmp.resolve("journal.jsonl");
 		Files.copy(OldSaves.newest("journal.jsonl").resolve("journal.jsonl"), file);
 		byte[] before = Files.readAllBytes(file);
-		JournalFile journal = new JournalFile(file);
+		JournalFile journal = new JournalFile(file, Runnable::run);
 		List<JournalEntry> old = journal.load().get();
 		journal.append(old.get(old.size() - 1));
-		journal.close();
 		byte[] after = Files.readAllBytes(file);
 		byte[] start = new byte[before.length];
 		System.arraycopy(after, 0, start, 0, Math.min(after.length, before.length));
 		assertArrayEquals(before, start, "old lines untouched");
-		assertEquals(old.size() + 1, new JournalFile(file).read().size());
+		assertEquals(old.size() + 1, new JournalFile(file, Runnable::run).read().size());
 	}
 
 	@Test
@@ -102,7 +101,7 @@ class OldJournalTest {
 		String good = Files.readAllLines(OldSaves.newest("journal.jsonl").resolve("journal.jsonl")).get(0);
 		String text = "null\n{\"version\":1,\"corpses\":[{\"ty\n" + good + "\n\n";
 		Files.writeString(file, text);
-		assertEquals(1, new JournalFile(file).read().size());
+		assertEquals(1, new JournalFile(file, Runnable::run).read().size());
 		assertEquals(text, Files.readString(file));
 	}
 

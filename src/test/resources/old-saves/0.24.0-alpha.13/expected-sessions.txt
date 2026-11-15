@@ -1,0 +1,15 @@
+time 16641538
+1794754944760 shafts=29 outside=56 length=4092778 shafts/h=25.5083 per1k/h=879.5982
+1794753516221 shafts=1 outside=0 length=396140 shafts/h=9.0877 per1k/h=9087.6963
+1794662726153 shafts=2 outside=0 length=129910 shafts/h=- per1k/h=-
+1794605156437 shafts=3 outside=0 length=1714892 shafts/h=6.2978 per1k/h=2099.2576
+1794570228113 shafts=1 outside=0 length=735750 shafts/h=4.8930 per1k/h=4892.9664
+1794523818992 shafts=3 outside=0 length=554028 shafts/h=19.4936 per1k/h=6497.8665
+1794519218749 shafts=2 outside=0 length=1014916 shafts/h=7.0942 per1k/h=3547.0916
+1794510646219 shafts=3 outside=0 length=219332 shafts/h=- per1k/h=-
+1794441350970 shafts=2 outside=0 length=346771 shafts/h=20.7630 per1k/h=10381.4910
+1794439848110 shafts=1 outside=0 length=41216 shafts/h=- per1k/h=-
+1794437267037 shafts=2 outside=0 length=1107687 shafts/h=6.5000 per1k/h=3250.0156
+1794430980131 shafts=12 outside=0 length=4216668 shafts/h=10.2451 per1k/h=853.7547
+1794428607183 shafts=4 outside=0 length=957380 shafts/h=15.0410 per1k/h=3760.2624
+1794413789542 shafts=6 outside=0 length=1114070 shafts/h=19.3884 per1k/h=3231.3948

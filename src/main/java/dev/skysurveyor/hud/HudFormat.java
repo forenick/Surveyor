@@ -138,6 +138,11 @@ public final class HudFormat {
 	private static String time(long seconds, int format) {
 		// -0:13, not 0:-13
 		if (seconds < 0) return "-" + time(-seconds, format);
+		// hours for session length + time since last shaft
+		if (seconds >= 3600 && format != 2) {
+			return format == 1 ? seconds / 3600 + "h " + seconds % 3600 / 60 + "m"
+					: seconds / 3600 + ":" + String.format(Locale.ROOT, "%02d:%02d", seconds % 3600 / 60, seconds % 60);
+		}
 		return switch (format) {
 			case 1 -> seconds >= 60 ? seconds / 60 + "m " + seconds % 60 + "s" : seconds + "s";
 			case 2 -> seconds + "s";

@@ -1,6 +1,6 @@
 package dev.skysurveyor.data;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -22,7 +22,8 @@ public final class ShaftNames {
 	private record Type(String name, int rgb, Character hudColor) {
 	}
 
-	private final Map<String, Type> types = new HashMap<>();
+	// file order
+	private final Map<String, Type> types = new LinkedHashMap<>();
 
 	ShaftNames(List<String> lines) {
 		for (String line : lines) {
@@ -64,6 +65,10 @@ public final class ShaftNames {
 		return defaults;
 	}
 
+	public List<String> codes() {
+		return List.copyOf(types.keySet());
+	}
+
 	public String name(String code) {
 		Type type = types.get(code);
 		return type == null ? code : type.name();
@@ -73,6 +78,14 @@ public final class ShaftNames {
 	public Character hudColor(String code) {
 		Type type = types.get(code);
 		return type == null ? null : type.hudColor();
+	}
+
+	// by name, f.e. "Jade" or "Tungsten". null = none
+	public Character hudColorByName(String name) {
+		for (Type type : types.values()) {
+			if (type.name().equalsIgnoreCase(name)) return type.hudColor();
+		}
+		return null;
 	}
 
 	public int rgb(String code) {

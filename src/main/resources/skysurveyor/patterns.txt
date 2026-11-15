@@ -35,6 +35,8 @@ loot.bonus             ^  \+1 bonus drop!$
 loot.rewards           ^  REWARDS$
 loot.item              ^    (?:\p{Co} )?(?<item>\S.*?)(?: x(?<count>[\d,]+))?$
 loot.end               ^▬+$
+# unconfirmed, from other mods (research/02), never recorded
+loot.key_saved         ^LUCKY! Your Resourceful perk saved your key from being consumed!$
 # corpse powder, not a real item
 loot.powder            ^Glacite Powder$
 
@@ -57,6 +59,9 @@ supercraft             ^You Supercrafted (?:\p{Co} )?(?<item>.+) x(?<count>[\d,]
 gem.item               ^(?<quality>Rough|Flawed|Fine) (?<gem>\w+) Gemstone$
 # gem crystals only, other "x crystal" items get their own price
 crystal.item           ^(?<gem>Ruby|Amber|Sapphire|Jade|Amethyst|Topaz|Jasper|Opal|Aquamarine|Citrine|Onyx|Peridot) Crystal$
+
+# full sack overflow, ~once a minute while it holds items (research/09)
+stash.count            ^ +You have (?<count>[\d,]+) materials stashed away!$
 
 # per item lines are in the hover text
 sacks                  ^\[Sacks\] .*\(Last (?<seconds>\d+)s\.\)$

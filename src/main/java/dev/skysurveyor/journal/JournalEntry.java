@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 
+import dev.skysurveyor.data.CorpseType;
 import dev.skysurveyor.detection.Corpse;
 import dev.skysurveyor.detection.CorpseLoot;
 import dev.skysurveyor.detection.Shaft;
@@ -20,6 +21,7 @@ import dev.skysurveyor.money.ItemPrice;
 // prices = by skyblock id at the end of the shaft, empty when there were none
 // campfireColds = cold before each campfire use, null in entries before 0.22.0, null items = no cold line
 // metal = shafts own metal, null = none or before 0.23.0 (those keep it in otherDrops)
+// keysSaved = loots indexes whose key resourceful saved, null = none or before 0.24.0
 public record JournalEntry(
 		int version,
 		long sessionId,
@@ -45,7 +47,8 @@ public record JournalEntry(
 		Map<String, Long> otherDrops,
 		Map<String, ItemPrice> prices,
 		List<Integer> campfireColds,
-		MetalYield metal) {
+		MetalYield metal,
+		List<Integer> keysSaved) {
 	public static final int VERSION = 1;
 
 	public static JournalEntry of(Shaft shaft, long sessionId, Long searchMillis, TextPatterns patterns) {
@@ -60,13 +63,28 @@ public record JournalEntry(
 				new LinkedHashMap<>(shaft.pristineItems()), new LinkedHashMap<>(shaft.sacksAdded()), new LinkedHashMap<>(shaft.sacksRemoved()),
 				GemYield.of(shaft, patterns), List.copyOf(shaft.crystals()), otherDrops(shaft, patterns), null,
 				// list.copyOf hates nulls
-				Collections.unmodifiableList(new ArrayList<>(shaft.campfireColds())), MetalYield.of(shaft));
+				Collections.unmodifiableList(new ArrayList<>(shaft.campfireColds())), MetalYield.of(shaft),
+				shaft.keysSaved().isEmpty() ? null : List.copyOf(shaft.keysSaved()));
 	}
 
 	public JournalEntry withPrices(Map<String, ItemPrice> prices) {
 		return new JournalEntry(version, sessionId, shaftId, enteredAt, durationMillis, exit, exitPowder, searchMillis,
 				corpses, extraCorpses, loots, mayhemBuffs, campfiresAt, coldAtExit, scrapFound, pristineProcs,
-				pristineItems, sacksAdded, sacksRemoved, gems, crystals, otherDrops, prices, campfireColds, metal);
+				pristineItems, sacksAdded, sacksRemoved, gems, crystals, otherDrops, prices, campfireColds, metal, keysSaved);
+	}
+
+	public boolean keySaved(int loot) {
+		return keysSaved != null && keysSaved.contains(loot);
+	}
+
+	// key item -> how many resourceful saved
+	public Map<String, Integer> savedKeys() {
+		Map<String, Integer> saved = new LinkedHashMap<>();
+		for (int i = 0; i < loots.size(); i++) {
+			String key = CorpseType.key(loots.get(i).type());
+			if (key != null && keySaved(i)) saved.merge(key, 1, Integer::sum);
+		}
+		return saved;
 	}
 
 	// sacks minus corpse loot, supercrafts and the shafts own gem + metal (GemYield, MetalYield)
@@ -80,6 +98,10 @@ public record JournalEntry(
 	}
 
 	// null = no id seen
+	public long endedAt() {
+		return enteredAt + durationMillis;
+	}
+
 	public String shaftType() {
 		return idPart("type");
 	}

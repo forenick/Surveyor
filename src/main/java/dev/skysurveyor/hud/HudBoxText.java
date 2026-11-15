@@ -63,7 +63,7 @@ public final class HudBoxText {
 		Range range = line.range();
 		String prefix = range == Range.SHAFT && !data.inShaft() ? lastShaft(line.prefix) : line.prefix;
 		String text = line.dash() && !data.inShaft() && hudValue.followsShaft(range) ? HudFormat.MISSING
-				: text(hudValue, range, line.format, data, example);
+				: text(hudValue, range, line.target(), line.format, data, example);
 		return label + prefix + "§" + color + styles + paint(text, color, styles);
 	}
 
@@ -105,7 +105,7 @@ public final class HudBoxText {
 		while (matcher.find()) {
 			HudExpr.Parsed parsed = parseTag(matcher.group(1));
 			String replacement = matcher.group();
-			if (parsed.error() == null && parsed.node() instanceof Val v && value(v.value(), v.range(), data, example) == null) {
+			if (parsed.error() == null && parsed.node() instanceof Val v && value(v.value(), v.range(), v.target(), data, example) == null) {
 				replacement = "";
 			} else if (parsed.error() == null) {
 				String shown = tagText(parsed.node(), data, example);
@@ -120,7 +120,7 @@ public final class HudBoxText {
 	// one tag as shown. null = cant show it (text in maths), stays as typed
 	static String tagText(Node node, HudData data, boolean example) {
 		if (node instanceof Val v && (v.format() == null || HudFormat.names(v.value().kind()).contains(v.format()))) {
-			return text(v.value(), v.range(), HudExpr.index(v.value().kind(), v.format()), data, example);
+			return text(v.value(), v.range(), v.target(), HudExpr.index(v.value().kind(), v.format()), data, example);
 		}
 		try {
 			HudExpr.Result r = HudExpr.eval(node, values(data, example));
@@ -287,7 +287,13 @@ public final class HudBoxText {
 	}
 
 	public static String tag(HudValue value, Range range, int format) {
+		return tag(value, range, null, format);
+	}
+
+	// order: target, range, format
+	public static String tag(HudValue value, Range range, String target, int format) {
 		StringBuilder tag = new StringBuilder("{").append(value.tag());
+		if (value.acceptsTarget(target) && (value.pinsTarget() || !target.equals(value.defaultTarget()))) tag.append(':').append(target);
 		if (range != null && range != value.defaultRange()) tag.append(':').append(range.tagName());
 		if (format > 0 && format < HudFormat.names(value.kind()).size()) {
 			tag.append(':').append(HudFormat.names(value.kind()).get(format));
@@ -311,7 +317,7 @@ public final class HudBoxText {
 		String label = line.labelColor == null ? "" : "&" + line.labelColor + (box.labelBold ? "&l" : "");
 		String valueCode = line.valueColor == null ? "&v" : "&" + line.valueColor + (box.valueBold ? "&l" : "");
 		String prefix = line.prefix.replace("&", "&&").replace("{", "&{");
-		return label + prefix + valueCode + tag(value, line.range(), line.format);
+		return label + prefix + valueCode + tag(value, line.range(), line.target(), line.format);
 	}
 
 	private static String codes(CharSequence styles) {
@@ -321,7 +327,11 @@ public final class HudBoxText {
 	}
 
 	static String text(HudValue value, Range range, int format, HudData data, boolean example) {
-		Object v = value(value, range, data, example);
+		return text(value, range, null, format, data, example);
+	}
+
+	static String text(HudValue value, Range range, String target, int format, HudData data, boolean example) {
+		Object v = value(value, range, target, data, example);
 		return v == null && rate(value, range) ? waiting(data.now()) : formatted(value, range, format, v);
 	}
 
@@ -376,8 +386,8 @@ public final class HudBoxText {
 		return color + styles;
 	}
 
-	private static Object value(HudValue value, Range range, HudData data, boolean example) {
-		return example ? data.getOrExample(value, range) : data.get(value, range);
+	private static Object value(HudValue value, Range range, String target, HudData data, boolean example) {
+		return example ? data.getOrExample(value, range, target) : data.get(value, range, target);
 	}
 
 	private static String formatted(HudValue value, Range range, int format, Object v) {

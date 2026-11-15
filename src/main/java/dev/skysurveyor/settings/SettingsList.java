@@ -7,6 +7,7 @@ import dev.skysurveyor.settings.MoneySettings.Crystals;
 import dev.skysurveyor.settings.MoneySettings.GemTier;
 import dev.skysurveyor.settings.MoneySettings.MetalTier;
 import dev.skysurveyor.settings.MoneySettings.OldShafts;
+import dev.skysurveyor.settings.MoneySettings.OwnMetal;
 import dev.skysurveyor.settings.MoneySettings.SellPrice;
 import dev.skysurveyor.settings.Setting.Choice;
 import dev.skysurveyor.settings.Setting.Number;
@@ -78,7 +79,15 @@ public final class SettingsList {
 											new Option<>(MetalTier.ENCHANTED, "Enchanted", "Every 160 count as 1 Enchanted. Crafting is free."),
 											new Option<>(MetalTier.RAW, "Tungsten or Umber", "The price of the metal you mined."),
 											new Option<>(MetalTier.REFINED, "Refined", "Every 160 Enchanted count as 1 Refined, an hour in the Forge.")),
-									s -> s.money().metalTier(), (s, v) -> s.withMoney(s.money().withMetalTier(v))))),
+									s -> s.money().metalTier(), (s, v) -> s.withMoney(s.money().withMetalTier(v))),
+							new Choice<>("Keys and campfires", "What a Tungsten Key, Umber Key or Portable Campfire costs.", List.of(
+									new Option<>(OwnMetal.INSTA_BUY, "Insta-buy", "Bought on the Bazaar."),
+									new Option<>(OwnMetal.CRAFT, "Craft from your metal",
+											"A key is 192 Enchanted Tungsten or Umber at your sell price plus a Bejeweled Handle. "
+													+ "A campfire is 160 Enchanted Umber plus 16 Match-Sticks."),
+									new Option<>(OwnMetal.DONT_COUNT, "Don't count", "Keys and campfires cost nothing. "
+											+ "A shaft shows how many you used.")),
+									s -> s.money().ownMetal(), (s, v) -> s.withMoney(s.money().withOwnMetal(v))))),
 					new Section("Old shafts", List.of(
 							new Choice<>("Prices for old shafts",
 									"Shafts since 0.14.0 saved their prices when they ended. Older shafts always use today's.", List.of(

@@ -13,6 +13,11 @@ public record MetalYield(String metal, long raw, long enchanted, long refined) {
 	public static final int ENCHANTED = 1;
 	public static final int REFINED = 2;
 
+	// raw per one of a tier, tungsten + umber same ratios
+	public static double rawPer(int tier) {
+		return Ladder.metalOf("TUNG").base(tier);
+	}
+
 	// null = not a metal shaft or none mined
 	public static MetalYield of(Shaft shaft) {
 		Ladder ladder = Ladder.metalOf(shaft.id() == null ? null : shaft.id().type());
@@ -50,14 +55,29 @@ public record MetalYield(String metal, long raw, long enchanted, long refined) {
 		return items;
 	}
 
-	// raw whole, others ≈ like fine gems. f.e. "≈301.3 Enchanted Tungsten"
+	// raw whole, others 1 decimal like fine gems. f.e. "301.3 Enchanted Tungsten"
 	public String text(int tier) {
 		Ladder ladder = ladder();
 		if (ladder == null) {
 			return String.join(", ", items().entrySet().stream().map(e -> Format.number(e.getValue()) + " " + e.getKey()).toList());
 		}
-		String name = ladder.name(tier, null);
-		if (tier == RAW) return Format.number(Math.round(in(ladder, RAW))) + " " + name;
-		return "≈" + Format.decimal(in(ladder, tier)) + " " + name;
+		return amount(ladder, tier) + " " + ladder.name(tier, null);
+	}
+
+	// stats record, tier only like "391.0 Fine". f.e. "301.3 Enchanted", "48,531 Tungsten"
+	public String shortText(int tier) {
+		if (ladder() == null || tier == RAW) return amount(RAW) + " " + metal;
+		return amount(tier) + (tier == ENCHANTED ? " Enchanted" : " Refined");
+	}
+
+	// no name, f.e. "301.3". null ladder = raw count
+	public String amount(int tier) {
+		Ladder ladder = ladder();
+		return ladder == null ? Format.number(raw) : amount(ladder, tier);
+	}
+
+	private String amount(Ladder ladder, int tier) {
+		if (tier == RAW) return Format.number(Math.round(in(ladder, RAW)));
+		return Format.decimal(in(ladder, tier));
 	}
 }

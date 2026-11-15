@@ -55,6 +55,16 @@ jar {
 	from('LICENSE', 'COPYING', 'NOTICE.md')
 }
 
+// dev tool, lives in test so its not in the jar
+// ./gradlew replay --args="<recording> [--raw] [--cold]", no recording = newest in ../Recordings
+tasks.register('replay', JavaExec) {
+	group = 'dev'
+	description = 'Prints a recording as a timeline and checks it against what the game saw live'
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = 'dev.skysurveyor.tools.Replay'
+	workingDir = projectDir
+}
+
 // build fails until spotlessApply
 spotless {
 	java {

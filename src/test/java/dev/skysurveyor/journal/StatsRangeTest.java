@@ -43,7 +43,7 @@ class StatsRangeTest {
 	@Test
 	void entriesOldestFirst() {
 		List<SessionSummary> recent = StatsRange.LAST_5_SESSIONS.sessions(tenDays(), 0);
-		List<JournalEntry> entries = StatsRange.entries(recent);
+		List<JournalEntry> entries = StatsRange.flat(recent, SessionSummary::entries);
 		assertEquals(10, entries.size());
 		assertEquals(5 * DAY, entries.getFirst().enteredAt());
 		assertEquals(9 * DAY + 120_000, entries.getLast().enteredAt());

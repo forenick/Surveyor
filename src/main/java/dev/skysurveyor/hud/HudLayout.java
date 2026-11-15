@@ -3,6 +3,7 @@ package dev.skysurveyor.hud;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Supplier;
 
@@ -95,6 +96,8 @@ public final class HudLayout {
 		public Boolean dashOutside;
 		// typed rules, 1 a line. null = never set (old rules or the preset)
 		public List<String> colorRules;
+		// shaft or corpse type tag, f.e. "jasper". null = the values default
+		public String target;
 
 		public Line() {
 		}
@@ -111,6 +114,7 @@ public final class HudLayout {
 			this.format = format;
 			// not in Line(), gson uses that one
 			this.valueColor = value.defaultColor();
+			if (value.pinsTarget()) this.target = value.defaultTarget();
 		}
 
 		// null in old files = the default range, kept null so the file stays the same
@@ -120,6 +124,20 @@ public final class HudLayout {
 			return value.hasRange(range) ? range : value.defaultRange();
 		}
 
+		public String target() {
+			HudValue value = hudValue();
+			return value == null ? target : value.targetOrDefault(target);
+		}
+
+		// label + colour nobody picked follow the target
+		public void setTarget(String target) {
+			HudValue value = hudValue();
+			if (value == null) return;
+			if (value.defaultPrefix(range(), target()).equals(prefix)) prefix = value.defaultPrefix(range(), target);
+			if (Objects.equals(valueColor, value.defaultColor(target()))) valueColor = value.defaultColor(target);
+			this.target = !value.pinsTarget() && target.equals(value.defaultTarget()) ? null : target;
+		}
+
 		public boolean dash() {
 			return Boolean.TRUE.equals(dashOutside);
 		}
@@ -127,8 +145,8 @@ public final class HudLayout {
 		// a label nobody typed follows the range
 		public void setRange(Range range) {
 			HudValue value = hudValue();
-			if (value != null && (value.defaultPrefix(range()).equals(prefix) || value.oldDefaultPrefix(prefix))) {
-				prefix = value.defaultPrefix(range);
+			if (value != null && (value.defaultPrefix(range(), target()).equals(prefix) || value.oldDefaultPrefix(prefix))) {
+				prefix = value.defaultPrefix(range, target());
 			}
 			this.range = range;
 		}
@@ -224,9 +242,15 @@ public final class HudLayout {
 		public String titleColor;
 		// null = bold
 		public Boolean titleBold;
+		// "(/sv hud)" under the box till the editor opens, new players only. null = none
+		public Boolean hint;
 
 		public String titleColorOrDefault() {
 			return titleColor != null ? titleColor : "e";
+		}
+
+		public boolean hint() {
+			return hint != null && hint;
 		}
 
 		public boolean titleBoldOrDefault() {
@@ -258,6 +282,23 @@ public final class HudLayout {
 		layout.boxes.add(spawnBox());
 		layout.boxes.add(shaftBox());
 		return layout;
+	}
+
+	// a new players HUD, so they can find where the boxes come from
+	public static HudLayout firstStart() {
+		HudLayout layout = defaults();
+		for (Box box : layout.boxes) box.hint = true;
+		return layout;
+	}
+
+	// editor opened, hints gone for good. false = there were none
+	public boolean dropHints() {
+		boolean had = false;
+		for (Box box : boxes) {
+			had |= box.hint();
+			box.hint = null;
+		}
+		return had;
 	}
 
 	public record Preset(String name, String description, Supplier<Box> box) {
@@ -414,7 +455,9 @@ public final class HudLayout {
 			if (line.format < 0 || line.format >= formats) line.format = 0;
 			// pre-range files have none, were all session values
 			if (line.range != null && !value.hasRange(line.range)) line.range = value.defaultRange();
-			if (line.prefix == null) line.prefix = value.defaultPrefix(line.range());
+			// pbs come from settings, maybe not loaded yet
+			if (line.target != null && !value.acceptsTarget(line.target)) line.target = null;
+			if (line.prefix == null) line.prefix = value.defaultPrefix(line.range(), line.target());
 			if (HudRules.preset(value).isEmpty()) line.readyRule = false;
 			if (line.rules != null) {
 				line.rules.removeIf(rule -> rule == null);

@@ -31,7 +31,11 @@ public final class HudExpr {
 	public record Num(double value, Type type, Integer decimals, Double minutes) implements Node {
 	}
 
-	public record Val(HudValue value, Range range, String format) implements Node {
+	// target = tag name, f.e. "jasper", null for values w/o one
+	public record Val(HudValue value, Range range, String format, String target) implements Node {
+		public Val(HudValue value, Range range, String format) {
+			this(value, range, format, value.defaultTarget());
+		}
 	}
 
 	public record Group(Node inner, String format) implements Node {
@@ -51,13 +55,13 @@ public final class HudExpr {
 	}
 
 	public interface Values {
-		Object get(HudValue value, Range range);
+		Object get(HudValue value, Range range, String target);
 	}
 
 	public record Parsed(Node node, String error) {
 	}
 
-	public static final Values NONE = (value, range) -> null;
+	public static final Values NONE = (value, range, target) -> null;
 	private static final List<String> NUMBER_FORMATS = Stream
 			.concat(HudFormat.names(Kind.INTEGER).stream(), HudFormat.names(Kind.DECIMAL).stream()).toList();
 	private static final Pattern CLOCK = Pattern.compile("(\\d+):(\\d{2})(?!\\d)");
@@ -207,7 +211,7 @@ public final class HudExpr {
 			String format = formats.getFirst().name();
 			Node site = formats.getFirst().site();
 			// a lone value keeps its own format
-			if (node == site && node instanceof Val v) return new Val(v.value(), v.range(), format);
+			if (node == site && node instanceof Val v) return new Val(v.value(), v.range(), format, v.target());
 			if (node == site && node instanceof Group g) return new Group(g.inner(), format);
 			return new Group(node, format);
 		}
@@ -285,17 +289,20 @@ public final class HudExpr {
 			}
 			Range range = value.defaultRange();
 			String format = null;
+			String target = value.defaultTarget();
 			for (String o : t.options()) {
 				Range r = Range.byTagName(o);
 				if (value.hasRange(r)) {
 					range = r;
 				} else if (HudFormat.names(value.kind()).contains(o) || (value.hasNumber() && NUMBER_FORMATS.contains(o))) {
 					format = o;
+				} else if (value.acceptsTarget(o)) {
+					target = o;
 				} else {
 					throw new Error(value.tag() + " has no :" + o + guessOption(value, o));
 				}
 			}
-			Val val = new Val(value, range, null);
+			Val val = new Val(value, range, null, target);
 			if (format != null) {
 				formats.add(new Format(format, index, val));
 			}
@@ -332,7 +339,7 @@ public final class HudExpr {
 	private static String guessOption(HudValue value, String option) {
 		String guess = RANGE_GUESS.get(option);
 		if (guess == null || !value.hasRange(Range.byTagName(guess))) {
-			List<String> options = new ArrayList<>();
+			List<String> options = new ArrayList<>(value.targets());
 			if (value.ranges().size() > 1) value.ranges().forEach(r -> options.add(r.tagName()));
 			options.addAll(HudFormat.names(value.kind()));
 			guess = near(option, options);
@@ -385,7 +392,7 @@ public final class HudExpr {
 
 	private static Result value(Val v, Values values) {
 		HudValue value = v.value();
-		Object o = values.get(value, v.range());
+		Object o = values.get(value, v.range(), v.target());
 		String unit = HudBoxText.suffix(value, v.range());
 		boolean waiting = o == null && HudBoxText.rate(value, v.range());
 		Type type = type(value.kind());
@@ -510,7 +517,7 @@ public final class HudExpr {
 	public static String key(Node node) {
 		return switch (node) {
 			case Num n -> Double.toString(n.value());
-			case Val v -> v.value().tag() + (v.range() == null ? "" : ":" + v.range().tagName());
+			case Val v -> v.value().tag() + (v.target() == null ? "" : ":" + v.target()) + (v.range() == null ? "" : ":" + v.range().tagName());
 			case Group g -> key(g.inner());
 			case Neg n -> "-" + key(n.inner());
 			case Op o -> "(" + key(o.a()) + o.op() + key(o.b()) + ")";
@@ -521,7 +528,8 @@ public final class HudExpr {
 	public static String plain(Node node) {
 		return switch (node) {
 			case Num n -> n.type() == Type.TIME ? HudFormat.thresholdText(Kind.TIME, n.value()) : HudFormat.thresholdText(Kind.COINS, n.value());
-			case Val v -> v.value().tag() + (v.range() == null || v.range() == v.value().defaultRange() ? "" : ":" + v.range().tagName());
+			case Val v -> v.value().tag() + (v.target() == null || !v.value().pinsTarget() && v.target().equals(v.value().defaultTarget()) ? "" : ":" + v.target())
+					+ (v.range() == null || v.range() == v.value().defaultRange() ? "" : ":" + v.range().tagName());
 			case Group g -> plain(g.inner());
 			case Neg n -> "-" + (bare(n.inner()) instanceof Op ? "(" + plain(n.inner()) + ")" : plain(n.inner()));
 			case Op o -> {

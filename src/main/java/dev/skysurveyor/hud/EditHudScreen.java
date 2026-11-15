@@ -94,7 +94,7 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 	private static final int HOVER = 0x20FFFFFF;
 	// box name keeps at least this much before the page name gets cut
 	private static final int CRUMB_MIN = 40;
-	private static final Surface GRIP = (graphics, c) -> {
+	public static final Surface GRIP = (graphics, c) -> {
 		int x = c.x() + (c.width() - 3) / 2;
 		int y = c.y() + (c.height() - 5) / 2;
 		for (int dx = 0; dx <= 2; dx += 2) {
@@ -277,6 +277,8 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		super(Component.literal("Edit HUD"));
 		this.parent = parent;
 		this.hud = hud;
+		// they found the editor, saved on close
+		if (hud.layout().dropHints()) hud.setLayout(hud.layout());
 		this.history = new HudHistory(hud.layout().toJson());
 	}
 
@@ -1414,6 +1416,13 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 			tip.append("\n§8Ranges: ");
 			tip.append(String.join(", ", value.ranges().stream().map(HudValue.Range::displayName).toList()));
 		}
+		switch (value.target()) {
+			case SHAFT_TYPE -> tip.append("\n§8Pick the shaft type on its line");
+			case CORPSE_TYPE -> tip.append("\n§8Pick the corpse type on its line");
+			case PERSONAL_BEST -> tip.append("\n§8Pick which personal best on its line. Make your own on the Stats tab");
+			case NONE -> {
+			}
+		}
 		return tip.append("\n§eClick to add").toString();
 	}
 
@@ -1564,6 +1573,35 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		}
 
 		panel.child(heading("Value"));
+		List<String> targets = value.targets();
+		if (!targets.isEmpty()) {
+			HudValue.Target kind = value.target();
+			int widest = targets.stream().mapToInt(t -> font.width(value.targetName(t))).max().orElse(0);
+			// as many a row as the longest name fits, f.e. 2 at scale 4
+			int columns = 1;
+			for (int c = kind == HudValue.Target.SHAFT_TYPE ? 3 : 2; c > 1 && columns == 1; c--) {
+				if (widest + 8 <= (inner() - KEY - 2 - 2 * (c - 1)) / c) columns = c;
+			}
+			Grid options = new Grid(columns, KEY);
+			for (String t : targets) {
+				String name = value.targetName(t);
+				tip(options.add(choice(name, line.target().equals(t), () -> line.setTarget(t))), switch (kind) {
+					case SHAFT_TYPE -> "Shafts since your last " + name + " shaft";
+					case CORPSE_TYPE -> name + " corpses";
+					default -> "Your " + name + " personal best";
+				});
+			}
+			panel.child(keyRow(switch (kind) {
+				case SHAFT_TYPE -> "Shaft";
+				case CORPSE_TYPE -> "Corpse";
+				default -> "PB";
+			}, options));
+			if (kind == HudValue.Target.PERSONAL_BEST && !value.hasTarget(line.target())) {
+				LabelComponent gone = label("§8This personal best isn't on your Stats tab any more, so it shows -.");
+				gone.maxWidth(inner());
+				panel.child(gone);
+			}
+		}
 		List<HudValue.Range> ranges = value.ranges();
 		if (ranges.size() > 1) {
 			Grid options = new Grid(2, KEY);
@@ -1822,6 +1860,16 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 					return true;
 				});
 				listContent.child(row);
+				if (!value.targets().isEmpty()) {
+					FlowLayout options = optionRow();
+					for (String target : value.targets()) {
+						Chip chip = new Chip(":" + target, RANGE_TEXT, () -> typeOption(value, target));
+						tip(chip, "{" + value.tag() + ":" + target + "}: " + value.targetName(target) + ". Now "
+								+ strip(HudBoxText.paint(HudBoxText.text(value, value.defaultRange(), target, 0, hud.data(), true), "7", "")));
+						options.child(chip);
+					}
+					listContent.child(options);
+				}
 				if (value.ranges().size() > 1) {
 					FlowLayout options = optionRow();
 					for (HudValue.Range range : value.ranges()) {

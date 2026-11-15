@@ -67,7 +67,12 @@ public final class Journal {
 			if (entry.sessionId() == last.sessionId()) resumed = resumed.add(entry);
 		}
 		session = resumed;
-		lastActivity = last.enteredAt() + last.durationMillis();
+		lastActivity = last.endedAt();
+	}
+
+	// saved activity after the last shaft, f.e. mining outside shafts
+	public void resumeActivity(long sessionId, long at) {
+		if (session != null && session.id() == sessionId && at > lastActivity) lastActivity = at;
 	}
 
 	public boolean searchRunning() {

@@ -81,7 +81,7 @@ class PriceBookTest {
 
 	@Test
 	void settingsRepairHandEdits() {
-		MoneySettings broken = new MoneySettings(null, MoneySettings.GemTier.FINE, -3.0, null, null, null, null);
+		MoneySettings broken = new MoneySettings(null, MoneySettings.GemTier.FINE, -3.0, null, null, null, null, null);
 		MoneySettings repaired = broken.repaired();
 		assertEquals(MoneySettings.GemTier.FINE, repaired.gemTier());
 		assertEquals(MoneySettings.DEFAULTS.sellPrice(), repaired.sellPrice());

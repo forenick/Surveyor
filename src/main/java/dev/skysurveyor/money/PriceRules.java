@@ -3,18 +3,23 @@ package dev.skysurveyor.money;
 import java.util.Locale;
 import java.util.regex.Matcher;
 
+import dev.skysurveyor.data.CorpseType;
 import dev.skysurveyor.data.Ladder;
 import dev.skysurveyor.detection.TextPatterns;
 import dev.skysurveyor.journal.GemYield;
+import dev.skysurveyor.journal.MetalYield;
 import dev.skysurveyor.settings.MoneySettings;
 import dev.skysurveyor.settings.MoneySettings.Crystals;
 import dev.skysurveyor.settings.MoneySettings.GemTier;
+import dev.skysurveyor.settings.MoneySettings.OwnMetal;
 import dev.skysurveyor.settings.MoneySettings.SellPrice;
 
 // rules in docs/money-design.md
 public record PriceRules(ShaftValue.Prices prices, MoneySettings settings, ItemIds ids, TextPatterns patterns) {
 	// portable campfire recipe (research/01)
 	private static final int CAMPFIRE_MATCH_STICKS = 16;
+	// tungsten/umber key = 192 enchanted + 1 bejeweled handle, forge (NEU TUNGSTEN_KEY, UMBER_KEY)
+	private static final int KEY_ENCHANTED = 192;
 	// perfect = 5 flawless + crystal (research/01)
 	private static final int PERFECT_FLAWLESS = 5;
 
@@ -74,15 +79,43 @@ public record PriceRules(ShaftValue.Prices prices, MoneySettings settings, ItemI
 		return price.onBazaar() ? price.sellOffer() : price.lowestBin();
 	}
 
-	// by key item name
+	// by key item name. craft = enchanted u could have sold + a bought handle
 	public Double key(String key) {
-		return buy(ids.id(key));
+		String id = ids.id(key);
+		String metal = "TUNGSTEN_KEY".equals(id) ? "ENCHANTED_TUNGSTEN" : "UMBER_KEY".equals(id) ? "ENCHANTED_UMBER" : null;
+		// skeleton key isnt from ur metal, always bought
+		if (metal == null) return buy(id);
+		if (settings.ownMetal() == OwnMetal.DONT_COUNT) return 0.0;
+		if (!crafts()) return buy(id);
+		Double enchanted = sell(metal);
+		Double handle = buy("BEJEWELED_HANDLE");
+		return enchanted == null || handle == null ? null : KEY_ENCHANTED * enchanted + handle;
 	}
 
 	public Double campfireCost() {
-		Double umber = buy("REFINED_UMBER");
+		if (settings.ownMetal() == OwnMetal.DONT_COUNT) return 0.0;
+		Double umber = crafts() ? refinedUmberFromOwn() : buy("REFINED_UMBER");
 		Double sticks = buy("MATCH_STICKS");
 		return umber == null || sticks == null ? null : umber + CAMPFIRE_MATCH_STICKS * sticks;
+	}
+
+	// costs 0 w/ these settings, shown as used
+	public static boolean free(MoneySettings settings, ShaftValue.Part part, String item) {
+		if (part != ShaftValue.Part.KEYS && part != ShaftValue.Part.CAMPFIRES) return false;
+		if (settings.isIronman()) return true;
+		return settings.ownMetal() == OwnMetal.DONT_COUNT && (part == ShaftValue.Part.CAMPFIRES
+				|| item.equals(CorpseType.key(CorpseType.TUNGSTEN.label())) || item.equals(CorpseType.key(CorpseType.UMBER.label())));
+	}
+
+	// ironman keeps no cost
+	private boolean crafts() {
+		return settings.ownMetal() == OwnMetal.CRAFT && !settings.isIronman();
+	}
+
+	private Double refinedUmberFromOwn() {
+		Ladder umber = Ladder.metal("Umber");
+		Double enchanted = sell("ENCHANTED_UMBER");
+		return enchanted == null ? null : enchanted * umber.base(MetalYield.REFINED) / umber.base(MetalYield.ENCHANTED);
 	}
 
 	private static String gemId(String tier, String gem) {

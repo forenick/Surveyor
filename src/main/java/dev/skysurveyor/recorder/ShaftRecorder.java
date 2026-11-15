@@ -31,7 +31,10 @@ import net.minecraft.world.scores.Scoreboard;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import dev.skysurveyor.detection.EventText;
+import dev.skysurveyor.detection.ShaftEvent;
 import dev.skysurveyor.detection.TextPatterns;
+import dev.skysurveyor.journal.JournalEntry;
 import dev.skysurveyor.mixin.PlayerTabOverlayAccessor;
 import dev.skysurveyor.util.DataFolder;
 import dev.skysurveyor.util.GameText;
@@ -71,9 +74,13 @@ public final class ShaftRecorder {
 		for (int i = 2; Files.exists(file); i++) file = folder.resolve(name + "_" + i + ".jsonl");
 		writer = new RecordingWriter(file);
 		startMillis = System.currentTimeMillis();
+		// only real world changes, live tracker has none here either
+		lastLevel = client.level;
 		resetSnapshots();
 		JsonObject event = event("start");
 		event.addProperty("time", LocalDateTime.now().toString());
+		// has live + live_entry lines (0.24.0+)
+		event.addProperty("live", true);
 		writer.write(event);
 		return file;
 	}
@@ -107,6 +114,24 @@ public final class ShaftRecorder {
 		writer.write(event);
 	}
 
+	// what live detection made of the lines above, replay checks it
+	public void onLiveEvent(ShaftEvent event) {
+		if (writer == null) return;
+		JsonObject json = event("live");
+		json.addProperty("event", EventText.of(event));
+		writer.write(json);
+	}
+
+	public void onLiveEntry(JournalEntry entry) {
+		if (writer == null) return;
+		JsonObject json = event("live_entry");
+		json.addProperty("shaft", entry.shaftId());
+		// recording time, like t
+		json.addProperty("entered", entry.enteredAt() - startMillis);
+		if (entry.searchMillis() != null) json.addProperty("search", entry.searchMillis());
+		writer.write(json);
+	}
+
 	public void onTitle(Component text, boolean subtitle) {
 		if (writer == null) return;
 		JsonObject event = event(subtitle ? "subtitle" : "title");
@@ -132,8 +157,9 @@ public final class ShaftRecorder {
 	}
 
 	public void onTick(Minecraft client) {
-		if (writer == null) return;
+		// counts while off too, same ticks as LiveTracker
 		tick++;
+		if (writer == null) return;
 		if (client.level != lastLevel) {
 			lastLevel = client.level;
 			resetSnapshots();

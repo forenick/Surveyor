@@ -11,6 +11,8 @@ import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import dev.skysurveyor.journal.PersonalBests;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -35,7 +37,7 @@ class LiveSettingsTest {
 		assertNull(live.saveError());
 		live.reloadIfChanged();
 		// nothing to save to yet, memory stays
-		Settings asked = live.change(s -> s.withJournal(new JournalSettings(false)));
+		Settings asked = live.change(s -> s.withJournal(JournalSettings.DEFAULTS.withByDay(false)));
 		assertFalse(asked.journal().byDay());
 		assertEquals(Settings.DEFAULTS, live.get());
 	}
@@ -67,6 +69,28 @@ class LiveSettingsTest {
 
 		LiveSettings restarted = started(tmp);
 		assertEquals(live.get(), restarted.get());
+	}
+
+	@Test
+	void personalBestsSaveAsAList(@TempDir Path tmp) throws Exception {
+		Files.writeString(tmp.resolve("config.json"), "{\"money\": {\"bazaarTax\": 2}}");
+		LiveSettings live = started(tmp);
+		assertEquals(PersonalBestSettings.DEFAULTS, live.get().personalBests(), "no section = the default list");
+		List<PersonalBests.Def> list = List.of(new PersonalBests.Def("shaft_coins", "JASP", "lowest", null),
+				new PersonalBests.Def("drystreak", "FAIR", null, "Vanguard wait"));
+		live.change(s -> s.withPersonalBests(s.personalBests().withList(list)));
+		JsonObject saved = file(tmp);
+		assertEquals(2, saved.getAsJsonObject("money").get("bazaarTax").getAsInt(), "money untouched");
+		assertEquals("{\"stat\":\"shaft_coins\",\"shaft\":\"JASP\",\"best\":\"lowest\"}",
+				saved.getAsJsonObject("personalBests").getAsJsonArray("list").get(0).toString(), "nulls left out");
+		assertEquals(list, started(tmp).get().personalBests().list());
+		live.change(s -> s.withPersonalBests(PersonalBestSettings.DEFAULTS));
+		assertFalse(file(tmp).has("personalBests"), "reset = no section, later defaults reach it");
+
+		Files.writeString(tmp.resolve("config.json"), "{\"personalBests\": {\"list\": [{\"stat\": \"nope\"}, 5, "
+				+ "{\"stat\": \"shaft_powder\", \"best\": \"sideways\"}]}}");
+		assertEquals(List.of(new PersonalBests.Def("shaft_powder", null, null, null)), started(tmp).get().personalBests().list(),
+				"broken entries skipped, the rest loads");
 	}
 
 	@Test
@@ -103,7 +127,7 @@ class LiveSettingsTest {
 	void failedSaveIsReported(@TempDir Path tmp) throws Exception {
 		LiveSettings live = started(tmp);
 		Files.writeString(tmp.resolve("config.json"), "{\"money\": {");
-		live.change(s -> s.withJournal(new JournalSettings(false)));
+		live.change(s -> s.withJournal(JournalSettings.DEFAULTS.withByDay(false)));
 		assertFalse(live.get().journal().byDay(), "memory still changes");
 		assertEquals("{\"money\": {", Files.readString(tmp.resolve("config.json")));
 		assertTrue(live.saveError() != null);

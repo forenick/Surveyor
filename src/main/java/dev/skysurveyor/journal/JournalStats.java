@@ -1,10 +1,16 @@
 package dev.skysurveyor.journal;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.ToLongFunction;
 
 import dev.skysurveyor.data.CorpseType;
 import dev.skysurveyor.detection.Corpse;
@@ -32,18 +38,47 @@ public final class JournalStats {
 	public record CorpseCount(int looted, int total) {
 	}
 
-	public record SessionSummary(long id, List<JournalEntry> entries) {
+	// mining = outside shafts, empty before 0.24.0-alpha.11. breaks = none before 0.24.0-alpha.18
+	public record SessionSummary(long id, List<JournalEntry> entries, List<MiningEntry> mining, List<BreakEntry> breaks) {
+		public SessionSummary(long id, List<JournalEntry> entries) {
+			this(id, entries, List.of(), List.of());
+		}
+
+		public SessionSummary withBreaks(List<BreakEntry> breaks) {
+			return new SessionSummary(id, entries, mining, breaks);
+		}
+
 		public long start() {
 			return id;
 		}
 
+		// last activity, coins mined after the last shaft count w/ their time
 		public long end() {
-			JournalEntry last = entries.getLast();
-			return Math.max(id, last.enteredAt() + last.durationMillis());
+			long end = Math.max(id, entries.getLast().endedAt());
+			return mining.isEmpty() ? end : Math.max(end, mining.getLast().at());
 		}
 
+		// wall clock, breaks included
 		public long lengthMillis() {
 			return end() - start();
+		}
+
+		public long breakMillis() {
+			return breakMillis(end());
+		}
+
+		// not counted per hour, breaks ended by then
+		public long breakMillis(long now) {
+			return Breaks.counted(breaks, start(), Math.max(end(), now));
+		}
+
+		// what every per hour rate divides by
+		public long rateMillis() {
+			return rateMillis(end());
+		}
+
+		public long rateMillis(long now) {
+			return Math.max(end(), now) - start() - breakMillis(now);
 		}
 
 		public int shafts() {
@@ -67,7 +102,7 @@ public final class JournalStats {
 		}
 
 		public Double perHour(double amount, long now) {
-			return JournalStats.perHour(amount, Math.max(end(), now) - start());
+			return JournalStats.perHour(amount, rateMillis(now));
 		}
 
 		public long powder() {
@@ -78,12 +113,9 @@ public final class JournalStats {
 			return entries.stream().mapToInt(e -> looted(e, type)).sum();
 		}
 
-		private static int looted(JournalEntry entry, String type) {
+		static int looted(JournalEntry entry, String type) {
 			return (int) entry.corpses().stream().filter(c -> c.looted() && c.type().equals(type)).count();
 		}
-	}
-
-	public record Best(JournalEntry entry, long value) {
 	}
 
 	// corpses = with loot seen, item corpses = how many of those dropped it
@@ -103,14 +135,7 @@ public final class JournalStats {
 			long powder,
 			Map<String, Integer> looted,
 			Long averageSearchMillis,
-			JournalEntry fastest,
 			List<SessionSummary> oldestFirst,
-			Best mostPowder,
-			Best mostLapis,
-			SessionSummary bestRate,
-			SessionSummary fastestSession,
-			SessionSummary mostShafts,
-			JournalEntry mostGems,
 			Map<String, Map<String, Integer>> types,
 			Map<String, Integer> corpsesSeen,
 			Map<String, Integer> shaftsWithCorpse,
@@ -120,15 +145,57 @@ public final class JournalStats {
 		}
 	}
 
+	// shaft type code -> shafts since the last one, oldest first in. types never seen = every shaft
+	public static Map<String, Long> drystreaks(List<JournalEntry> entries, List<String> types) {
+		Map<String, Long> dry = new LinkedHashMap<>();
+		long since = 0;
+		for (int i = entries.size() - 1; i >= 0 && dry.size() < types.size(); i--) {
+			String type = entries.get(i).shaftType();
+			if (type != null && types.contains(type)) dry.putIfAbsent(type, since);
+			since++;
+		}
+		for (String type : types) dry.putIfAbsent(type, (long) entries.size());
+		return dry;
+	}
+
+	// finished on that day, oldest first in
+	public static long shaftsOn(List<JournalEntry> entries, LocalDate day, ZoneId zone) {
+		long count = 0;
+		for (int i = entries.size() - 1; i >= 0; i--) {
+			JournalEntry entry = entries.get(i);
+			LocalDate date = Instant.ofEpochMilli(entry.endedAt()).atZone(zone).toLocalDate();
+			if (date.isBefore(day)) break;
+			if (date.equals(day)) count++;
+		}
+		return count;
+	}
+
 	public static List<SessionSummary> sessions(List<JournalEntry> entries) {
+		return sessions(entries, List.of(), List.of());
+	}
+
+	// sessions w/o a shaft dont show, their mining + breaks neither
+	public static List<SessionSummary> sessions(List<JournalEntry> entries, List<MiningEntry> mining, List<BreakEntry> breaks) {
 		Map<Long, List<JournalEntry>> bySession = new LinkedHashMap<>();
 		for (JournalEntry entry : entries) {
 			bySession.computeIfAbsent(entry.sessionId(), id -> new ArrayList<>()).add(entry);
 		}
+		Map<Long, List<MiningEntry>> outside = bySession(mining, MiningEntry::sessionId, bySession.keySet());
+		Map<Long, List<BreakEntry>> paused = bySession(breaks, BreakEntry::sessionId, bySession.keySet());
 		List<SessionSummary> sessions = new ArrayList<>();
-		bySession.forEach((id, list) -> sessions.add(new SessionSummary(id, List.copyOf(list))));
+		bySession.forEach((id, list) -> sessions.add(new SessionSummary(id, List.copyOf(list), List.copyOf(outside.getOrDefault(id, List.of())),
+				List.copyOf(paused.getOrDefault(id, List.of())))));
 		sessions.sort(Comparator.comparingLong(SessionSummary::start).reversed());
 		return sessions;
+	}
+
+	private static <T> Map<Long, List<T>> bySession(List<T> list, ToLongFunction<T> sessionId, Set<Long> keep) {
+		Map<Long, List<T>> grouped = new HashMap<>();
+		for (T item : list) {
+			long id = sessionId.applyAsLong(item);
+			if (keep.contains(id)) grouped.computeIfAbsent(id, k -> new ArrayList<>()).add(item);
+		}
+		return grouped;
 	}
 
 	// colds only from 0.22.0 shafts on
@@ -177,7 +244,12 @@ public final class JournalStats {
 	}
 
 	public static AllTime allTime(List<JournalEntry> entries) {
-		List<SessionSummary> sessions = sessions(entries);
+		return allTime(entries, List.of(), List.of());
+	}
+
+	// timeMillis = w/o breaks, what the avg rates divide by
+	public static AllTime allTime(List<JournalEntry> entries, List<MiningEntry> mining, List<BreakEntry> breaks) {
+		List<SessionSummary> sessions = sessions(entries, mining, breaks);
 		List<SessionSummary> oldestFirst = new ArrayList<>(sessions);
 		oldestFirst.sort(Comparator.comparingLong(SessionSummary::start));
 
@@ -187,10 +259,6 @@ public final class JournalStats {
 		Map<String, Integer> shaftsWithCorpse = new LinkedHashMap<>();
 		Map<String, Integer> lootSeen = new LinkedHashMap<>();
 		Map<String, Map<String, ItemDrop>> dropped = new LinkedHashMap<>();
-		JournalEntry fastest = null;
-		Best mostPowder = null;
-		Best mostLapis = null;
-		JournalEntry mostGems = null;
 		long powder = 0;
 		for (JournalEntry entry : entries) {
 			powder += powder(entry);
@@ -213,42 +281,11 @@ public final class JournalStats {
 			if (type != null && variant != null) {
 				types.computeIfAbsent(type, t -> new LinkedHashMap<>()).merge(variant, 1, Integer::sum);
 			}
-			if (entry.searchMillis() != null && (fastest == null || entry.searchMillis() < fastest.searchMillis())) {
-				fastest = entry;
-			}
-			long shaftPowder = powder(entry);
-			if (mostPowder == null || shaftPowder > mostPowder.value()) mostPowder = new Best(entry, shaftPowder);
-			long lapis = SessionSummary.looted(entry, CorpseType.LAPIS.label());
-			if (lapis > 0 && (mostLapis == null || lapis > mostLapis.value())) mostLapis = new Best(entry, lapis);
-			if (entry.gems() != null && entry.gems().fineEquivalent() > 0
-					&& (mostGems == null || entry.gems().fineEquivalent() > mostGems.gems().fineEquivalent())) mostGems = entry;
-		}
-
-		SessionSummary bestRate = null;
-		double bestRateValue = 0;
-		SessionSummary fastestSession = null;
-		long fastestAverage = 0;
-		SessionSummary mostShafts = null;
-		for (SessionSummary session : sessions) {
-			Double rate = session.shaftsPerHour();
-			if (rate != null && session.shafts() >= MIN_SHAFTS_FOR_RATE_RECORD && (bestRate == null || rate > bestRateValue)) {
-				bestRate = session;
-				bestRateValue = rate;
-			}
-			if (session.timedSpawns() >= MIN_TIMED_FOR_RECORD) {
-				long average = session.averageSearchMillis();
-				if (fastestSession == null || average < fastestAverage) {
-					fastestSession = session;
-					fastestAverage = average;
-				}
-			}
-			if (mostShafts == null || session.shafts() > mostShafts.shafts()) mostShafts = session;
 		}
 
 		return new AllTime(entries.size(), sessions.size(),
-				sessions.stream().mapToLong(SessionSummary::lengthMillis).sum(), powder,
-				orderedMap(looted), averageSearch(entries), fastest, List.copyOf(oldestFirst),
-				mostPowder, mostLapis, bestRate, fastestSession, mostShafts, mostGems, byTotal(types), orderedMap(seen), orderedMap(shaftsWithCorpse),
+				sessions.stream().mapToLong(SessionSummary::rateMillis).sum(), powder,
+				orderedMap(looted), averageSearch(entries), List.copyOf(oldestFirst), byTotal(types), orderedMap(seen), orderedMap(shaftsWithCorpse),
 				drops(lootSeen, dropped));
 	}
 

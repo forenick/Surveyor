@@ -29,6 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import dev.skysurveyor.detection.LiveTracker;
+import dev.skysurveyor.hud.EditHudScreen;
 import dev.skysurveyor.hud.LiveHud;
 import dev.skysurveyor.journal.LiveJournal;
 import dev.skysurveyor.money.LiveMoney;
@@ -68,6 +69,7 @@ public class Surveyor implements ClientModInitializer {
 	// opens next tick once the chat screen is closed
 	private boolean openJournal;
 	private boolean openSettings;
+	private boolean openHud;
 
 	@Override
 	public void onInitializeClient() {
@@ -87,16 +89,22 @@ public class Surveyor implements ClientModInitializer {
 		ClientTickEvents.END_CLIENT_TICK.register(HUD::onTick);
 		HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT, Identifier.fromNamespaceAndPath(MOD_ID, "hud"), HUD::render);
 		ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
-			RECORDER.stop();
 			// before journal.close, else the shaft ur in is lost
 			TRACKER.onQuit();
+			// after onQuit, so the last shaft is in the recording
+			RECORDER.stop();
 			JOURNAL.close();
 			HUD.close();
 			MONEY.close();
 		});
 		JOURNAL.onToast(HUD::showToast);
+		JOURNAL.addEntryListener(RECORDER::onLiveEntry);
+		// 1st, so live lines come before the journals
+		TRACKER.addListener(RECORDER::onLiveEvent);
 		TRACKER.addListener(JOURNAL::onEvent);
+		TRACKER.addChatListener(JOURNAL::onChat);
 		TRACKER.addListener(MONEY::onEvent);
+		TRACKER.onWorldChange(JOURNAL::onWorldChange);
 		// own hits only, PASS = never changes the hit
 		AttackBlockCallback.EVENT.register((player, level, hand, pos, direction) -> {
 			if (level.isClientSide()) {
@@ -116,6 +124,7 @@ public class Surveyor implements ClientModInitializer {
 				.executes(this::openJournal)
 				.then(ClientCommands.literal("journal").executes(this::openJournal))
 				.then(ClientCommands.literal("settings").executes(this::openSettings))
+				.then(ClientCommands.literal("hud").executes(this::openHud))
 				.then(ClientCommands.literal("record")
 						.then(ClientCommands.literal("start").executes(this::startRecording))
 						.then(ClientCommands.literal("stop").executes(this::stopRecording)))
@@ -136,6 +145,11 @@ public class Surveyor implements ClientModInitializer {
 		return 1;
 	}
 
+	private int openHud(CommandContext<FabricClientCommandSource> context) {
+		openHud = true;
+		return 1;
+	}
+
 	private static void moveOldDataFolder() {
 		Path gameDir = FabricLoader.getInstance().getGameDir();
 		try {
@@ -148,12 +162,18 @@ public class Surveyor implements ClientModInitializer {
 
 	private void openJournalIfAsked(Minecraft client) {
 		while (JOURNAL_KEY.consumeClick()) openJournal = true;
+		if (openHud) {
+			openHud = false;
+			// no parent, done goes back to the game
+			client.gui.setScreen(new EditHudScreen(null, HUD));
+			return;
+		}
 		if (!openJournal && !openSettings) return;
 		boolean settings = openSettings;
 		openJournal = false;
 		openSettings = false;
 		MONEY.refresh();
-		JournalScreen journal = new JournalScreen(JOURNAL.entries());
+		JournalScreen journal = new JournalScreen(JOURNAL.entries(), JOURNAL.mining(0), JOURNAL.breaks());
 		// back from settings lands in the journal
 		client.gui.setScreen(settings ? new SettingsScreen(journal) : journal);
 	}

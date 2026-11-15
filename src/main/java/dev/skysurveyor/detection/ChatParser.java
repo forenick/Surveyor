@@ -14,6 +14,7 @@ import dev.skysurveyor.detection.ShaftEvent.CrystalOwned;
 import dev.skysurveyor.detection.ShaftEvent.ExitBonus;
 import dev.skysurveyor.detection.ShaftEvent.ExtraCorpses;
 import dev.skysurveyor.detection.ShaftEvent.FrozeToDeath;
+import dev.skysurveyor.detection.ShaftEvent.KeySaved;
 import dev.skysurveyor.detection.ShaftEvent.MayhemBuff;
 import dev.skysurveyor.detection.ShaftEvent.PickaxeAbility;
 import dev.skysurveyor.detection.ShaftEvent.PortalSpawned;
@@ -92,6 +93,7 @@ public final class ChatParser {
 		if (patterns.matches("campfire.placed", text)) return new CampfirePlaced();
 		if ((m = patterns.match("campfire.used", text)) != null) return new CampfireUsed(Integer.parseInt(m.group("amount")));
 		if (patterns.matches("scrap", text)) return new ScrapFound();
+		if (patterns.matches("loot.key_saved", text)) return new KeySaved();
 		if ((m = patterns.match("ability.used", text)) != null) return new PickaxeAbility(m.group("ability"));
 		if ((m = patterns.match("supercraft", text)) != null) {
 			return new Supercraft(new ItemCount(m.group("item"), TextPatterns.number(m.group("count"))));
