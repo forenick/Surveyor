@@ -21,8 +21,30 @@ public final class HudLayout {
 	public static final float MIN_SCALE = 0.5f;
 	public static final float MAX_SCALE = 2;
 	public static final String COLOR_CODES = "0123456789abcdef";
+	// rgb of each code above, same order
+	public static final int[] COLOR_RGB = {0x000000, 0x0000AA, 0x00AA00, 0x00AAAA, 0xAA0000, 0xAA00AA, 0xFFAA00, 0xAAAAAA,
+			0x555555, 0x5555FF, 0x55FF55, 0x55FFFF, 0xFF5555, 0xFF55FF, 0xFFFF55, 0xFFFFFF};
 	public static final String TOAST_ID = "toast";
+
+	// bad or no code = white
+	public static int colorIndex(String code) {
+		int i = code == null || code.isEmpty() ? -1 : COLOR_CODES.indexOf(Character.toLowerCase(code.charAt(0)));
+		return i < 0 ? COLOR_CODES.indexOf('f') : i;
+	}
+
+	public static int argb(String code) {
+		return 0xFF000000 | COLOR_RGB[colorIndex(code)];
+	}
+	// box title in the shafts (or last ones) colour, yellow w/o one
+	public static final String SHAFT_COLOR = "shaft";
+	// drops line, mockup hud-drops-v1
+	public static final int DEFAULT_ROWS = 5;
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+	// display choice, not a game number. fixtures have 6 boxes, 6 lines, 66 chars, the editor allows 64 to 512 chars
+	static final int MAX_BOXES = 100;
+	static final int MAX_LINES = 100;
+	static final int MAX_RULES = 100;
+	static final int MAX_TEXT = 1000;
 
 	enum Visibility {
 		ALWAYS, MINES, IN_SHAFT, OUTSIDE_SHAFT
@@ -98,6 +120,17 @@ public final class HudLayout {
 		public List<String> colorRules;
 		// shaft or corpse type tag, f.e. "jasper". null = the values default
 		public String target;
+		// null = text, "both" or "graph". unknown kept + drawn as text
+		public String showAs;
+		// drops line. null = DEFAULT_ROWS, 0 = all
+		public Integer rows;
+		// drops line, null = shown
+		public Boolean hideAmounts;
+		// row bars gone since 0.25.0-alpha.12, kept so old files load unchanged
+		public Boolean hideBars;
+		public Boolean hideSpent;
+		// drops line. null = items, "sources" or "both". unknown kept + drawn as items
+		public String view;
 
 		public Line() {
 		}
@@ -117,6 +150,35 @@ public final class HudLayout {
 			if (value.pinsTarget()) this.target = value.defaultTarget();
 		}
 
+		public static Line of(HudValue.Period period) {
+			Line line = new Line(period.value());
+			if (period.range() != null) line.setRange(period.range());
+			return line;
+		}
+
+		// null = the value has no periods
+		public HudValue.Period period() {
+			HudValue value = hudValue();
+			return value == null ? null : value.period(range());
+		}
+
+		// period row. across the shafts family it changes the value, saved ids stay
+		public void setPeriod(HudValue.Period period) {
+			HudValue old = hudValue();
+			if (old == null) return;
+			HudValue now = period.value();
+			if (now == old) {
+				if (period.range() != null) setRange(period.range());
+				return;
+			}
+			if (old.isDefaultPrefix(prefix)) prefix = now.defaultPrefix(period.range(), target);
+			// formats are per kind, an index from another is wrong
+			if (now.kind() != old.kind()) format = 0;
+			if (Objects.equals(valueColor, old.defaultColor(target()))) valueColor = now.defaultColor(target);
+			value = now.id();
+			range = period.range();
+		}
+
 		// null in old files = the default range, kept null so the file stays the same
 		public Range range() {
 			HudValue value = hudValue();
@@ -133,9 +195,25 @@ public final class HudLayout {
 		public void setTarget(String target) {
 			HudValue value = hudValue();
 			if (value == null) return;
-			if (value.defaultPrefix(range(), target()).equals(prefix)) prefix = value.defaultPrefix(range(), target);
+			if (value.isDefaultPrefix(prefix)) prefix = value.defaultPrefix(range(), target);
 			if (Objects.equals(valueColor, value.defaultColor(target()))) valueColor = value.defaultColor(target);
 			this.target = !value.pinsTarget() && target.equals(value.defaultTarget()) ? null : target;
+		}
+
+		// drops line, 0 = all
+		public int rowsOrDefault() {
+			return rows == null ? DEFAULT_ROWS : Math.max(0, rows);
+		}
+
+		public DropsView dropsView() {
+			for (DropsView v : DropsView.values()) {
+				if (v.saved != null && v.saved.equals(view)) return v;
+			}
+			return DropsView.ITEMS;
+		}
+
+		public void dropsView(DropsView v) {
+			view = v.saved;
 		}
 
 		public boolean dash() {
@@ -145,7 +223,7 @@ public final class HudLayout {
 		// a label nobody typed follows the range
 		public void setRange(Range range) {
 			HudValue value = hudValue();
-			if (value != null && (value.defaultPrefix(range(), target()).equals(prefix) || value.oldDefaultPrefix(prefix))) {
+			if (value != null && value.isDefaultPrefix(prefix)) {
 				prefix = value.defaultPrefix(range, target());
 			}
 			this.range = range;
@@ -153,6 +231,20 @@ public final class HudLayout {
 
 		public HudValue hudValue() {
 			return HudValue.byId(value);
+		}
+
+		// a value w/o a graph (or not in this period) shows text, showAs kept
+		public ShowAs showAs() {
+			HudValue value = hudValue();
+			if (value == null || value.graph(range()) == HudValue.Graph.NONE) return ShowAs.TEXT;
+			for (ShowAs as : ShowAs.values()) {
+				if (as.saved != null && as.saved.equals(showAs)) return as;
+			}
+			return ShowAs.TEXT;
+		}
+
+		public void showAs(ShowAs as) {
+			showAs = as.saved;
 		}
 
 		public boolean advancedMode() {
@@ -197,6 +289,32 @@ public final class HudLayout {
 		}
 	}
 
+	public enum ShowAs {
+		TEXT(null),
+		BOTH("both"),
+		GRAPH("graph");
+
+		// saved in hud.json, never rename
+		private final String saved;
+
+		ShowAs(String saved) {
+			this.saved = saved;
+		}
+	}
+
+	public enum DropsView {
+		ITEMS(null),
+		SOURCES("sources"),
+		BOTH("both");
+
+		// saved in hud.json, never rename
+		private final String saved;
+
+		DropsView(String saved) {
+			this.saved = saved;
+		}
+	}
+
 	public static final class ColorRule {
 		public enum When {
 			OVER, UNDER
@@ -208,10 +326,6 @@ public final class HudLayout {
 		// a value tag like {average_spawn}, beats value. null = value
 		public String than;
 		public String color = "c";
-
-		public boolean matches(double number, double limit) {
-			return when == When.UNDER ? number < limit : number > limit;
-		}
 	}
 
 	public static final class Box {
@@ -238,7 +352,7 @@ public final class HudLayout {
 		Float x;
 		Float y;
 		Visibility visibility;
-		// null = yellow, nulls stay out of the file
+		// null = yellow, nulls stay out of the file. or SHAFT_COLOR
 		public String titleColor;
 		// null = bold
 		public Boolean titleBold;
@@ -274,13 +388,16 @@ public final class HudLayout {
 	public List<Box> boxes = new ArrayList<>();
 	// movable shaft toast spot, null = never moved (defaultToast). only position + scale count
 	public Box toast;
+	// parts the caps cut on load, never saved
+	transient int cutParts;
 
-	// from Docs/mockups/hud-v1.html
+	// left column, right side is hypixels scoreboard (nick, 2026-11-18)
 	public static HudLayout defaults() {
 		HudLayout layout = new HudLayout();
 		layout.boxes.add(sessionBox());
 		layout.boxes.add(spawnBox());
 		layout.boxes.add(shaftBox());
+		layout.boxes.add(moneyBox());
 		return layout;
 	}
 
@@ -322,10 +439,10 @@ public final class HudLayout {
 	public static List<Preset> presets() {
 		return List.of(
 				new Preset("Spawn", "Spawn timer and average spawn", HudLayout::spawnBox),
-				new Preset("Session", "Shafts, shafts per hour, powder and corpse Fine", HudLayout::sessionBox),
-				new Preset("Current shaft", "Time inside, corpses, cold and campfires", HudLayout::shaftBox),
-				new Preset("All-time totals", "Shafts, powder and corpse Fine, all-time", HudLayout::allTimeBox),
-				new Preset("Money", "Coins this shaft, this session, per hour and avg per shaft", HudLayout::moneyBox),
+				new Preset("Session", "Shafts, shafts per hour and powder", HudLayout::sessionBox),
+				new Preset("Current shaft", "Time inside, corpses, campfires and coins", HudLayout::shaftBox),
+				new Preset("All-time", "Shafts, powder and corpse Fine, all-time", HudLayout::allTimeBox),
+				new Preset("Session profit", "Coins this session, per hour, per shaft, session length and drops", HudLayout::moneyBox),
 				new Preset("Performance", "FPS, ping and TPS", HudLayout::performanceBox));
 	}
 
@@ -335,13 +452,13 @@ public final class HudLayout {
 		session.lines.add(new Line(HudValue.SHAFTS_PER_HOUR, null, true, 0));
 		session.lines.add(new Line(HudValue.AVERAGE_SPAWN, null, false, 1));
 		session.lines.add(new Line(HudValue.SESSION_POWDER, null, true, 0));
-		session.lines.add(new Line(HudValue.SESSION_CORPSE_FINE, null, true, 0));
 		return session;
 	}
 
 	private static Box spawnBox() {
-		// = v1s 58% at 1080p, under the crosshair
-		Box spawn = box("spawn", "Spawn", false, true, Background.NONE, Align.CENTER, Anchor.MIDDLE, 0, Anchor.MIDDLE, 18);
+		// same spot as the shaft box, never both at once. offsets leave room for the first start hint
+		Box spawn = box("spawn", "Spawn", false, true, Background.NONE, Align.LEFT, Anchor.START, 0, Anchor.START, 54);
+		spawn.showInShaft = false;
 		spawn.valueBold = true;
 		spawn.lines.add(new Line(HudValue.SPAWN_TIMER, null, true, 0));
 		spawn.lines.add(new Line(HudValue.AVERAGE_SPAWN, "Avg: ", true, 0));
@@ -349,11 +466,13 @@ public final class HudLayout {
 	}
 
 	private static Box shaftBox() {
-		Box shaft = box("shaft", "{shaft_type} Shaft", true, false, Background.FRAME, Align.LEFT, Anchor.END, 0, Anchor.START, 0);
+		Box shaft = box("shaft", "{shaft_type} Shaft", true, false, Background.FRAME, Align.LEFT, Anchor.START, 0, Anchor.START, 54);
+		shaft.titleColor = SHAFT_COLOR;
 		shaft.lines.add(new Line(HudValue.SHAFT_TIME, null, true, 0));
 		shaft.lines.add(new Line(HudValue.SHAFT_CORPSES, null, true, 0));
-		shaft.lines.add(new Line(HudValue.SHAFT_COLD, null, true, 0));
 		shaft.lines.add(new Line(HudValue.SHAFT_CAMPFIRES, null, true, 0));
+		// title says the shaft already. no cold, the scoreboard has it (nick, 2026-11-15)
+		shaft.lines.add(rangeLine(HudValue.COINS, "Coins: ", Range.SHAFT));
 		return shaft;
 	}
 
@@ -367,11 +486,14 @@ public final class HudLayout {
 	}
 
 	private static Box moneyBox() {
-		Box box = box("money", "Money", true, true, Background.DARK, Align.LEFT, Anchor.END, 0, Anchor.MIDDLE, 0);
-		box.lines.add(rangeLine(HudValue.COINS, "This shaft: ", Range.SHAFT));
-		box.lines.add(rangeLine(HudValue.COINS, "Session: ", Range.SESSION));
+		Box box = box("money", "Session profit", true, true, Background.DARK, Align.LEFT, Anchor.START, 0, Anchor.START, 120);
+		// this shaft lives in the shaft box (nick, 2026-11-15)
+		box.lines.add(rangeLine(HudValue.COINS, "Total: ", Range.SESSION));
 		box.lines.add(rangeLine(HudValue.COINS, "Per hour: ", Range.PER_HOUR));
-		box.lines.add(rangeLine(HudValue.COINS_PER_SHAFT, "Avg per shaft: ", Range.SESSION));
+		box.lines.add(rangeLine(HudValue.COINS_PER_SHAFT, "Per shaft: ", Range.SESSION));
+		box.lines.add(new Line(HudValue.SESSION_TIME, "Time: ", true, 0));
+		// nick, 2026-11-16
+		box.lines.add(rangeLine(HudValue.DROPS, "", Range.SESSION));
 		return box;
 	}
 
@@ -414,14 +536,15 @@ public final class HudLayout {
 		HudLayout layout = GSON.fromJson(json, HudLayout.class);
 		if (layout == null || layout.boxes == null) throw new JsonParseException("No boxes in the HUD file");
 		layout.boxes.removeIf(box -> box == null);
+		layout.cutParts += cut(layout.boxes, MAX_BOXES);
 		Set<String> ids = new HashSet<>();
 		ids.add(TOAST_ID);
 		if (layout.toast != null) {
-			repair(layout.toast);
+			layout.cutParts += repair(layout.toast);
 			layout.toast.id = TOAST_ID;
 		}
 		for (Box box : layout.boxes) {
-			repair(box);
+			layout.cutParts += repair(box);
 			// editor finds boxes by id after undo
 			if (box.id == null || box.id.isBlank() || !ids.add(box.id)) {
 				int n = 1;
@@ -433,22 +556,37 @@ public final class HudLayout {
 		return layout;
 	}
 
-	private static void repair(Box box) {
+	// = parts the caps cut
+	private static int repair(Box box) {
+		int cut = 0;
 		if (box.title == null) box.title = "";
+		if (box.title.length() > MAX_TEXT) {
+			box.title = cut(box.title);
+			cut++;
+		}
 		if (box.visibility != null) convertVersion2(box);
 		if (box.background == null) box.background = Background.DARK;
 		if (box.align == null) box.align = Align.LEFT;
 		if (!isColor(box.labelColor)) box.labelColor = "7";
 		if (!isColor(box.valueColor)) box.valueColor = "f";
-		if (box.titleColor != null && !isColor(box.titleColor)) box.titleColor = null;
+		if (box.titleColor != null && !isColor(box.titleColor) && !SHAFT_COLOR.equals(box.titleColor)) box.titleColor = null;
 		box.scale = clamp(box.scale == 0 ? 1 : box.scale, MIN_SCALE, MAX_SCALE);
 		if (box.anchorX == null) box.anchorX = Anchor.START;
 		if (box.anchorY == null) box.anchorY = Anchor.START;
 		if (box.x != null || box.y != null) convertVersion1(box);
 		if (box.lines == null) box.lines = new ArrayList<>();
 		box.lines.removeIf(line -> line == null || line.hudValue() == null);
+		cut += cut(box.lines, MAX_LINES);
 		for (Line line : box.lines) {
 			HudValue value = line.hudValue();
+			if (line.prefix != null && line.prefix.length() > MAX_TEXT) {
+				line.prefix = cut(line.prefix);
+				cut++;
+			}
+			if (line.text != null && line.text.length() > MAX_TEXT) {
+				line.text = cut(line.text);
+				cut++;
+			}
 			if (!isColor(line.labelColor)) line.labelColor = null;
 			if (!isColor(line.valueColor)) line.valueColor = null;
 			int formats = HudFormat.options(value.kind()).size();
@@ -461,6 +599,7 @@ public final class HudLayout {
 			if (HudRules.preset(value).isEmpty()) line.readyRule = false;
 			if (line.rules != null) {
 				line.rules.removeIf(rule -> rule == null);
+				cut += cut(line.rules, MAX_RULES);
 				for (ColorRule rule : line.rules) {
 					if (rule.when == null) rule.when = ColorRule.When.OVER;
 					if (!isColor(rule.color)) rule.color = "c";
@@ -470,8 +609,35 @@ public final class HudLayout {
 				if (line.rules.isEmpty() || !value.hasNumber()) line.rules = null;
 			}
 			if (line.advanced && line.text == null) line.advanced = false;
-			if (line.colorRules != null) line.colorRules.removeIf(rule -> rule == null);
+			if (line.colorRules != null) {
+				line.colorRules.removeIf(rule -> rule == null);
+				cut += cut(line.colorRules, MAX_RULES);
+				for (int i = 0; i < line.colorRules.size(); i++) {
+					if (line.colorRules.get(i).length() > MAX_TEXT) {
+						line.colorRules.set(i, cut(line.colorRules.get(i)));
+						cut++;
+					}
+				}
+			}
 		}
+		return cut;
+	}
+
+	private static int cut(List<?> list, int max) {
+		if (list.size() <= max) return 0;
+		int over = list.size() - max;
+		list.subList(max, list.size()).clear();
+		return over;
+	}
+
+	// never half a surrogate pair
+	private static String cut(String text) {
+		int end = Character.isHighSurrogate(text.charAt(MAX_TEXT - 1)) ? MAX_TEXT - 1 : MAX_TEXT;
+		return text.substring(0, end);
+	}
+
+	public int cutParts() {
+		return cutParts;
 	}
 
 	private static void convertVersion2(Box box) {

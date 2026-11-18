@@ -13,6 +13,7 @@ import dev.skysurveyor.settings.Setting.Choice;
 import dev.skysurveyor.settings.Setting.Number;
 import dev.skysurveyor.settings.Setting.Option;
 import dev.skysurveyor.settings.Setting.Toggle;
+import dev.skysurveyor.settings.Setting.Unused;
 import dev.skysurveyor.settings.SummarySettings.Position;
 import dev.skysurveyor.settings.SummarySettings.Show;
 import dev.skysurveyor.settings.SummarySettings.Style;
@@ -50,6 +51,10 @@ public final class SettingsList {
 	public static final String MONEY = "money";
 	public static final String JOURNAL = "journal";
 
+	// money/PriceRules: ironman returns before reading these. old shafts still picks saved vs todays npc prices
+	private static final Unused IRONMAN = new Unused(s -> s.money().isIronman(), "Not used while Ironman is on");
+	private static final Unused NO_TOAST = new Unused(s -> !s.summary().show().toast(), "Not used while the toast is off");
+
 	public static final List<Category> CATEGORIES = List.of(
 			new Category(MONEY, "Money", "money_icon", "How a shaft turns into coins, everywhere the journal and HUD show coins.", List.of(
 					new Section("Profile", List.of(
@@ -60,26 +65,26 @@ public final class SettingsList {
 							new Choice<>("Sell price", "Price used for everything sold on the Bazaar.", List.of(
 									new Option<>(SellPrice.INSTA_SELL, "Insta-sell", "The highest buy order, what you get right away."),
 									new Option<>(SellPrice.SELL_OFFER, "Sell offer", "The lowest sell offer, more coins but you wait for a buyer.")),
-									s -> s.money().sellPrice(), (s, v) -> s.withMoney(s.money().withSellPrice(v))),
+									s -> s.money().sellPrice(), (s, v) -> s.withMoney(s.money().withSellPrice(v)), IRONMAN),
 							new Number("Bazaar tax", "Taken off everything sold on the Bazaar. Not off lowest BIN or NPC prices.", "%", 0, 100,
-									s -> s.money().bazaarTax(), (s, v) -> s.withMoney(s.money().withBazaarTax(v))))),
+									s -> s.money().bazaarTax(), (s, v) -> s.withMoney(s.money().withBazaarTax(v)), IRONMAN))),
 					new Section("Gems", List.of(
 							new Choice<>("Gem tier", "Rough, Flawed and Fine gems all count as this tier. Crafting up is free.", List.of(
 									new Option<>(GemTier.FLAWLESS, "Flawless", "Every 80 Fine count as 1 Flawless."),
 									new Option<>(GemTier.FINE, "Fine", "Gems count at the Fine price.")),
-									s -> s.money().gemTier(), (s, v) -> s.withMoney(s.money().withGemTier(v))),
+									s -> s.money().gemTier(), (s, v) -> s.withMoney(s.money().withGemTier(v)), IRONMAN),
 							new Choice<>("Gemstone Crystals", "Crystals from crystal shafts. They can't be sold.", List.of(
 									new Option<>(Crystals.PERFECT_MINUS_FLAWLESS, "Perfect minus 5 Flawless",
 											"A Perfect gem minus 5 Flawless of that gem."),
 									new Option<>(Crystals.ZERO, "Zero", "Crystals add no coins.")),
-									s -> s.money().crystals(), (s, v) -> s.withMoney(s.money().withCrystals(v))))),
+									s -> s.money().crystals(), (s, v) -> s.withMoney(s.money().withCrystals(v)), IRONMAN))),
 					new Section("Metal", List.of(
 							new Choice<>("Metal tier", "Tungsten mined in Tungsten shafts and Umber in Umber shafts count as this tier. "
 									+ "Metal from corpses keeps its own price.", List.of(
 											new Option<>(MetalTier.ENCHANTED, "Enchanted", "Every 160 count as 1 Enchanted. Crafting is free."),
 											new Option<>(MetalTier.RAW, "Tungsten or Umber", "The price of the metal you mined."),
 											new Option<>(MetalTier.REFINED, "Refined", "Every 160 Enchanted count as 1 Refined, an hour in the Forge.")),
-									s -> s.money().metalTier(), (s, v) -> s.withMoney(s.money().withMetalTier(v))),
+									s -> s.money().metalTier(), (s, v) -> s.withMoney(s.money().withMetalTier(v)), IRONMAN),
 							new Choice<>("Keys and campfires", "What a Tungsten Key, Umber Key or Portable Campfire costs.", List.of(
 									new Option<>(OwnMetal.INSTA_BUY, "Insta-buy", "Bought on the Bazaar."),
 									new Option<>(OwnMetal.CRAFT, "Craft from your metal",
@@ -87,10 +92,10 @@ public final class SettingsList {
 													+ "A campfire is 160 Enchanted Umber plus 16 Match-Sticks."),
 									new Option<>(OwnMetal.DONT_COUNT, "Don't count", "Keys and campfires cost nothing. "
 											+ "A shaft shows how many you used.")),
-									s -> s.money().ownMetal(), (s, v) -> s.withMoney(s.money().withOwnMetal(v))))),
+									s -> s.money().ownMetal(), (s, v) -> s.withMoney(s.money().withOwnMetal(v)), IRONMAN))),
 					new Section("Old shafts", List.of(
 							new Choice<>("Prices for old shafts",
-									"Shafts since 0.14.0 saved their prices when they ended. Older shafts always use today's.", List.of(
+									"Each shaft saves its prices when it ends. Shafts from before Surveyor saved prices always use today's.", List.of(
 											new Option<>(OldShafts.THAT_DAY, "That day's", "The prices saved when each shaft ended."),
 											new Option<>(OldShafts.TODAY, "Today's", "Every shaft at the latest prices.")),
 									s -> s.money().oldShafts(), (s, v) -> s.withMoney(s.money().withOldShafts(v))))))),
@@ -106,17 +111,17 @@ public final class SettingsList {
 									new Option<>(Show.OFF, "Off", "Nothing, the journal still saves the shaft.")),
 									s -> s.summary().show(), (s, v) -> s.withSummary(s.summary().withShow(v))),
 							new Choice<>("Toast style", "How the card looks.", List.of(
-									new Option<>(Style.VANILLA, "Vanilla toast", "Like Minecraft's own toasts."),
-									new Option<>(Style.FRAME, "HUD frame", "The tooltip frame the HUD boxes use."),
-									new Option<>(Style.DARK, "HUD dark", "A dark see-through box.")),
-									s -> s.summary().style(), (s, v) -> s.withSummary(s.summary().withStyle(v))),
+									new Option<>(Style.VANILLA, "Vanilla", "Like Minecraft's own toasts."),
+									new Option<>(Style.FRAME, "Frame", "The tooltip frame the HUD boxes use."),
+									new Option<>(Style.DARK, "Dark", "A dark see-through box.")),
+									s -> s.summary().style(), (s, v) -> s.withSummary(s.summary().withStyle(v)), NO_TOAST),
 							new Choice<>("Toast position", "Where the card shows up.", List.of(
 									new Option<>(Position.TOP_RIGHT, "Top right", "Where Minecraft's toasts go, slides in."),
 									new Option<>(Position.MOVABLE, "Movable", "Anywhere you like, drag it in Edit HUD.")),
-									s -> s.summary().position(), (s, v) -> s.withSummary(s.summary().withPosition(v))),
+									s -> s.summary().position(), (s, v) -> s.withSummary(s.summary().withPosition(v)), NO_TOAST),
 							new Number("Toast time", "How long the card stays. Minecraft's Notification Time setting stretches it.", "s",
 									SummarySettings.MIN_SECONDS, SummarySettings.MAX_SECONDS,
-									s -> s.summary().seconds(), (s, v) -> s.withSummary(s.summary().withSeconds(v))))))));
+									s -> s.summary().seconds(), (s, v) -> s.withSummary(s.summary().withSeconds(v)), NO_TOAST))))));
 
 	private SettingsList() {
 	}

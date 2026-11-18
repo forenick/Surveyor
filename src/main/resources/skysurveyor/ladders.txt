@@ -1,6 +1,13 @@
 # tiers low to high, number = how many of the tier below
 # gem 80:1 (research/05), metal 160:1 (neu ENCHANTED_*, REFINED_* recipes)
 # key = shaft code, gem = every gem shaft ({gem} = the gems name)
+# every step is also what a compactor in sacks makes (detection/Compaction)
+# gem compaction in sacks unconfirmed, no recording w/ a gem compactor yet (review 0.2)
 gem  = Rough {gem} Gemstone, 80 Flawed {gem} Gemstone, 80 Fine {gem} Gemstone, 80 Flawless {gem} Gemstone
 TUNG = Tungsten, 160 Enchanted Tungsten, 160 Refined Tungsten
 UMBE = Umber, 160 Enchanted Umber, 160 Refined Umber
+# compact.* = only for compaction in sacks, no shafts own
+# from recording 6: removes always 160s, f.e. -320 Glacite +2 Enchanted Glacite at 6:11.6
+compact.glacite    = Glacite, 160 Enchanted Glacite
+# from recording 6: removes always 576s, f.e. -576 Hard Stone +1 Enchanted Hard Stone at 14:43.7
+compact.hard_stone = Hard Stone, 576 Enchanted Hard Stone

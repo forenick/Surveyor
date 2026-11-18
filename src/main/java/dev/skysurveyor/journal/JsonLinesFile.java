@@ -17,7 +17,6 @@ import java.util.function.Predicate;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.JsonParseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,6 +30,7 @@ public class JsonLinesFile<T> {
 	private final Gson gson = new GsonBuilder().disableHtmlEscaping().create();
 	// one thread for every file, owner shuts it down
 	private final Executor io;
+	private volatile boolean failed;
 
 	public JsonLinesFile(Path file, Class<T> type, Predicate<T> complete, Executor io) {
 		this.file = file;
@@ -43,14 +43,22 @@ public class JsonLinesFile<T> {
 		return file;
 	}
 
+	// read threw, so some lines may be missing
+	public boolean failed() {
+		return failed;
+	}
+
+	// never completes exceptionally, a failed future = empty journal w/o a word. throwable on purpose
 	public CompletableFuture<List<T>> load() {
 		return CompletableFuture.supplyAsync(() -> {
+			List<T> entries = new ArrayList<>();
 			try {
-				return read();
-			} catch (IOException e) {
-				LOGGER.error("Could not read {}", file, e);
-				return List.of();
+				read(entries);
+			} catch (Throwable e) {
+				failed = true;
+				LOGGER.error("Could not read all of {}, keeping {} entries read before it", file, entries.size(), e);
 			}
+			return entries;
 		}, io);
 	}
 
@@ -70,7 +78,12 @@ public class JsonLinesFile<T> {
 
 	List<T> read() throws IOException {
 		List<T> entries = new ArrayList<>();
-		if (!Files.exists(file)) return entries;
+		read(entries);
+		return entries;
+	}
+
+	private void read(List<T> entries) throws IOException {
+		if (!Files.exists(file)) return;
 		// replaces bad utf-8, newBufferedReader throws and one cut off char would hide every line
 		try (BufferedReader reader = new BufferedReader(new InputStreamReader(Files.newInputStream(file), StandardCharsets.UTF_8))) {
 			String line;
@@ -85,12 +98,12 @@ public class JsonLinesFile<T> {
 					// f.e. {} from a hand edit, line stays in the file
 					else if (!complete.test(entry)) LOGGER.warn("Skipping line {} of {}: fields missing", number, file);
 					else entries.add(entry);
-				} catch (JsonParseException e) {
-					LOGGER.warn("Skipping unreadable line {} of {}: {}", number, file, e.getMessage());
+				} catch (RuntimeException e) {
+					// not just JsonParseException, f.e. a price typed as text. line stays in the file
+					LOGGER.warn("Skipping unreadable line {} of {}: {}", number, file, e.toString());
 				}
 			}
 		}
-		return entries;
 	}
 
 	// cant tell = true, a blank line is skipped on read

@@ -41,7 +41,7 @@ class OldRulesTest {
 			String key = HudExpr.key(new HudExpr.Val(value, range, null));
 			List<HudRules.Rule> rules = HudRules.parse(line.advancedRules());
 			for (Number number : sweep(line)) {
-				HudData data = HudData.live(SessionTotals.NONE, Totals.NONE, null, null, null, 0, ShaftNames.defaults())
+				HudData data = HudFixtures.live(SessionTotals.NONE, Totals.NONE, null, null, null, 0, ShaftNames.defaults())
 						.set(value, range, number).set(HudValue.AVERAGE_SPAWN, Range.SESSION, 85_000L)
 						.set(HudValue.COINS_PER_SHAFT, Range.ALL_TIME, 2_000_000.0);
 				String old = oldColor(line, range, data);

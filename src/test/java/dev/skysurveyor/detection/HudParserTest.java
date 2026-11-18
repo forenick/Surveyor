@@ -1,13 +1,20 @@
 package dev.skysurveyor.detection;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.stream.Stream;
 
+import com.google.gson.JsonObject;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 // fixtures = real snapshots from recordings
 class HudParserTest {
@@ -88,5 +95,37 @@ class HudParserTest {
 				new Corpse("Umber", false),
 				new Corpse("Tungsten", false)), tabList.corpses(SHAFT_TAB));
 		assertEquals(List.of(), tabList.corpses(List.of("§b§lArea: §7Mineshaft", "§r Scrap: §b0")));
+	}
+
+	// real lines, recordings 1-5
+	@Test
+	void pityWidget() {
+		assertEquals(new TabListParser.Pity(388, 2_000),
+				tabList.pity(List.of("§d§lPity:", "§r §bGlacite Mineshafts§f: §e388§7/§a2,000")));
+		assertEquals(new TabListParser.Pity(0, 2_000), tabList.pity(List.of("§r §bGlacite Mineshafts§f: §c0§7/§a2,000")));
+		assertEquals(new TabListParser.Pity(1_498, 2_000), tabList.pity(List.of("§r §bGlacite Mineshafts§f: §e1,498§7/§a2,000")));
+		assertNull(tabList.pity(SHAFT_TAB));
+	}
+
+	@Test
+	void everyRecordedPityLineParses() throws IOException {
+		Path dir = RecordingReplay.RECORDINGS;
+		assumeTrue(Files.isDirectory(dir), "Recordings not available: " + dir);
+		List<Path> files;
+		try (Stream<Path> list = Files.list(dir)) {
+			files = list.filter(file -> file.toString().endsWith(".jsonl")).sorted().toList();
+		}
+		int seen = 0;
+		for (Path file : files) {
+			for (JsonObject record : RecordingReplay.read(file)) {
+				if (!RecordingReplay.type(record).equals("tablist")) continue;
+				for (String line : RecordingReplay.strings(record.getAsJsonArray("lines"))) {
+					if (!TextPatterns.clean(line).startsWith(" Glacite Mineshafts")) continue;
+					assertNotNull(tabList.pity(List.of(line)), file.getFileName() + ": " + line);
+					seen++;
+				}
+			}
+		}
+		assumeTrue(seen > 0, "no pity lines recorded");
 	}
 }

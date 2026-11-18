@@ -1,10 +1,13 @@
 package dev.skysurveyor.hud;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
 import dev.skysurveyor.data.CorpseType;
 import dev.skysurveyor.data.ShaftNames;
+import dev.skysurveyor.journal.Breaks;
+import dev.skysurveyor.journal.Journal;
 import dev.skysurveyor.journal.PersonalBests;
 
 // ids saved in hud.json, never rename. tags use tag()
@@ -13,20 +16,22 @@ public enum HudValue {
 	SHAFTS_PER_HOUR("shafts_per_hour", "Shafts per hour", Group.SESSION, Kind.DECIMAL, "Shafts/h: "),
 	AVERAGE_SPAWN("average_spawn", "Average spawn", Group.SPAWN, Kind.TIME, "Avg spawn: ", Range.SHAFT, Range.SESSION,
 			Range.ALL_TIME),
-	SESSION_POWDER("session_powder", "Glacite Powder from shafts", Group.SESSION, Kind.INTEGER, "Shaft powder: ",
+	SESSION_POWDER("session_powder", "Shaft powder", Group.SESSION, Kind.INTEGER, "Shaft powder: ",
 			Range.values()),
 	SESSION_CORPSE_FINE("session_corpse_fine", "Corpse gems (Fine)", Group.SESSION, Kind.DECIMAL, "Corpse Fine: ", Range.values()),
 	// in the metal tier setting
 	MINED_METAL("mined_metal", "Mined metal", Group.SESSION, Kind.DECIMAL, "Mined metal: ", Range.values()),
 	SPAWN_TIMER("spawn_timer", "Spawn timer", Group.SPAWN, Kind.TIME, "Spawn: "),
 	// shafts since the last one of the lines shaft type
-	DRYSTREAK("drystreak", "Drystreak", Group.SPAWN, Kind.INTEGER, "Jasper dry: "),
+	DRYSTREAK("drystreak", "Drystreak", Group.SPAWN, Kind.INTEGER, "Jasper drystreak: "),
+	// tab list pity widget, shows now/max
+	PITY("pity", "Shaft pity", Group.SPAWN, Kind.INTEGER, "Pity: "),
 	SINCE_LAST_SHAFT("since_last_shaft", "Time since last shaft", Group.SPAWN, Kind.TIME, "Since last shaft: "),
-	CORPSES_LOOTED("corpses_looted", "Corpses looted", Group.SESSION, Kind.INTEGER, "Lapis looted: ", Range.values()),
-	SESSION_TIME("session_time", "Session length", Group.SESSION, Kind.TIME, "Session: "),
+	CORPSES_LOOTED("corpses_looted", "Corpses looted", Group.SESSION, Kind.INTEGER, "Lapis corpses: ", Range.values()),
+	SESSION_TIME("session_time", "Session length", Group.OTHER, Kind.TIME, "Session: "),
 	SHAFTS_TODAY("shafts_today", "Shafts today", Group.SESSION, Kind.INTEGER, "Shafts today: "),
 	// one of the Stats tabs personal bests, all-time
-	PERSONAL_BEST("personal_best", "Personal best", Group.SESSION, Kind.TEXT, "PB: "),
+	PERSONAL_BEST("personal_best", "Personal best", Group.OTHER, Kind.TEXT, "PB: "),
 	SHAFT_TYPE("shaft_type", "Shaft type", Group.SHAFT, Kind.TEXT, "Shaft: "),
 	SHAFT_TIME("shaft_time", "Time inside", Group.SHAFT, Kind.TIME, "Time inside: "),
 	SHAFT_CORPSES("shaft_corpses", "Corpses", Group.SHAFT, Kind.TEXT, "Corpses: "),
@@ -34,11 +39,13 @@ public enum HudValue {
 	SHAFT_CAMPFIRES("shaft_campfires", "Campfires", Group.SHAFT, Kind.INTEGER, "Campfires: "),
 	// net, shaft = live while inside
 	COINS("coins", "Coins", Group.MONEY, Kind.COINS, "Coins: ", Range.values()),
-	COINS_PER_SHAFT("coins_per_shaft", "Avg coins per shaft", Group.MONEY, Kind.COINS, "Avg coins/shaft: ", Range.SESSION,
+	COINS_PER_SHAFT("coins_per_shaft", "Coins per shaft", Group.MONEY, Kind.COINS, "Coins/shaft: ", Range.SESSION,
 			Range.ALL_TIME),
 	// sacks msgs while mining in the mines, not in a shaft. nicks name pick (2026-11-14)
-	OUTSIDE_COINS("outside_coins", "Coins outside shafts", Group.MONEY, Kind.COINS, "Outside shafts: ", Range.SESSION,
+	OUTSIDE_COINS("outside_coins", "Coins outside shafts", Group.MONEY, Kind.COINS, "Outside coins: ", Range.SESSION,
 			Range.PER_HOUR, Range.ALL_TIME),
+	// several rows, not a tag. label stays empty
+	DROPS("drops", "Drops", Group.MONEY, Kind.TEXT, "", Range.SHAFT, Range.SESSION, Range.ALL_TIME),
 	FPS("fps", "FPS", Group.GAME, Kind.INTEGER, "FPS: "),
 	PING("ping", "Ping", Group.GAME, Kind.INTEGER, "Ping: ", "ms"),
 	TPS("tps", "TPS", Group.GAME, Kind.DECIMAL, "TPS: "),
@@ -46,12 +53,13 @@ public enum HudValue {
 	MOD_VERSION("mod_version", "Surveyor version", Group.GAME, Kind.TEXT, "Surveyor "),
 	MINECRAFT_VERSION("minecraft_version", "Minecraft version", Group.GAME, Kind.TEXT, "Minecraft ");
 
-	// picker headings, display only
+	// picker headings, display only. SHAFT = followsShaft, keep its 5
 	public enum Group {
 		SPAWN("Spawn"),
-		SESSION("Totals"),
-		SHAFT("Shaft"),
-		MONEY("Money"),
+		SESSION("Shafts and loot"),
+		SHAFT("Current shaft"),
+		MONEY("Coins"),
+		OTHER("Other"),
 		GAME("Game");
 
 		private final String displayName;
@@ -68,10 +76,11 @@ public enum HudValue {
 	// names saved in hud.json, never rename
 	public enum Range {
 		// or the last one after leaving
-		SHAFT("Shaft", "The shaft you're in, or the last one while you're outside"),
-		SESSION("Session", "This session. It ends after 15 min without mining in the Dwarven Mines or shafting"),
-		PER_HOUR("Per hour", "The session amount per hour of this session, counted up to now"),
-		ALL_TIME("All-time", "Every shaft in your journal");
+		SHAFT("This shaft", "The shaft you're in. Outside a shaft, the last one"),
+		SESSION("Session", "This session. It ends after " + Journal.SESSION_GAP_MILLIS / 60_000
+				+ " min without mining in the Dwarven Mines or shafting"),
+		PER_HOUR("Per hour", "This session's amount per hour, breaks over " + Breaks.BREAK_MILLIS / 60_000 + " min left out"),
+		ALL_TIME("All-time", "Everything in your journal");
 
 		private final String displayName;
 		private final String description;
@@ -101,6 +110,31 @@ public enum HudValue {
 		}
 	}
 
+	// range null = the value has none, f.e. shafts today
+	public record Period(String name, String shortName, String description, HudValue value, Range range) {
+		static Period of(HudValue value, Range range) {
+			String shortName = switch (range) {
+				case SHAFT -> "shaft";
+				case PER_HOUR -> "/h";
+				default -> range.displayName().toLowerCase(Locale.ROOT);
+			};
+			return new Period(range.displayName(), shortName, range.description(), value, range);
+		}
+
+		// any target
+		public boolean shows(HudValue value, Range range) {
+			return this.value == value && this.range == range;
+		}
+	}
+
+	// what a line can draw under or instead of its number
+	public enum Graph {
+		NONE,
+		BAR,
+		// last shafts as columns
+		CHART
+	}
+
 	// what a line picks besides the range, f.e. {dry:jasper}
 	public enum Target {
 		NONE,
@@ -128,6 +162,11 @@ public enum HudValue {
 	private static final class Fixed {
 		static final List<String> SHAFTS = shafts();
 		static final List<String> CORPSES = CorpseType.ORDER.stream().map(HudValue::targetTag).toList();
+		// Add line order, docs/hud-rethink.md
+		static final List<HudValue> LISTED = List.of(SPAWN_TIMER, AVERAGE_SPAWN, SINCE_LAST_SHAFT, DRYSTREAK, PITY, SESSION_SHAFTS,
+				SHAFTS_PER_HOUR, SHAFTS_TODAY, SESSION_POWDER, SESSION_CORPSE_FINE, MINED_METAL, CORPSES_LOOTED, SHAFT_TYPE,
+				SHAFT_TIME, SHAFT_CORPSES, SHAFT_COLD, SHAFT_CAMPFIRES, COINS, COINS_PER_SHAFT, OUTSIDE_COINS, DROPS, SESSION_TIME,
+				PERSONAL_BEST, FPS, PING, TPS, CLOCK, MOD_VERSION, MINECRAFT_VERSION);
 
 		private static List<String> shafts() {
 			ShaftNames names = ShaftNames.defaults();
@@ -218,65 +257,76 @@ public enum HudValue {
 	}
 
 	// labels older versions gave new lines, still count as untyped
-	public boolean oldDefaultPrefix(String prefix) {
+	private boolean oldDefaultPrefix(String prefix) {
 		List<String> old = switch (this) {
 			// 0.22 + 0.23 alpha.1-2
-			case SESSION_POWDER -> List.of("Powder: ", "All-time powder: ");
-			case SESSION_CORPSE_FINE -> List.of("Fine: ");
+			case SESSION_POWDER -> List.of("Powder: ", "All-time powder: ", "All-time shaft powder: ");
+			case SESSION_CORPSE_FINE -> List.of("Fine: ", "All-time corpse Fine: ");
 			case SHAFT_TIME -> List.of("Inside: ");
 			// 0.22, 0.23 alpha.1
-			case COINS_PER_SHAFT -> List.of("Coins/shaft: ", "All-time avg/shaft: ");
+			case COINS_PER_SHAFT -> List.of("Coins/shaft: ", "All-time avg/shaft: ", "Avg coins/shaft: ", "All-time avg coins/shaft: ");
 			case CLOCK -> List.of("Time: ");
+			// till 0.25 periods
+			case SESSION_SHAFTS -> List.of("All-time shafts: ");
+			case AVERAGE_SPAWN -> List.of("All-time avg spawn: ", "This shaft's spawn: ");
+			case MINED_METAL -> List.of("All-time mined metal: ", "Metal this shaft: ");
+			case COINS -> List.of("All-time coins: ");
+			case OUTSIDE_COINS -> List.of("Outside shafts: ", "All-time outside shafts: ");
 			default -> List.of();
 		};
-		return old.contains(prefix);
+		if (old.contains(prefix)) return true;
+		for (String target : targets()) {
+			String name = targetName(target);
+			boolean had = switch (target()) {
+				case SHAFT_TYPE -> prefix.equals(name + " dry: ");
+				case CORPSE_TYPE -> prefix.equals(name + " looted: ") || prefix.equals("All-time " + name + " looted: ")
+						|| prefix.equals(name + " looted this shaft: ");
+				case PERSONAL_BEST, NONE -> false;
+			};
+			if (had) return true;
+		}
+		return false;
+	}
+
+	// a label nobody typed: any default this value has or had, any range + target
+	public boolean isDefaultPrefix(String prefix) {
+		if (prefix == null || oldDefaultPrefix(prefix) || prefix.equals(defaultPrefix)) return true;
+		List<String> targets = target() == Target.NONE ? Collections.singletonList(null) : targets();
+		for (String target : targets) {
+			if (prefix.equals(defaultPrefix(null, target))) return true;
+			for (Range range : ranges) {
+				if (prefix.equals(defaultPrefix(range, target))) return true;
+			}
+		}
+		return false;
 	}
 
 	public String defaultPrefix(Range range) {
 		return defaultPrefix(range, defaultTarget());
 	}
 
-	// per hour has /h on the value already
+	// noun 1st, period after. session = the short one. /h in the label, HudBoxText drops the values
 	public String defaultPrefix(Range range, String target) {
+		if (target() == Target.NONE && ranges.isEmpty() || multiRow()) return defaultPrefix;
 		String name = targetName(target == null ? defaultTarget() : target);
-		switch (target()) {
-			case PERSONAL_BEST -> {
-				return "PB " + name + ": ";
-			}
-			case SHAFT_TYPE -> {
-				return name + " dry: ";
-			}
-			case CORPSE_TYPE -> {
-				if (range == Range.ALL_TIME) return "All-time " + name + " looted: ";
-				return range == Range.SHAFT ? name + " looted this shaft: " : name + " looted: ";
-			}
-			case NONE -> {
-			}
-		}
-		if (range == Range.ALL_TIME) {
-			return switch (this) {
-				case SESSION_SHAFTS -> "All-time shafts: ";
-				case SESSION_POWDER -> "All-time shaft powder: ";
-				case AVERAGE_SPAWN -> "All-time avg spawn: ";
-				case SESSION_CORPSE_FINE -> "All-time corpse Fine: ";
-				case MINED_METAL -> "All-time mined metal: ";
-				case COINS -> "All-time coins: ";
-				case COINS_PER_SHAFT -> "All-time avg coins/shaft: ";
-				case OUTSIDE_COINS -> "All-time outside shafts: ";
-				default -> defaultPrefix;
-			};
-		}
-		if (range == Range.SHAFT) {
-			return switch (this) {
+		String noun = switch (target()) {
+			case PERSONAL_BEST -> "PB " + name;
+			case SHAFT_TYPE -> name + " drystreak";
+			case CORPSE_TYPE -> name + " corpses";
+			// all end in ": "
+			case NONE -> defaultPrefix.substring(0, defaultPrefix.length() - 2);
+		};
+		if (!hasRange(range)) return noun + ": ";
+		return switch (range) {
+			case SHAFT -> switch (this) {
 				case SESSION_POWDER -> "Powder this shaft: ";
-				case AVERAGE_SPAWN -> "This shaft's spawn: ";
-				case SESSION_CORPSE_FINE -> "Corpse Fine this shaft: ";
-				case MINED_METAL -> "Metal this shaft: ";
-				case COINS -> "Coins this shaft: ";
-				default -> defaultPrefix;
+				case AVERAGE_SPAWN -> "Spawn time this shaft: ";
+				default -> noun + " this shaft: ";
 			};
-		}
-		return defaultPrefix;
+			case SESSION -> noun + ": ";
+			case PER_HOUR -> noun + "/h: ";
+			case ALL_TIME -> noun + " all-time: ";
+		};
 	}
 
 	public String defaultColor() {
@@ -304,6 +354,8 @@ public enum HudValue {
 			case SESSION_POWDER, SHAFT_COLD -> "b";
 			// fine = rare
 			case SESSION_CORPSE_FINE -> "9";
+			// games colour for the pity number
+			case PITY -> "e";
 			default -> null;
 		};
 	}
@@ -413,7 +465,7 @@ public enum HudValue {
 		return switch (this) {
 			case SESSION_SHAFTS -> "Shafts you finished.";
 			case SHAFTS_PER_HOUR -> "Shafts per hour of this session, counted up to now.";
-			case AVERAGE_SPAWN -> "Average mining time it took to spawn a shaft. The shaft range is how long the shaft "
+			case AVERAGE_SPAWN -> "Average mining time it took to spawn a shaft. Spawn time of this shaft is how long the shaft "
 					+ "you're in (or the last one) took. Only mining in the Dwarven Mines counts, gaps over 40 s count as 40 s.";
 			case SESSION_POWDER -> "Glacite Powder from shafts: corpse loot plus the bonus for leaving. Not powder from mining.";
 			case SESSION_CORPSE_FINE -> "Gemstones from corpse loot, counted in Fine. 80 Rough make a Flawed, 80 Flawed a Fine.";
@@ -422,6 +474,8 @@ public enum HudValue {
 			case SPAWN_TIMER -> "Mining time since your last shaft. Block hits and pickaxe abilities in the Dwarven Mines "
 					+ "count, gaps over 40 s count as 40 s.";
 			case DRYSTREAK -> "Shafts since your last shaft of one type, f.e. Jasper. Any variant counts. 0 while you're in one.";
+			case PITY -> "The game's shaft pity from the tab list: a shaft is guaranteed when it reaches the second number. "
+					+ "Needs the Pity widget in your tab list, else it shows -.";
 			case SINCE_LAST_SHAFT -> "Time since you left your last shaft. - while you're in one.";
 			case CORPSES_LOOTED -> "Corpses you looted of one type, f.e. Lapis.";
 			case SESSION_TIME -> "How long this session has been going.";
@@ -434,11 +488,12 @@ public enum HudValue {
 			case SHAFT_COLD -> "Your Cold in this shaft, from the scoreboard. After leaving, the Cold you left with.";
 			case SHAFT_CAMPFIRES -> "Portable Campfires you placed in this shaft, or in the last one.";
 			case COINS -> "Net coins from shafts: everything they gave, minus keys and campfires, at your price settings. "
-					+ "Session, per hour and all-time also count what you mine outside shafts. The shaft range is live "
-					+ "while you're inside.";
+					+ "Session, per hour and all-time also count what you mine outside shafts. Coins this shaft are "
+					+ "live while you're inside.";
 			case COINS_PER_SHAFT -> "Average net coins per shaft. Shafts only.";
 			case OUTSIDE_COINS -> "Coins from what you mine in the Dwarven Mines outside shafts, from the Sacks messages, at "
 					+ "your price settings. Items that go to your material stash aren't counted.";
+			case DROPS -> "What your coins are made of, one row per item, biggest first. Gems count as Fine.";
 			case FPS -> "Frames per second.";
 			case PING -> "Time from your block breaks and clicks to the server's answer. Updates while you mine.";
 			case TPS -> "Server ticks per second, 20 is full speed. Shows - where the server doesn't send tick pings.";
@@ -450,6 +505,58 @@ public enum HudValue {
 
 	public List<Range> ranges() {
 		return ranges;
+	}
+
+	// shafts today + per hour are periods of shafts, add line + line page only. ids + tags stay
+	public HudValue family() {
+		return this == SHAFTS_TODAY || this == SHAFTS_PER_HOUR ? SESSION_SHAFTS : this;
+	}
+
+	public boolean inAddLine() {
+		return family() == this;
+	}
+
+	// in Range order, today after session. none = no periods
+	public List<Period> periods() {
+		if (family() != this) return family().periods();
+		if (this == SESSION_SHAFTS) {
+			return List.of(Period.of(this, Range.SESSION), new Period("Today", "today", SHAFTS_TODAY.description().replace(".", ""),
+					SHAFTS_TODAY, null), new Period(Range.PER_HOUR.displayName(), "/h", Range.PER_HOUR.description(), SHAFTS_PER_HOUR, null),
+					Period.of(this, Range.ALL_TIME));
+		}
+		if (ranges.size() < 2) return List.of();
+		return ranges.stream().map(range -> Period.of(this, range)).toList();
+	}
+
+	// null = not one of this values periods
+	public Period period(Range range) {
+		for (Period period : periods()) {
+			if (period.shows(this, range)) return period;
+		}
+		return null;
+	}
+
+	// page title + tooltips, docs/hud-rethink.md names table
+	public String lineName(Range range, String target) {
+		String name = targetName(target == null ? defaultTarget() : target);
+		String noun = switch (this) {
+			case SESSION_SHAFTS -> "Shafts";
+			case AVERAGE_SPAWN -> range == Range.SHAFT ? "Spawn time of" : "Average spawn";
+			case SESSION_POWDER -> range == Range.SHAFT ? "Powder from" : "Shaft powder";
+			case SESSION_CORPSE_FINE -> "Corpse Fine";
+			case CORPSES_LOOTED -> name + " corpses";
+			case DRYSTREAK -> name + " drystreak";
+			case SHAFT_CORPSES -> "Corpses in this shaft";
+			case PERSONAL_BEST -> name;
+			default -> displayName;
+		};
+		if (!hasRange(range)) return noun;
+		return noun + switch (range) {
+			case SHAFT -> " this shaft";
+			case SESSION -> " this session";
+			case PER_HOUR -> " per hour";
+			case ALL_TIME -> " all-time";
+		};
 	}
 
 	public boolean hasRange(Range range) {
@@ -465,16 +572,41 @@ public enum HudValue {
 		return unit;
 	}
 
+	// range = the lines period
+	public Graph graph(Range range) {
+		return switch (this) {
+			case PITY -> Graph.BAR;
+			// this shaft is 1 number, no chart
+			case AVERAGE_SPAWN -> range == Range.SESSION || range == Range.ALL_TIME ? Graph.CHART : Graph.NONE;
+			default -> Graph.NONE;
+		};
+	}
+
 	public boolean hasNumber() {
 		return kind != Kind.TEXT;
+	}
+
+	// drops draws rows, {drops} stays as typed
+	public boolean isTag() {
+		return !multiRow();
+	}
+
+	// draws its own rows, no label or tag
+	public boolean multiRow() {
+		return this == DROPS;
 	}
 
 	// tag name, or the old id
 	public static HudValue byTag(String name) {
 		for (HudValue value : values()) {
-			if (value.tag().equals(name)) return value;
+			if (value.isTag() && value.tag().equals(name)) return value;
 		}
-		return byId(name);
+		HudValue value = byId(name);
+		return value == null || !value.isTag() ? null : value;
+	}
+
+	public static List<HudValue> listed() {
+		return Fixed.LISTED;
 	}
 
 	public static HudValue byId(String id) {

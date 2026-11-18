@@ -20,6 +20,15 @@ public sealed interface Setting permits Setting.Choice, Setting.Number, Setting.
 
 	String defaultText();
 
+	// null = always used
+	Unused unusedWhen();
+
+	// null = used. page dims the card but keeps it editable
+	default String unused(Settings settings) {
+		Unused rule = unusedWhen();
+		return rule != null && rule.when().test(settings) ? rule.why() : null;
+	}
+
 	default List<String> searchText() {
 		return List.of(name(), description());
 	}
@@ -37,8 +46,16 @@ public sealed interface Setting permits Setting.Choice, Setting.Number, Setting.
 	record Option<T>(T value, String label, String tip) {
 	}
 
+	record Unused(Predicate<Settings> when, String why) {
+	}
+
 	record Choice<T>(String name, String description, List<Option<T>> options, Function<Settings, T> get,
-			BiFunction<Settings, T, Settings> set) implements Setting {
+			BiFunction<Settings, T, Settings> set, Unused unusedWhen) implements Setting {
+		public Choice(String name, String description, List<Option<T>> options, Function<Settings, T> get,
+				BiFunction<Settings, T, Settings> set) {
+			this(name, description, options, get, set, null);
+		}
+
 		public boolean isDefault(Settings settings) {
 			return get.apply(settings).equals(get.apply(Settings.DEFAULTS));
 		}
@@ -64,7 +81,12 @@ public sealed interface Setting permits Setting.Choice, Setting.Number, Setting.
 	}
 
 	record Number(String name, String description, String unit, double min, double max, ToDoubleFunction<Settings> get,
-			BiFunction<Settings, Double, Settings> set) implements Setting {
+			BiFunction<Settings, Double, Settings> set, Unused unusedWhen) implements Setting {
+		public Number(String name, String description, String unit, double min, double max, ToDoubleFunction<Settings> get,
+				BiFunction<Settings, Double, Settings> set) {
+			this(name, description, unit, min, max, get, set, null);
+		}
+
 		public boolean isDefault(Settings settings) {
 			return get.applyAsDouble(settings) == get.applyAsDouble(Settings.DEFAULTS);
 		}
@@ -95,8 +117,12 @@ public sealed interface Setting permits Setting.Choice, Setting.Number, Setting.
 		}
 	}
 
-	record Toggle(String name, String description, Predicate<Settings> get, BiFunction<Settings, Boolean, Settings> set)
-			implements Setting {
+	record Toggle(String name, String description, Predicate<Settings> get, BiFunction<Settings, Boolean, Settings> set,
+			Unused unusedWhen) implements Setting {
+		public Toggle(String name, String description, Predicate<Settings> get, BiFunction<Settings, Boolean, Settings> set) {
+			this(name, description, get, set, null);
+		}
+
 		public boolean isDefault(Settings settings) {
 			return get.test(settings) == get.test(Settings.DEFAULTS);
 		}

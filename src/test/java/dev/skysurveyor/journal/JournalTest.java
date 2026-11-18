@@ -11,6 +11,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import dev.skysurveyor.detection.Corpse;
 import dev.skysurveyor.detection.RecordingReplay;
 import dev.skysurveyor.detection.ShaftEvent;
 import dev.skysurveyor.detection.ShaftTracker;
@@ -233,6 +234,71 @@ class JournalTest {
 		assertEquals(28_635, jade.flawed());
 		assertEquals(379.1, jade.reportedFine(), 0.05);
 		assertTrue(jade.fineEquivalent() > 382 && jade.fineEquivalent() < 386, "total " + jade.fineEquivalent());
+	}
+
+	// recording 6 at 16:16.3 + 17:22.4 in JADE_1: 5,650 hard stone in, 5,760 compacted
+	@Test
+	void compactedHardStoneIsntAnotherDrop() {
+		at(0).tracker.onWorldChange(now);
+		tracker.onScoreboard(now, List.of("§e§lSKYBLOCK", "§711/17/26 §8m19AB JADE_1"));
+		at(30_000).tracker.onChat(now, "§6[Sacks] §a+3,479§e items§e, §c-2,880§e items§e.§8 (Last 23s.)", List.of(
+					"§aAdded items:\n§a  +5 §eEnchanted Hard Stone§8 (Enchanted Mining Sack)§a\n§a  +2,475 §eHard Stone§8 (Mining Sack)§a\n"
+							+ "§a  +160 §e Rough Jade Gemstone§8 (Gemstones Sack)§a",
+					"§cRemoved items:\n§c  -2,880 §eHard Stone§8 (Mining Sack)§c"));
+		at(60_000).tracker.onChat(now, "§6[Sacks] §a+16,654§e items§e, §c-2,880§e items§e.§8 (Last 30s.)", List.of(
+					"§aAdded items:\n§a  +5 §eEnchanted Hard Stone§8 (Enchanted Mining Sack)§a\n§a  +3,175 §eHard Stone§8 (Mining Sack)§a\n"
+							+ "§a  +2,387 §e Flawed Jade Gemstone§8 (Gemstones Sack)§a\n§a  +11,087 §e Rough Jade Gemstone§8 (Gemstones Sack)§a",
+					"§cRemoved items:\n§c  -2,880 §eHard Stone§8 (Mining Sack)§c"));
+		at(90_000).tracker.onWorldChange(now);
+		JournalEntry jade = entries.getFirst();
+		assertEquals(Map.of("Enchanted Hard Stone", 10L), jade.otherDrops());
+		assertEquals(11_247, jade.gems().rough());
+		// raw msgs saved as they came
+		assertEquals(5_650L, jade.sacksAdded().get("Hard Stone"));
+		assertEquals(5_760L, jade.sacksRemoved().get("Hard Stone"));
+	}
+
+	// hand sums: hard stone 47,931 in, 48,384 compacted, so none mined. enchanted 88, none from corpses
+	@Test
+	void recording6JadeShaft() throws IOException {
+		Path recording = RecordingReplay.RECORDINGS.resolve("2026-11-17_19-16-17.jsonl");
+		assumeTrue(Files.exists(recording), "Recording not available: " + recording);
+		replay(recording);
+		JournalEntry jade = entries.stream().filter(entry -> "JADE_1".equals(entry.shaftId())).findFirst().orElseThrow();
+		assertNull(jade.otherDrops().get("Hard Stone"));
+		assertEquals(88L, jade.otherDrops().get("Enchanted Hard Stone"));
+		assertEquals(47_931L, jade.sacksAdded().get("Hard Stone"));
+		// 7 RARE DROP! lines, each in the next sacks msg. sacks onyx 3, peridot 2, citrine 3, 1 onyx from a corpse
+		assertEquals(2L, jade.otherDrops().get("Fine Onyx Gemstone"));
+		assertEquals(2L, jade.otherDrops().get("Fine Peridot Gemstone"));
+		assertEquals(3L, jade.otherDrops().get("Fine Citrine Gemstone"));
+	}
+
+	// left before any sacks msg, drops only in chat: 0:55.9 + 12:48.0 to 12:58.3
+	@Test
+	void recording6RareDropsInShortShafts() throws IOException {
+		Path recording = RecordingReplay.RECORDINGS.resolve("2026-11-17_19-16-17.jsonl");
+		assumeTrue(Files.exists(recording), "Recording not available: " + recording);
+		replay(recording);
+		JournalEntry amethyst = entries.stream().filter(entry -> "AMET_1".equals(entry.shaftId())).findFirst().orElseThrow();
+		assertEquals(Map.of("Fine Citrine Gemstone", 1L, "Fine Peridot Gemstone", 1L), amethyst.otherDrops());
+		JournalEntry fair = entries.stream().filter(entry -> "FAIR_1".equals(entry.shaftId())).findFirst().orElseThrow();
+		assertEquals(Map.of("Fine Aquamarine Gemstone", 2L, "Fine Peridot Gemstone", 2L, "Fine Citrine Gemstone", 1L,
+				"Glacite Jewel", 1L, "Fine Onyx Gemstone", 1L), fair.otherDrops());
+		assertEquals(Map.of(), fair.sacksAdded());
+	}
+
+	// lapis looted 9:53.3, tab list still not looted at 9:53.5, left 9:56.3. exit 1,250 = 1,000 + 250 for it
+	@Test
+	void recording6LootedLapisBeforeTheTabListFlipped() throws IOException {
+		Path recording = RecordingReplay.RECORDINGS.resolve("2026-11-17_19-16-17.jsonl");
+		assumeTrue(Files.exists(recording), "Recording not available: " + recording);
+		replay(recording);
+		JournalEntry aqua = entries.stream().filter(entry -> "AQUA_2".equals(entry.shaftId())).findFirst().orElseThrow();
+		assertEquals(1250, aqua.exitPowder());
+		assertTrue(aqua.corpses().stream().noneMatch(Corpse::looted), "tab list lagged");
+		String text = String.join("\n", SummaryText.lines(aqua, null, null, MoneySettings.DEFAULTS));
+		assertTrue(text.contains("§9Lapis 1/1§7, §fUmber 0/1§7, §fTungsten 0/2"), text);
 	}
 
 	@Test

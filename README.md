@@ -76,7 +76,7 @@ Saves every shaft automatically:
 - avg coins per shaft type
 - coins/h and avg spawn per session, as bars or a line
 - personal bests
-- range: all time, last 7 days or last 5 sessions
+- range: all time, last 7 days, last 5 sessions or since the last shaft patch
 
 </td>
 </tr>
@@ -85,9 +85,9 @@ Saves every shaft automatically:
 
 <h3><img src="docs/icons/settings.png" height="16" alt=""> HUD <code>/sv</code> → Edit HUD</h3>
 
-- default boxes: session, spawn timer and current shaft
-- add your own boxes and lines: spawn timer, shafts/h, powder, coins, corpses, cold, FPS, ping, TPS and more
-- ranges: this shaft, session, per hour or all-time
+- default boxes: session, session profit, spawn timer and current shaft
+- add your own boxes and lines: spawn timer, shafts/h, powder, coins, drops, shaft pity, corpses, cold, FPS, ping, TPS and more
+- periods: this shaft, session, today, per hour or all-time
 - colour rules, f.e. spawn timer red above your avg
 - snapping, presets, undo and redo
 - custom text with `&` colour codes and `{tags}`
@@ -113,7 +113,7 @@ Saves every shaft automatically:
 
 1. Minecraft 26.2 with [Fabric Loader](https://fabricmc.net/use/) 0.20.1+
 2. Put these in your `mods` folder:
-   - [Fabric API](https://modrinth.com/mod/fabric-api)
+   - [Fabric API](https://modrinth.com/mod/fabric-api) 0.161.0+
    - [owo-lib](https://modrinth.com/mod/owo-lib) 0.13.1+ for 26.2
    - Surveyor from [Releases](../../releases)
 3. Join Hypixel and type `/sv`
@@ -126,6 +126,7 @@ Coming from the older private mod ShaftJournal? Remove the old jar. Your data an
 | --- | --- |
 | `/sv` | journal (`/surveyor` and `/sj` work too) |
 | `/sv settings` | settings |
+| `/sv hud` | HUD editor |
 | `/sv session new` | starts a new session |
 
 The journal can also get a hotkey in Controls, under Surveyor.
@@ -134,7 +135,7 @@ The journal can also get a hotkey in Controls, under Surveyor.
 
 ### Is it safe?
 Surveyor only reads what your game already receives and draws its own screens. It never sends chat, commands,
-clicks or packets (This might change in the future), and has no ESP or x-ray. The only thing it downloads is
+clicks or packets, and has no ESP or x-ray. The only thing it downloads is
 prices, from Hypixel's API and a lowest BIN list (EliteSkyblock or hysky.de).
 
 ### Your data
@@ -150,4 +151,4 @@ Open an [issue](../../issues/new/choose). For bugs, add your Surveyor version an
 ### Credits
 Made by [forenick](https://github.com/forenick).
 
-AI Disclosure: I use AI tools to help me with reviewing my code and clean up messy logic. 
+It's coded with a lot of help from AI (Claude); I decide what goes in and test every build in-game.

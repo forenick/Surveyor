@@ -56,6 +56,43 @@ class LiveCheckTest {
 		assertEquals(0, check.firstDifference());
 	}
 
+	// recording 6 at 0:55.9, made w/ alpha.13 before RareDrop existed
+	private static final String RARE_DROP = "{\"t\":%d,\"type\":\"chat\","
+			+ "\"legacy\":\"§6§lRARE DROP! §9 Fine Citrine Gemstone §b(§b+103 Magic Find§b)\"}";
+	private static final String RARE_DROP_LIVE = "{\"t\":%d,\"type\":\"live\","
+			+ "\"event\":\"RareDrop[item=ItemCount[item=Fine Citrine Gemstone, count=1]]\"}";
+
+	@Test
+	void olderRecordingsSkipNewerEvents() {
+		LiveCheck check = RecordingReplay.liveCheck(records(
+				"{\"t\":0,\"type\":\"start\",\"live\":true}",
+				"{\"t\":100,\"type\":\"world_change\"}",
+				RARE_DROP.formatted(500),
+				PICKOBULUS.formatted(600),
+				"{\"t\":600,\"type\":\"live\",\"event\":\"PickaxeAbility[ability=Pickobulus]\"}"));
+		assertEquals(-1, check.firstDifference());
+		assertEquals(1, check.replayed().size());
+	}
+
+	@Test
+	void newerRecordingsCheckThem() {
+		String start = "{\"t\":0,\"type\":\"start\",\"live\":true,\"version\":\"0.25.0-alpha.16\"}";
+		LiveCheck missing = RecordingReplay.liveCheck(records(start, "{\"t\":100,\"type\":\"world_change\"}", RARE_DROP.formatted(500)));
+		assertEquals(0, missing.firstDifference());
+		LiveCheck logged = RecordingReplay.liveCheck(records(start, "{\"t\":100,\"type\":\"world_change\"}", RARE_DROP.formatted(500),
+				RARE_DROP_LIVE.formatted(500)));
+		assertEquals(-1, logged.firstDifference());
+	}
+
+	@Test
+	void versionOrder() {
+		assertTrue(RecordingReplay.compareVersions("0.25.0-alpha.16", "0.25.0-alpha.9") > 0);
+		assertTrue(RecordingReplay.compareVersions("0.25.0", "0.25.0-alpha.16") > 0);
+		assertTrue(RecordingReplay.compareVersions("0.25.0-beta.1", "0.25.0-alpha.16") > 0);
+		assertTrue(RecordingReplay.compareVersions("0.24.0", "0.25.0-alpha.16") < 0);
+		assertEquals(0, RecordingReplay.compareVersions("0.25.0-alpha.16", "0.25.0-alpha.16"));
+	}
+
 	@Test
 	void oldRecordingsHaveNoLiveLines() {
 		assertFalse(RecordingReplay.liveCheck(records("{\"t\":0,\"type\":\"start\"}", "{\"t\":12,\"type\":\"world_change\"}")).hasLive());

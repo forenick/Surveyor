@@ -6,7 +6,7 @@ import java.util.Locale;
 import java.util.Map;
 
 import dev.skysurveyor.data.CorpseType;
-import dev.skysurveyor.detection.Corpse;
+import dev.skysurveyor.data.ItemNames;
 import dev.skysurveyor.detection.Shaft.ExitReason;
 import dev.skysurveyor.money.CoinBreakdown;
 import dev.skysurveyor.money.Coins;
@@ -32,12 +32,13 @@ public final class SummaryText {
 				+ "  §7inside §f" + Format.duration(entry.durationMillis()) + exit(entry.exitReason()));
 		lines.add(" §7Spawned in " + (entry.searchMillis() == null ? "§8not timed" : "§f" + Format.duration(entry.searchMillis())));
 
-		if (!entry.corpses().isEmpty()) lines.add(" §7Corpses " + corpses(entry.corpses()));
+		String corpses = corpses(entry);
+		if (corpses != null) lines.add(" §7Corpses " + corpses);
 		if (entry.gems() != null) {
-			lines.add(" §7Gems §f" + Format.decimal(entry.gems().fineEquivalent())
-					+ " Fine " + entry.gems().gem() + " §8(" + Format.number(entry.pristineProcs()) + " pristine procs)");
+			lines.add(" §7Gems " + ItemNames.current().styled(GemYield.fineName(entry.gems().gem()), Format.decimal(entry.gems().fineEquivalent()))
+					+ " §8(" + Format.number(entry.pristineProcs()) + " pristine procs)");
 		}
-		if (entry.metal() != null) lines.add(" §7Metal §f" + entry.metal().text(money.metalTierUsed().tier()));
+		if (entry.metal() != null) lines.add(" §7Metal " + entry.metal().styledText(money.metalTierUsed().tier(), ItemNames.current()));
 		long corpsePowder = entry.corpsePowder();
 		long powder = corpsePowder + entry.exitPowder();
 		if (powder > 0) {
@@ -80,11 +81,12 @@ public final class SummaryText {
 		return line;
 	}
 
-	static String corpses(List<Corpse> corpses) {
+	// null = no corpses seen
+	static String corpses(JournalEntry entry) {
 		List<String> parts = new ArrayList<>();
-		JournalStats.corpseCounts(corpses).forEach((type, count) ->
+		CorpseCounts.of(entry).forEach((type, count) ->
 				parts.add((type.equals(CorpseType.LAPIS.label()) ? "§9" : "§f") + type + " " + count.looted() + "/" + count.total()));
-		return String.join("§7, ", parts);
+		return parts.isEmpty() ? null : String.join("§7, ", parts);
 	}
 
 	private static String exit(ExitReason exit) {

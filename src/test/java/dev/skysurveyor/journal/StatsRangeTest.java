@@ -1,10 +1,13 @@
 package dev.skysurveyor.journal;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import dev.skysurveyor.data.Patches;
+import dev.skysurveyor.data.Patches.Patch;
 import dev.skysurveyor.journal.JournalStats.SessionSummary;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -51,8 +54,48 @@ class StatsRangeTest {
 
 	@Test
 	void arrowsWrapAround() {
-		assertEquals(StatsRange.LAST_5_SESSIONS, StatsRange.ALL_TIME.next(-1));
-		assertEquals(StatsRange.ALL_TIME, StatsRange.LAST_5_SESSIONS.next(1));
+		assertEquals(StatsRange.SINCE_PATCH, StatsRange.ALL_TIME.next(-1));
+		assertEquals(StatsRange.SINCE_PATCH, StatsRange.LAST_5_SESSIONS.next(1));
+		assertEquals(StatsRange.ALL_TIME, StatsRange.SINCE_PATCH.next(1));
 		assertEquals(StatsRange.LAST_7_DAYS, StatsRange.ALL_TIME.next(1));
+	}
+
+	@Test
+	void patchFileParses() {
+		Patch patch = Patches.defaults().newest();
+		assertEquals("0.27.3", patch.name());
+		// thread post time, 2026-11-17 10:42:53 -05:00
+		assertEquals(Instant.parse("2026-11-17T15:42:53Z").toEpochMilli(), patch.startMillis());
+		assertEquals("Since 0.27.3", StatsRange.SINCE_PATCH.displayName());
+		assertEquals("Last 5 sessions", StatsRange.LAST_5_SESSIONS.displayName());
+		assertEquals("All-time", StatsRange.ALL_TIME.displayName());
+	}
+
+	// cut at the start of day 5: before, on and after
+	@Test
+	void sinceThePatch() {
+		Patches patches = Patches.parse(List.of("# comment", "0.27.3 1970-01-06"));
+		assertEquals(5 * DAY, patches.newest().startMillis());
+		List<SessionSummary> since = StatsRange.SINCE_PATCH.sessions(tenDays(), 0, patches);
+		assertEquals(5, since.size());
+		assertEquals(5 * DAY, since.getLast().start(), "a session starting right at the cut counts");
+		assertEquals(9 * DAY, since.getFirst().start());
+
+		Patches exact = Patches.parse(List.of("0.27.3 1970-01-06T00:00:00.001Z"));
+		assertEquals(4, StatsRange.SINCE_PATCH.sessions(tenDays(), 0, exact).size(), "1 ms after the session start");
+	}
+
+	@Test
+	void newerPatchLineWins() {
+		Patches patches = Patches.parse(List.of("0.28.0 1970-01-09", "0.27.3 1970-01-06"));
+		assertEquals("0.28.0", patches.newest().name());
+		assertEquals("Since 0.28.0", StatsRange.SINCE_PATCH.displayName(patches));
+		assertEquals(2, StatsRange.SINCE_PATCH.sessions(tenDays(), 0, patches).size());
+	}
+
+	@Test
+	void nothingAfterThePatch() {
+		Patches patches = Patches.parse(List.of("0.27.3 1970-02-01"));
+		assertEquals(List.of(), StatsRange.SINCE_PATCH.sessions(tenDays(), 0, patches));
 	}
 }

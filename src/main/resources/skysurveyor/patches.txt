@@ -1,0 +1,5 @@
+# skyblock patches that change shaft numbers. format: <name> <start>, start = iso instant or a day (= 00:00 utc)
+# newest start is the stats tabs "Since" range
+# 0.27.3 https://hypixel.net/threads/6169127/ block strengths, magic find, RARE DROP! msgs
+# start = thread post time 2026-11-17 10:42:53 -05:00, time it went live unconfirmed
+0.27.3 2026-11-17T15:42:53Z

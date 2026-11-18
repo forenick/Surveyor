@@ -104,6 +104,10 @@ class HudExprTest {
 			assertTrue(value.tag().matches("[a-z_]+"), value.tag());
 			assertFalse(tags.contains(value.tag()), "tag twice: " + value.tag());
 			tags.add(value.tag());
+			if (!value.isTag()) {
+				assertNull(HudValue.byTag(value.tag()), "rows, not a tag");
+				continue;
+			}
 			assertEquals(value, HudValue.byTag(value.tag()));
 			assertEquals(value, HudValue.byTag(value.id()), "old id still works");
 		}
@@ -126,7 +130,7 @@ class HudExprTest {
 
 	@Test
 	void rulesMatch() {
-		HudData data = HudData.live(SessionTotals.NONE, Totals.NONE, null, 102_000L, null, 0, ShaftNames.defaults())
+		HudData data = HudFixtures.live(SessionTotals.NONE, Totals.NONE, null, 102_000L, null, 0, ShaftNames.defaults())
 				.set(HudValue.TPS, null, 19.97).set(HudValue.AVERAGE_SPAWN, Range.SESSION, 85_000L);
 		HudExpr.Values values = HudBoxText.values(data, false);
 		assertTrue(matches("{tps} = 20 &a", values), "= at the typed precision");
@@ -147,7 +151,7 @@ class HudExprTest {
 
 	@Test
 	void hintsUnderTheRules() {
-		HudData data = HudData.live(SessionTotals.NONE, Totals.NONE, null, null, null, 0, ShaftNames.defaults()).cold(-63)
+		HudData data = HudFixtures.live(SessionTotals.NONE, Totals.NONE, null, null, null, 0, ShaftNames.defaults()).cold(-63)
 				.set(HudValue.COINS, Range.PER_HOUR, 46_800_000.0);
 		HudExpr.Values values = HudBoxText.values(data, false);
 		assertEquals(List.of("§7Now: {cold} §eyellow§7 (rule 2)."),
@@ -221,5 +225,64 @@ class HudExprTest {
 		assertEquals("spawn has no :jasper", error("spawn:jasper"));
 		assertTrue(HudValue.DRYSTREAK.targets().containsAll(List.of("jasper", "vanguard", "jade")));
 		assertEquals(List.of("lapis", "umber", "tungsten", "vanguard"), HudValue.CORPSES_LOOTED.targets());
+	}
+
+	// reviewers probe: both threw StackOverflowError on every HUD refresh
+	@Test
+	void tooLongOrDeepIsAMistakeNotACrash() {
+		assertEquals("too long", error("(".repeat(5000) + "coins" + ")".repeat(5000)));
+		assertEquals("too long", error("coins" + "+1".repeat(2000)));
+		assertEquals("too long", error("-".repeat(5000) + "coins"));
+
+		String deepest = "(".repeat(HudExpr.MAX_DEPTH) + "coins" + ")".repeat(HudExpr.MAX_DEPTH);
+		assertEquals(show("coins"), show(deepest));
+		assertEquals("too many ( inside each other", error("(" + deepest + ")"));
+		// coins + 2 tokens a term
+		String longest = "coins" + "+1".repeat((HudExpr.MAX_TOKENS - 1) / 2);
+		assertNull(error(longest));
+		assertEquals("too long", error(longest + "+1"));
+		String padded = "coins" + " ".repeat(HudExpr.MAX_CHARS - 5);
+		assertNull(error(padded));
+		assertEquals("too long", error(padded + " "));
+		assertEquals("coins + 1 + 1", HudExpr.plain(HudExpr.parseOrThrow("coins+1+1")), "long but legal still works");
+	}
+
+	// the worst at the limits, on a quarter of the default 1 MB stack
+	@Test
+	void limitsFitASmallStack() throws InterruptedException {
+		List<String> worst = List.of(
+				"(".repeat(HudExpr.MAX_DEPTH) + "coins" + "+1".repeat((HudExpr.MAX_TOKENS - 2 * HudExpr.MAX_DEPTH - 1) / 2)
+						+ ")".repeat(HudExpr.MAX_DEPTH),
+				"coins" + "*2".repeat((HudExpr.MAX_TOKENS - 1) / 2), "-".repeat(HudExpr.MAX_TOKENS - 1) + "coins",
+				"(".repeat(HudExpr.MAX_DEPTH + 1) + "coins" + ")".repeat(HudExpr.MAX_DEPTH + 1), "coins" + "+1".repeat(2000));
+		Runnable all = () -> {
+			for (String expr : worst) {
+				HudExpr.Parsed parsed = HudExpr.parse(expr);
+				if (parsed.error() != null) continue;
+				HudExpr.eval(parsed.node(), HudExpr.NONE);
+				HudBoxText.tagText(parsed.node(), HudData.EXAMPLE, true);
+				HudExpr.key(parsed.node());
+				HudExpr.plain(parsed.node());
+				HudExpr.values(parsed.node());
+			}
+		};
+		// pattern switch bootstraps here, not on the small stack
+		HudExpr.key(HudExpr.parseOrThrow("-(coins+1)*2"));
+		HudExpr.plain(HudExpr.parseOrThrow("-(coins+1)*2"));
+		Throwable[] thrown = new Throwable[1];
+		Thread small = new Thread(null, () -> {
+			try {
+				all.run();
+			} catch (Throwable e) {
+				thrown[0] = e;
+			}
+		}, "small stack", 256 * 1024);
+		small.start();
+		small.join();
+		assertNull(thrown[0]);
+		for (String expr : worst) {
+			HudExpr.Parsed parsed = HudExpr.parse(expr);
+			assertTrue(parsed.error() == null || parsed.error().startsWith("too "), expr);
+		}
 	}
 }

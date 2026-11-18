@@ -19,6 +19,7 @@ import dev.skysurveyor.detection.ShaftEvent.FrozeToDeath;
 import dev.skysurveyor.detection.ShaftEvent.KeySaved;
 import dev.skysurveyor.detection.ShaftEvent.MayhemBuff;
 import dev.skysurveyor.detection.ShaftEvent.Pristine;
+import dev.skysurveyor.detection.ShaftEvent.RareDrop;
 import dev.skysurveyor.detection.ShaftEvent.SacksChanged;
 import dev.skysurveyor.detection.ShaftEvent.ScrapFound;
 import dev.skysurveyor.detection.ShaftEvent.Supercraft;
@@ -61,9 +62,13 @@ public final class Shaft {
 	private final Map<String, Long> pristineItems = new LinkedHashMap<>();
 	private final Map<String, Long> sacksAdded = new LinkedHashMap<>();
 	private final Map<String, Long> sacksRemoved = new LinkedHashMap<>();
+	private final Map<String, Long> sacksCompacted = new LinkedHashMap<>();
+	private final Map<String, Long> craftedSinceSacks = new LinkedHashMap<>();
 	private long lastSacksAt = -1;
 	private final Map<String, Long> pristineSinceSacks = new LinkedHashMap<>();
-	// corpse loot + supercrafts wait here until a sacks msg reports them
+	// counted from chat, like corpse loot
+	private final Map<String, Long> rareDrops = new LinkedHashMap<>();
+	// corpse loot, rare drops + supercrafts wait here until a sacks msg reports them
 	private final Map<String, Long> notMinedPending = new LinkedHashMap<>();
 	private final Map<String, Long> notMinedInSacks = new LinkedHashMap<>();
 	// display choice, unconfirmed. loot block + msg come in the same click
@@ -104,7 +109,14 @@ public final class Shaft {
 					keySavedAt = now;
 				}
 			}
-			case Supercraft craft -> add(notMinedPending, craft.result());
+			case Supercraft craft -> {
+				add(notMinedPending, craft.result());
+				add(craftedSinceSacks, craft.result());
+			}
+			case RareDrop drop -> {
+				add(rareDrops, drop.item());
+				add(notMinedPending, drop.item());
+			}
 			case CampfirePlaced placed -> campfiresPlaced.add(now);
 			case CampfireUsed used -> campfireColds.add(cold);
 			case ScrapFound scrap -> scrapFound++;
@@ -120,6 +132,8 @@ public final class Shaft {
 			case SacksChanged sacks -> {
 				sacks.added().forEach(item -> add(sacksAdded, item));
 				sacks.removed().forEach(item -> add(sacksRemoved, item));
+				Compaction.of(sacks, craftedSinceSacks).forEach((item, count) -> sacksCompacted.merge(item, count, Long::sum));
+				craftedSinceSacks.clear();
 				lastSacksAt = now;
 				pristineSinceSacks.clear();
 				notMinedPending.forEach((item, count) -> notMinedInSacks.merge(item, count, Long::sum));
@@ -246,7 +260,7 @@ public final class Shaft {
 		return Collections.unmodifiableMap(pristineItems);
 	}
 
-	// last few secs before leaving never get reported
+	// last few secs before leaving never get reported. gross, compaction not taken off
 	public Map<String, Long> sacksAdded() {
 		return Collections.unmodifiableMap(sacksAdded);
 	}
@@ -255,9 +269,30 @@ public final class Shaft {
 		return Collections.unmodifiableMap(sacksRemoved);
 	}
 
+	// sacksAdded - compaction, over the whole shaft so a shortfall in one msg is paid by the others
+	public Map<String, Long> sacksNet() {
+		return new Compaction().net(sacksAdded, sacksCompacted);
+	}
+
+	// compacted here but added before the shaft, outside mining pays it (OutsideMining)
+	public Map<String, Long> compactionOwed() {
+		Compaction compaction = new Compaction();
+		compaction.net(sacksAdded, sacksCompacted);
+		return compaction.owed();
+	}
+
+	// gross w/o what compaction made, the tier mix as mined
+	public Map<String, Long> sacksBeforeCompacting() {
+		return Compaction.beforeCompacting(sacksAdded, sacksCompacted);
+	}
+
 	// start of the unreported tail, everything if no sacks msg yet
 	public Map<String, Long> pristineSinceSacks() {
 		return Collections.unmodifiableMap(pristineSinceSacks);
+	}
+
+	public Map<String, Long> rareDrops() {
+		return Collections.unmodifiableMap(rareDrops);
 	}
 
 	public Map<String, Long> notMinedInSacks() {

@@ -51,7 +51,7 @@ class CoinBreakdownTest {
 		List<String> lines = CoinBreakdown.detailed(stats(), null, 0, false, null, 1000);
 		// income 3M + 3.5k + 602k per shaft
 		assertTrue(lines.contains("§fMined gems §6+6.0M §883%"), lines.toString());
-		assertTrue(lines.contains("  §7201.0 Fine Jade Gemstone §6+6.0M"), lines.toString());
+		assertTrue(lines.contains("  §7§9Fine Jade Gemstone §8x201.0 §6+6.0M"), lines.toString());
 		assertTrue(lines.contains("§fOther drops §6+7.0k §8<1%"), lines.toString());
 		assertTrue(lines.contains("  §72 Umber corpses §6+1.2M"), lines.toString());
 		assertTrue(lines.contains("§fKeys §c-800.0k"), "no share on costs");
@@ -64,10 +64,19 @@ class CoinBreakdownTest {
 	}
 
 	@Test
+	void coinsPerHour() {
+		// 6h 17m
+		long time = (6 * 60 + 17) * 60_000L;
+		String line = "§7Coins / h §6+59.6M §8(6h 17m)";
+		assertTrue(CoinBreakdown.detailed(stats(), 59_600_000.0, time, false, null, 1000).contains(line));
+		assertTrue(CoinBreakdown.basic(stats(), 59_600_000.0, time).contains(line));
+	}
+
+	@Test
 	void itemsCutToFit() {
 		MoneyStats stats = stats();
 		List<String> all = CoinBreakdown.detailed(stats, null, 0, false, null, 1000);
-		assertTrue(all.contains("  §71,280 Coal §6+2.0k"), "3 other drops all shown");
+		assertTrue(all.contains("  §7§fCoal §8x1,280 §6+2.0k"), "3 other drops all shown");
 		List<String> cut = CoinBreakdown.detailed(stats, null, 0, false, null, CoinBreakdown.height(all) - 1);
 		assertTrue(CoinBreakdown.height(cut) < CoinBreakdown.height(all));
 		assertTrue(cut.stream().anyMatch(l -> l.startsWith("  §8") && l.contains(" more ")), cut.toString());
@@ -91,9 +100,9 @@ class CoinBreakdownTest {
 		assertTrue(lines.contains("  §7Key §c-400.0k §7each"));
 		int loot = lines.indexOf("§fLoot §8drop chance (2 corpses seen)");
 		assertTrue(loot > 0, lines.toString());
-		assertEquals("§7§b100% §72 Bejeweled Handle §6+1.2M", lines.get(loot + 1), "biggest first");
-		assertEquals("§7§b50% §74 Enchanted Umber §6+4.0k", lines.get(loot + 2));
-		assertEquals("§7§b100% §78 Goblin Egg §8no price", lines.get(loot + 3), "no price last");
+		assertEquals("§7§b100% §fBejeweled Handle §8x2 §6+1.2M", lines.get(loot + 1), "biggest first");
+		assertEquals("§7§b50% §fEnchanted Umber §8x4 §6+4.0k", lines.get(loot + 2));
+		assertEquals("§7§b100% §fGoblin Egg §8x8 §8no price", lines.get(loot + 3), "no price last");
 		List<String> tiny = CoinBreakdown.corpse("Umber", 3, stats.corpses().get("Umber"), drops(), 60, false);
 		assertTrue(tiny.stream().noneMatch(l -> l.startsWith("§fLoot")));
 	}
@@ -104,8 +113,8 @@ class CoinBreakdownTest {
 		assertTrue(lines.contains("§8No prices yet"));
 		assertTrue(lines.contains("§fLoot §8drop chance"));
 		// most common first when nothing has a price
-		assertEquals("§7§b100% §72 Bejeweled Handle", lines.get(lines.indexOf("§fLoot §8drop chance") + 1));
-		assertEquals("§7§b50% §74 Enchanted Umber", lines.getLast());
+		assertEquals("§7§b100% §fBejeweled Handle §8x2", lines.get(lines.indexOf("§fLoot §8drop chance") + 1));
+		assertEquals("§7§b50% §fEnchanted Umber §8x4", lines.getLast());
 	}
 
 	@Test

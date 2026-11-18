@@ -3,6 +3,7 @@ package dev.skysurveyor.journal;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import dev.skysurveyor.data.ItemNames;
 import dev.skysurveyor.data.Ladder;
 import dev.skysurveyor.detection.Shaft;
 import dev.skysurveyor.util.Format;
@@ -23,7 +24,7 @@ public record MetalYield(String metal, long raw, long enchanted, long refined) {
 		Ladder ladder = Ladder.metalOf(shaft.id() == null ? null : shaft.id().type());
 		if (ladder == null) return null;
 		String metal = ladder.name(RAW, null);
-		MinedCount mined = MinedCount.of(ladder, item -> metal, shaft.sacksAdded(), shaft.notMinedInSacks());
+		MinedCount mined = MinedCount.of(ladder, item -> metal, shaft.sacksNet(), shaft.notMinedInSacks());
 		MetalYield yield = new MetalYield(metal, mined.at(RAW), mined.at(ENCHANTED), mined.at(REFINED));
 		return yield.raw + yield.enchanted + yield.refined > 0 ? yield : null;
 	}
@@ -62,6 +63,15 @@ public record MetalYield(String metal, long raw, long enchanted, long refined) {
 			return String.join(", ", items().entrySet().stream().map(e -> Format.number(e.getValue()) + " " + e.getKey()).toList());
 		}
 		return amount(ladder, tier) + " " + ladder.name(tier, null);
+	}
+
+	// like text, names in hypixels look
+	public String styledText(int tier, ItemNames names) {
+		Ladder ladder = ladder();
+		if (ladder == null) {
+			return String.join("§7, ", items().entrySet().stream().map(e -> names.styled(e.getKey(), Format.number(e.getValue()))).toList());
+		}
+		return names.styled(ladder.name(tier, null), amount(ladder, tier));
 	}
 
 	// stats record, tier only like "391.0 Fine". f.e. "301.3 Enchanted", "48,531 Tungsten"

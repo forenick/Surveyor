@@ -409,10 +409,10 @@ class ShaftValueTest {
 	@Test
 	void metalSummaryAndCounts() {
 		List<String> lines = SummaryText.lines(metalEntry(), null, metalValue(MoneySettings.DEFAULTS), MoneySettings.DEFAULTS);
-		assertTrue(lines.contains(" §7Metal §f2.6 Enchanted Tungsten"), lines.toString());
+		assertTrue(lines.contains(" §7Metal §fEnchanted Tungsten §8x2.6"), lines.toString());
 		assertTrue(lines.stream().anyMatch(l -> l.contains("(metal 25.5k, glossy")), lines.toString());
 		List<String> raw = SummaryText.lines(metalEntry(), null, null, MoneySettings.DEFAULTS.withMetalTier(MetalTier.RAW));
-		assertTrue(raw.contains(" §7Metal §f412 Tungsten"), raw.toString());
+		assertTrue(raw.contains(" §7Metal §fTungsten §8x412"), raw.toString());
 		assertFalse(String.join("\n", SummaryText.lines(entry(), null, null, MoneySettings.DEFAULTS)).contains("Metal"));
 		assertEquals("412", CoinBreakdown.count(Part.MINED_METAL, "Tungsten", 412));
 		assertEquals("2.6", CoinBreakdown.count(Part.MINED_METAL, "Enchanted Tungsten", 412 / 160.0));

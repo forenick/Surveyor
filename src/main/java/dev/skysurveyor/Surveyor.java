@@ -38,6 +38,7 @@ import dev.skysurveyor.screen.JournalScreen;
 import dev.skysurveyor.screen.SettingsScreen;
 import dev.skysurveyor.settings.LiveSettings;
 import dev.skysurveyor.util.DataFolder;
+import dev.skysurveyor.util.Guard;
 
 /**
  This is my first real Java project i'll make public. The code is probably ass in some places.
@@ -74,28 +75,34 @@ public class Surveyor implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
 		moveOldDataFolder();
-		ClientTickEvents.END_CLIENT_TICK.register(RECORDER::onTick);
-		ClientTickEvents.END_CLIENT_TICK.register(TRACKER::onTick);
+		// every hook from the game guarded (util/Guard), a throw would crash or disconnect
+		ClientTickEvents.END_CLIENT_TICK.register(client -> Guard.run("recorder tick", () -> RECORDER.onTick(client)));
+		ClientTickEvents.END_CLIENT_TICK.register(client -> Guard.run("tracker tick", () -> TRACKER.onTick(client)));
 		KeyMappingHelper.registerKeyMapping(JOURNAL_KEY);
-		ClientTickEvents.END_CLIENT_TICK.register(this::openJournalIfAsked);
-		ClientLifecycleEvents.CLIENT_STARTED.register(client -> {
+		ClientTickEvents.END_CLIENT_TICK.register(client -> Guard.run("open journal", () -> openJournalIfAsked(client)));
+		ClientLifecycleEvents.CLIENT_STARTED.register(client -> Guard.run("settings + prices start", () -> {
 			Path folder = DataFolder.in(client.gameDirectory.toPath());
 			// moneys io thread, config saves + reloads stay in order w/ price refreshes
 			SETTINGS.start(folder, MONEY::run);
 			MONEY.start(folder, Objects.requireNonNullElse(modVersion(), "dev"));
-		});
-		ClientLifecycleEvents.CLIENT_STARTED.register(JOURNAL::start);
-		ClientLifecycleEvents.CLIENT_STARTED.register(HUD::start);
-		ClientTickEvents.END_CLIENT_TICK.register(HUD::onTick);
-		HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT, Identifier.fromNamespaceAndPath(MOD_ID, "hud"), HUD::render);
+		}));
+		ClientLifecycleEvents.CLIENT_STARTED.register(client -> Guard.run("journal start", () -> JOURNAL.start(client)));
+		ClientLifecycleEvents.CLIENT_STARTED.register(client -> Guard.run("hud start", () -> HUD.start(client)));
+		ClientTickEvents.END_CLIENT_TICK.register(client -> Guard.run("hud tick", () -> HUD.onTick(client)));
+		// a shaft counts as the mines too
+		ClientTickEvents.END_CLIENT_TICK.register(client -> Guard.run("first run hint",
+				() -> JOURNAL.onTick(TRACKER.inMiningArea() || TRACKER.currentShaft() != null)));
+		HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT, Identifier.fromNamespaceAndPath(MOD_ID, "hud"),
+				(graphics, delta) -> Guard.run("hud render", () -> HUD.render(graphics, delta)));
+		// each step on its own, one failing doesnt skip the journal close after it
 		ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
 			// before journal.close, else the shaft ur in is lost
-			TRACKER.onQuit();
+			Guard.run("quit", TRACKER::onQuit);
 			// after onQuit, so the last shaft is in the recording
-			RECORDER.stop();
-			JOURNAL.close();
-			HUD.close();
-			MONEY.close();
+			Guard.run("recorder stop", RECORDER::stop);
+			Guard.run("journal close", JOURNAL::close);
+			Guard.run("hud close", HUD::close);
+			Guard.run("money close", MONEY::close);
 		});
 		JOURNAL.onToast(HUD::showToast);
 		JOURNAL.addEntryListener(RECORDER::onLiveEntry);
@@ -105,11 +112,13 @@ public class Surveyor implements ClientModInitializer {
 		TRACKER.addChatListener(JOURNAL::onChat);
 		TRACKER.addListener(MONEY::onEvent);
 		TRACKER.onWorldChange(JOURNAL::onWorldChange);
+		TRACKER.addTabListener(HUD::onTabList);
+		TRACKER.onWorldChange(HUD::onWorldChange);
 		// own hits only, PASS = never changes the hit
 		AttackBlockCallback.EVENT.register((player, level, hand, pos, direction) -> {
 			if (level.isClientSide()) {
-				JOURNAL.onBlockHit();
-				RECORDER.onBlockHit(pos);
+				Guard.run("block hit", JOURNAL::onBlockHit);
+				Guard.run("recorder block hit", () -> RECORDER.onBlockHit(pos));
 			}
 			return InteractionResult.PASS;
 		});
@@ -173,7 +182,7 @@ public class Surveyor implements ClientModInitializer {
 		openJournal = false;
 		openSettings = false;
 		MONEY.refresh();
-		JournalScreen journal = new JournalScreen(JOURNAL.entries(), JOURNAL.mining(0), JOURNAL.breaks());
+		JournalScreen journal = new JournalScreen();
 		// back from settings lands in the journal
 		client.gui.setScreen(settings ? new SettingsScreen(journal) : journal);
 	}

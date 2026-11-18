@@ -89,6 +89,44 @@ class OutsideMiningTest {
 		assertTrue(mining.isEmpty());
 	}
 
+	// synthetic: 140 glacite from before the shaft got compacted in it, the shaft counted its enchanted glacite
+	@Test
+	void shaftCompactionShortfallComesOffOutsideAdds() {
+		hit(0);
+		ShaftTracker tracker = new ShaftTracker(TextPatterns.defaults(), event -> {
+			journal.onEvent(event, now);
+			outside.onEvent(event, now);
+		});
+		now = 5_000;
+		tracker.onWorldChange(now);
+		tracker.onScoreboard(now, List.of("§8§711/15/26 §8m10§8§u§8§88A TUNG_1", "§b §7 §bGlacite M§b§p§b§bineshafts"));
+		hit(10_000);
+		now = 30_000;
+		tracker.onChat(now, "§6[Sacks] §a+21§e items§e, §c-160§e items§e.§8 (Last 18s.)", List.of(
+				"§aAdded items:\n§a  +1 §eEnchanted Glacite§8 (Enchanted Mining Sack)§a\n§a  +20 §eGlacite§8 (Mining Sack)§a"
+						+ "\n\n§8This message can be disabled in the settings.",
+				"§cRemoved items:\n§c  -160 §eGlacite§8 (Mining Sack)§c\n\n§8This message can be disabled in the settings."));
+		now = 40_000;
+		tracker.onWorldChange(now);
+		hit(50_000);
+		sacks(60_000, 30, item("Glacite", 200));
+		assertEquals(Map.of("Glacite", 60L), mining.getLast().items());
+	}
+
+	// synthetic: 24 of the 412 flawed came from compacting rough, the tail ratio uses 2,000 rough to 388 flawed
+	@Test
+	void tailRatioLeavesOutCompactedFlawed() {
+		hit(0);
+		event(20_000, new SacksChanged(30, List.of(item("Flawed Jade Gemstone", 412), item("Rough Jade Gemstone", 2_000)),
+				List.of(item("Rough Jade Gemstone", 1_920)), 0, 0));
+		hit(25_000);
+		event(26_000, new Pristine(item("Flawed Jade Gemstone", 97)));
+		now = 30_000;
+		outside.onWorldChange(now);
+		// 97 * 2000 / 388 = 500
+		assertEquals(500L, mining.getLast().items().get("Rough Jade Gemstone"));
+	}
+
 	@Test
 	void supercraftResultsArentMined() {
 		hit(0);
@@ -146,10 +184,69 @@ class OutsideMiningTest {
 		assertEquals(List.of(priced), file.read());
 	}
 
+	// recording 6 at 0:01.8 + 0:37.4: compacted glacite comes off, 27 short in the 1st msg comes off the 2nd
+	@Test
+	void compactionInSacksIsntCountedTwice() {
+		hit(0);
+		event(1_800, new SacksChanged(18, List.of(item("Enchanted Glacite", 32), item("Enchanted Hard Stone", 1), item("Glacite", 4_133),
+				item("Hard Stone", 111), item("Refined Mineral", 2)), List.of(item("Glacite", 4_160), item("Hard Stone", 576)), 0, 0));
+		hit(30_000);
+		event(37_400, new SacksChanged(18, List.of(item("Enchanted Glacite", 21), item("Glacite", 3_408), item("Hard Stone", 329)),
+				List.of(item("Glacite", 3_360)), 0, 0));
+
+		assertEquals(Map.of("Enchanted Glacite", 32L, "Enchanted Hard Stone", 1L, "Refined Mineral", 2L), mining.get(0).items());
+		// hard stone still 465 - 329 short
+		assertEquals(Map.of("Enchanted Glacite", 21L, "Glacite", 21L), mining.get(1).items());
+	}
+
+	// recording 6 at 28:21.4, mined in its window here so it isnt skipped for that
+	@Test
+	void supercraftWithItsInputsRemovedStillCountsNothing() {
+		hit(0);
+		event(13_900, new Supercraft(item("Flawed Jade Gemstone", 2_814)));
+		event(15_700, new Supercraft(item("Fine Jade Gemstone", 663)));
+		event(21_400, new SacksChanged(7, List.of(item("Fine Jade Gemstone", 663), item("Flawed Jade Gemstone", 2_814)),
+				List.of(item("Flawed Jade Gemstone", 53_040), item("Rough Jade Gemstone", 225_120)), 0, 0));
+		hit(22_000);
+		sacks(30_000, 8, item("Flawed Jade Gemstone", 151), item("Rough Jade Gemstone", 513));
+		assertEquals(1, mining.size());
+		assertEquals(Map.of("Flawed Jade Gemstone", 151L, "Rough Jade Gemstone", 513L), mining.getFirst().items());
+	}
+
+	// sum of the sacks msgs outside shafts by hand: glacite 79,666 in, 79,200 out, hard stone 8,761 in, 8,640 out
+	// JADE_1 compacted 453 hard stone more than it got, those come off the hard stone after it
+	@Test
+	void recordingSix() throws IOException {
+		Map<String, Long> reported = totals(replayed("2026-11-17_19-16-17.jsonl"), false);
+		assertEquals(466L, reported.get("Glacite"));
+		assertEquals(null, reported.get("Hard Stone"));
+		assertEquals(525L, reported.get("Enchanted Glacite"));
+		assertEquals(17L, reported.get("Enchanted Hard Stone"));
+		// jade supercrafts after JADE_1 not mined
+		assertEquals(null, reported.get("Fine Jade Gemstone"));
+	}
+
 	// replay totals match the sacks msgs outside shafts by hand (research/09)
 	@Test
 	void recordingFive() throws IOException {
-		Path recording = RecordingReplay.RECORDINGS.resolve("2026-11-15_16-10-29.jsonl");
+		List<MiningEntry> replayed = replayed("2026-11-15_16-10-29.jsonl");
+		Map<String, Long> reported = totals(replayed, false);
+		Map<String, Long> tail = totals(replayed, true);
+		assertEquals(25_716L, reported.get("Flawed Jade Gemstone"));
+		assertEquals(146_399L, reported.get("Rough Jade Gemstone"));
+		assertEquals(5L, reported.get("Glossy Gemstone"));
+		assertEquals(35L, reported.get("Refined Mineral"));
+		assertEquals(55_749L, reported.get("Glacite"));
+		// nothing from the shafts or the jasper supercrafts
+		assertEquals(null, reported.get("Fine Jasper Gemstone"));
+		assertEquals(null, reported.get("Rough Jasper Gemstone"));
+		// pristine flawed after the last sacks msg before each portal
+		assertEquals(1_497L, tail.get("Flawed Jade Gemstone"));
+		assertEquals(1_312L, tail.get("Flawed Sapphire Gemstone"));
+	}
+
+	private List<MiningEntry> replayed(String name) throws IOException {
+		Path recording = RecordingReplay.RECORDINGS.resolve(name);
 		assumeTrue(Files.exists(recording), "Recording not available: " + recording);
 		List<ShaftEvent> events = new ArrayList<>();
 		ShaftTracker tracker = new ShaftTracker(TextPatterns.defaults(), events::add);
@@ -167,20 +264,16 @@ class OutsideMiningTest {
 			}
 			if (RecordingReplay.type(record).equals("world_change")) replayed.onWorldChange(now);
 		}
-		Map<String, Long> reported = new LinkedHashMap<>();
-		Map<String, Long> tail = new LinkedHashMap<>();
-		for (MiningEntry entry : mining) entry.items().forEach((item, count) -> (entry.estimated() ? tail : reported).merge(item, count, Long::sum));
-		assertEquals(25_716L, reported.get("Flawed Jade Gemstone"));
-		assertEquals(146_399L, reported.get("Rough Jade Gemstone"));
-		assertEquals(5L, reported.get("Glossy Gemstone"));
-		assertEquals(35L, reported.get("Refined Mineral"));
-		assertEquals(55_749L, reported.get("Glacite"));
-		// nothing from the shafts or the jasper supercrafts
-		assertEquals(null, reported.get("Fine Jasper Gemstone"));
-		assertEquals(null, reported.get("Rough Jasper Gemstone"));
-		// pristine flawed after the last sacks msg before each portal
-		assertEquals(1_497L, tail.get("Flawed Jade Gemstone"));
-		assertEquals(1_312L, tail.get("Flawed Sapphire Gemstone"));
+		return mining;
+	}
+
+	// estimated tails or reported
+	private static Map<String, Long> totals(List<MiningEntry> mining, boolean estimated) {
+		Map<String, Long> totals = new LinkedHashMap<>();
+		for (MiningEntry entry : mining) {
+			if (entry.estimated() == estimated) entry.items().forEach((item, count) -> totals.merge(item, count, Long::sum));
+		}
+		return totals;
 	}
 
 	private void hit(long at) {

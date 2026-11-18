@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.function.LongConsumer;
 
 import com.google.gson.JsonArray;
@@ -14,6 +15,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
+import dev.skysurveyor.detection.ShaftEvent.RareDrop;
 import dev.skysurveyor.detection.ShaftEvent.ShaftLeft;
 
 public final class RecordingReplay {
@@ -21,6 +23,8 @@ public final class RecordingReplay {
 	public static final Path RECORDINGS = Path.of("..", "Recordings");
 	// world change + the live ShaftLeft it causes land in the same tick
 	private static final long SAME_TICK_MILLIS = 50;
+	// event added after live lines -> 1st version that writes it. older recordings cant have it, so replay skips it there
+	static final Map<Class<? extends ShaftEvent>, String> NEWER_EVENTS = Map.of(RareDrop.class, "0.25.0-alpha.16");
 
 	private RecordingReplay() {
 	}
@@ -82,12 +86,14 @@ public final class RecordingReplay {
 	// before the 1st world change the live tracker already knew things replay doesnt
 	public static LiveCheck liveCheck(List<JsonObject> records) {
 		boolean hasLive = records.stream().anyMatch(record -> type(record).equals("start") && record.has("live"));
+		String version = records.stream().filter(record -> type(record).equals("start") && record.has("version")
+				&& !record.get("version").isJsonNull()).map(record -> record.get("version").getAsString()).findFirst().orElse(null);
 		List<Timed> live = new ArrayList<>();
 		List<Timed> replayed = new ArrayList<>();
 		long[] now = {0};
 		boolean[] synced = {false};
 		ShaftTracker tracker = new ShaftTracker(TextPatterns.defaults(), event -> {
-			if (synced[0]) replayed.add(new Timed(now[0], EventText.of(event)));
+			if (synced[0] && knows(version, event)) replayed.add(new Timed(now[0], EventText.of(event)));
 		});
 		long syncedAt = -1;
 		for (JsonObject record : records) {
@@ -114,6 +120,33 @@ public final class RecordingReplay {
 			}
 		}
 		return new LiveCheck(hasLive, live, replayed);
+	}
+
+	// no version = before 0.25.0-alpha.16
+	static boolean knows(String version, ShaftEvent event) {
+		String since = NEWER_EVENTS.get(event.getClass());
+		return since == null || version != null && compareVersions(version, since) >= 0;
+	}
+
+	// semver: x.y.z, a release beats its prereleases, prerelease parts numeric where both are
+	static int compareVersions(String a, String b) {
+		String[] aParts = a.split("-", 2);
+		String[] bParts = b.split("-", 2);
+		int core = compareDotted(aParts[0], bParts[0]);
+		if (core != 0) return core;
+		if (aParts.length != bParts.length) return aParts.length == 1 ? 1 : -1;
+		return aParts.length == 1 ? 0 : compareDotted(aParts[1], bParts[1]);
+	}
+
+	private static int compareDotted(String a, String b) {
+		String[] as = a.split("\\.");
+		String[] bs = b.split("\\.");
+		for (int i = 0; i < Math.min(as.length, bs.length); i++) {
+			boolean numbers = as[i].matches("\\d+") && bs[i].matches("\\d+");
+			int c = numbers ? Long.compare(Long.parseLong(as[i]), Long.parseLong(bs[i])) : as[i].compareTo(bs[i]);
+			if (c != 0) return c;
+		}
+		return Integer.compare(as.length, bs.length);
 	}
 
 	public static long time(JsonObject record) {

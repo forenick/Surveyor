@@ -88,6 +88,12 @@ public final class ShaftNames {
 		return null;
 	}
 
+	// gem or metal name, white w/o one. journals mined column + hud drops
+	public char minedColor(String name) {
+		Character color = hudColorByName(name);
+		return color == null ? 'f' : color;
+	}
+
 	public int rgb(String code) {
 		Type type = types.get(code);
 		return type == null ? DEFAULT_RGB : type.rgb();

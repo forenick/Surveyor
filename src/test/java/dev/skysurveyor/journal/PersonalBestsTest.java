@@ -37,7 +37,8 @@ class PersonalBestsTest {
 		assertSame(jasper, best("shaft_powder", "JASP", null, entries).entry(), "crystal counts as jasper");
 		assertSame(ruby, best("shaft_powder", null, "lowest", entries).entry());
 		assertSame(jasper, best("shaft_spawn", null, null, entries).entry(), "spawn is lowest by default");
-		assertEquals(2.0, best("shaft_lapis", null, null, entries).value(), "looted only");
+		assertEquals(2.0, best("shaft_lapis", null, null, entries).value(), "not looted ones dont count");
+		assertEquals(1.0, best("shaft_lapis", null, null, List.of(jade, CorpseCountsTest.aqua2())).value(), "chat loot before the tab list flips");
 		assertNull(best("shaft_powder", "OPAL", null, entries).value(), "no opal shafts");
 		assertEquals(500_000.0, best("shaft_coins", null, null, entries).value());
 	}

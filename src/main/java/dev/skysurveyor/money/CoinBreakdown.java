@@ -9,6 +9,7 @@ import java.util.function.Function;
 import java.util.function.IntFunction;
 import java.util.stream.Stream;
 
+import dev.skysurveyor.data.ItemNames;
 import dev.skysurveyor.data.Ladder;
 import dev.skysurveyor.journal.JournalStats;
 import dev.skysurveyor.journal.JournalStats.Drops;
@@ -205,7 +206,7 @@ public final class CoinBreakdown {
 			lines.add("§7Avg per shaft " + coins(money.perShaft()) + " §8(" + money.valued() + " shafts)");
 		}
 		if (perHour != null) {
-			lines.add("§7Avg per hour shafting " + coins(perHour) + " §8(" + Format.duration(timeMillis) + ")");
+			lines.add("§7Coins / h " + coins(perHour) + " §8(" + Format.duration(timeMillis) + ")");
 		}
 		if (tax != null && Math.round(tax) > 0) lines.add(taxLine(tax));
 		if (beforeOutside) lines.add("§8Outside shafts counted since 0.24.0");
@@ -229,7 +230,7 @@ public final class CoinBreakdown {
 			lines.add("§7Avg per shaft " + coins(money.perShaft()) + " §8(" + money.valued() + " shafts)");
 		}
 		if (perHour != null) {
-			lines.add("§7Avg per hour shafting " + coins(perHour) + " §8(" + Format.duration(timeMillis) + ")");
+			lines.add("§7Coins / h " + coins(perHour) + " §8(" + Format.duration(timeMillis) + ")");
 		}
 		return lines;
 	}
@@ -263,8 +264,8 @@ public final class CoinBreakdown {
 					.sorted(Comparator.comparingInt((Map.Entry<String, ItemDrop> e) -> -e.getValue().corpses()))
 					.forEach(e -> {
 						ItemCoins priced = corpse == null ? null : corpse.items().get(e.getKey());
-						rows.add(new Row("§b" + chance(e.getValue().chance(drops.corpses())) + " §7"
-								+ Format.number(e.getValue().count()) + " " + e.getKey(), priced == null ? null : priced.coins()));
+						rows.add(new Row("§b" + chance(e.getValue().chance(drops.corpses())) + " "
+								+ ItemNames.current().styled(e.getKey(), Format.number(e.getValue().count())), priced == null ? null : priced.coins()));
 					});
 			addRows(lines, rows, items, "", corpse != null, ironman);
 		}
@@ -310,7 +311,7 @@ public final class CoinBreakdown {
 
 	private static List<Row> itemRows(Part part, Map<String, ItemCoins> items) {
 		List<Row> rows = new ArrayList<>();
-		items.forEach((item, coins) -> rows.add(new Row(count(part, item, coins.count()) + " " + item, coins.coins())));
+		items.forEach((item, coins) -> rows.add(new Row(ItemNames.current().styled(item, count(part, item, coins.count())), coins.coins())));
 		return rows;
 	}
 
@@ -348,8 +349,12 @@ public final class CoinBreakdown {
 
 	// ironman: expected, so not red
 	public static String unpriced(long count, boolean ironman) {
+		return (ironman ? "§8" : "§c") + unpricedText(count, ironman);
+	}
+
+	public static String unpricedText(long count, boolean ironman) {
 		String items = count + (count == 1 ? " item" : " items");
-		return ironman ? "§8" + items + " with no NPC price" : "§c" + items + " without a price";
+		return items + (ironman ? " with no NPC price" : " without a price");
 	}
 
 	private static String share(double fraction) {

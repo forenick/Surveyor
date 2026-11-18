@@ -134,7 +134,7 @@ class OldJournalTest {
 			// metal only when set, so lines from before 0.23.0 stay the same
 			String metal = entry.metal() == null ? "" : " metal=" + entry.metal();
 			shafts.append(String.format(Locale.ROOT, "%d %s %s powder=%d corpses=%s gems=%s%s coins=%.1f%n", entry.enteredAt(),
-					entry.shaftId(), entry.exit(), JournalStats.powder(entry), JournalStats.corpses(entry),
+					entry.shaftId(), entry.exit(), JournalStats.powder(entry), CorpseCounts.of(entry),
 					entry.gems(), metal, coins));
 		}
 		out.append(String.format(Locale.ROOT, "coins %.1f%n", total));

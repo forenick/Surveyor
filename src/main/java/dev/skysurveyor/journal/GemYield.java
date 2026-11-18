@@ -10,9 +10,9 @@ import dev.skysurveyor.data.Ladder;
 import dev.skysurveyor.detection.Shaft;
 import dev.skysurveyor.detection.TextPatterns;
 
-// sacks added - corpse loot - supercrafts, tail estimated (research/06, 07)
+// sacks added - compaction - corpse loot - rare drops - supercrafts, tail estimated (research/06, 07)
 // silent gemstone spread in the tail is missing, slight undercount
-// mob drops of the same gem count as mined (research/07)
+// mob drops of the same gem w/o a RARE DROP! line count as mined (research/07)
 public record GemYield(String gem, long rough, long flawed, long fine, long tailRough, long tailFlawed) {
 	private static final int ROUGH = 0;
 	private static final int FLAWED = 1;
@@ -39,6 +39,11 @@ public record GemYield(String gem, long rough, long flawed, long fine, long tail
 		return count / countPerFine(quality);
 	}
 
+	// f.e. "Fine Jade Gemstone", name from ladders.txt
+	public static String fineName(String gem) {
+		return Ladder.gem().name(FINE, gem);
+	}
+
 	// how many of this quality make 1 fine
 	public static double countPerFine(String quality) {
 		return switch (quality) {
@@ -55,15 +60,16 @@ public record GemYield(String gem, long rough, long flawed, long fine, long tail
 			Matcher m = shaftGem(item, type, patterns);
 			return m == null ? null : m.group("gem");
 		};
-		MinedCount mined = MinedCount.of(Ladder.gem(), gemOf, shaft.sacksAdded(), shaft.notMinedInSacks());
+		MinedCount mined = MinedCount.of(Ladder.gem(), gemOf, shaft.sacksNet(), shaft.notMinedInSacks());
 		MinedCount tail = MinedCount.of(Ladder.gem(), gemOf, shaft.pristineSinceSacks(), Map.of());
 		String gem = mined.material() != null ? mined.material() : tail.material();
 		if (gem == null) return null;
 
-		long rough = mined.at(ROUGH);
-		long flawed = mined.at(FLAWED);
+		// tail ratio from the mix as mined, compaction turns rough into flawed and would skew it
+		MinedCount gross = MinedCount.of(Ladder.gem(), gemOf, shaft.sacksBeforeCompacting(), shaft.notMinedInSacks());
 		long tailFlawed = tail.counts()[FLAWED];
-		return new GemYield(gem, rough, flawed, mined.at(FINE), tailRough(tailFlawed, rough, flawed), tailFlawed);
+		return new GemYield(gem, mined.at(ROUGH), mined.at(FLAWED), mined.at(FINE), tailRough(tailFlawed, gross.at(ROUGH), gross.at(FLAWED)),
+				tailFlawed);
 	}
 
 	// tail is flawed only, rough in the same ratio as reported

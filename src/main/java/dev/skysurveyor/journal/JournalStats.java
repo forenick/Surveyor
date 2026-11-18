@@ -13,7 +13,6 @@ import java.util.Set;
 import java.util.function.ToLongFunction;
 
 import dev.skysurveyor.data.CorpseType;
-import dev.skysurveyor.detection.Corpse;
 import dev.skysurveyor.detection.CorpseLoot;
 import dev.skysurveyor.detection.ItemCount;
 
@@ -110,11 +109,7 @@ public final class JournalStats {
 		}
 
 		public int looted(String type) {
-			return entries.stream().mapToInt(e -> looted(e, type)).sum();
-		}
-
-		static int looted(JournalEntry entry, String type) {
-			return (int) entry.corpses().stream().filter(c -> c.looted() && c.type().equals(type)).count();
+			return entries.stream().mapToInt(e -> CorpseCounts.looted(e, type)).sum();
 		}
 	}
 
@@ -224,25 +219,6 @@ public final class JournalStats {
 		return loots.stream().mapToLong(CorpseLoot::powder).sum() + exitPowder;
 	}
 
-	public static Map<String, CorpseCount> corpseCounts(List<Corpse> corpses) {
-		Map<String, int[]> counts = new LinkedHashMap<>();
-		for (Corpse corpse : corpses) {
-			int[] count = counts.computeIfAbsent(corpse.type(), t -> new int[2]);
-			if (corpse.looted()) count[0]++;
-			count[1]++;
-		}
-		Map<String, CorpseCount> result = new LinkedHashMap<>();
-		counts.forEach((type, count) -> result.put(type, new CorpseCount(count[0], count[1])));
-		return result;
-	}
-
-	public static Map<String, CorpseCount> corpses(JournalEntry entry) {
-		Map<String, CorpseCount> counts = corpseCounts(entry.corpses());
-		Map<String, CorpseCount> ordered = new LinkedHashMap<>();
-		for (String type : ordered(counts.keySet())) ordered.put(type, counts.get(type));
-		return ordered;
-	}
-
 	public static AllTime allTime(List<JournalEntry> entries) {
 		return allTime(entries, List.of(), List.of());
 	}
@@ -262,12 +238,11 @@ public final class JournalStats {
 		long powder = 0;
 		for (JournalEntry entry : entries) {
 			powder += powder(entry);
-			for (Corpse corpse : entry.corpses()) {
-				seen.merge(corpse.type(), 1, Integer::sum);
-				if (corpse.looted()) looted.merge(corpse.type(), 1, Integer::sum);
-			}
-			entry.corpses().stream().map(Corpse::type).distinct()
-					.forEach(type -> shaftsWithCorpse.merge(type, 1, Integer::sum));
+			CorpseCounts.of(entry).forEach((type, count) -> {
+				seen.merge(type, count.total(), Integer::sum);
+				if (count.looted() > 0) looted.merge(type, count.looted(), Integer::sum);
+				shaftsWithCorpse.merge(type, 1, Integer::sum);
+			});
 			for (CorpseLoot loot : entry.loots()) {
 				lootSeen.merge(loot.type(), 1, Integer::sum);
 				Map<String, ItemDrop> items = dropped.computeIfAbsent(loot.type(), t -> new LinkedHashMap<>());
@@ -310,7 +285,7 @@ public final class JournalStats {
 		return timed == 0 ? null : total / timed;
 	}
 
-	private static List<String> ordered(Iterable<String> types) {
+	static List<String> ordered(Iterable<String> types) {
 		List<String> known = new ArrayList<>();
 		List<String> other = new ArrayList<>();
 		for (String type : types) (CorpseType.ORDER.contains(type) ? known : other).add(type);

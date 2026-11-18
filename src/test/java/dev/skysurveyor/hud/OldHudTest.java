@@ -24,7 +24,9 @@ class OldHudTest {
 		return OldSaves.withFile("hud.json").stream().map(dir -> DynamicTest.dynamicTest(dir.getFileName().toString(), () -> {
 			String json = OldSaves.read(dir.resolve("hud.json"));
 			JsonObject old = JsonParser.parseString(json).getAsJsonObject();
-			JsonObject now = JsonParser.parseString(HudLayout.fromJson(json).toJson()).getAsJsonObject();
+			HudLayout read = HudLayout.fromJson(json);
+			assertEquals(0, read.cutParts(), "caps never cut a real file");
+			JsonObject now = JsonParser.parseString(read.toJson()).getAsJsonObject();
 			OldSaves.assertKept(old.get("boxes"), now.get("boxes"), "boxes", CONVERTED);
 			// moved toast spot, 0.22.0+
 			if (old.has("toast")) OldSaves.assertKept(old.get("toast"), now.get("toast"), "toast", CONVERTED);

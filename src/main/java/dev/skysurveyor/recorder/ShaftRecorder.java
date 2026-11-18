@@ -31,6 +31,7 @@ import net.minecraft.world.scores.Scoreboard;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import dev.skysurveyor.Surveyor;
 import dev.skysurveyor.detection.EventText;
 import dev.skysurveyor.detection.ShaftEvent;
 import dev.skysurveyor.detection.TextPatterns;
@@ -81,6 +82,8 @@ public final class ShaftRecorder {
 		event.addProperty("time", LocalDateTime.now().toString());
 		// has live + live_entry lines (0.24.0+)
 		event.addProperty("live", true);
+		// replay skips events added after it (0.25.0-alpha.16+)
+		event.addProperty("version", Surveyor.modVersion());
 		writer.write(event);
 		return file;
 	}

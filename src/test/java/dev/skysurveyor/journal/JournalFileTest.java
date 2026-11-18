@@ -6,13 +6,18 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonParseException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import dev.skysurveyor.detection.TextPatterns;
 import dev.skysurveyor.hud.HudData;
+import dev.skysurveyor.money.ItemPrice;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class JournalFileTest {
@@ -51,6 +56,60 @@ class JournalFileTest {
 		JournalStats.allTime(entries);
 		HudData.Totals.of(entries, TextPatterns.defaults());
 		assertEquals(text, Files.readString(path, StandardCharsets.UTF_8), "read never changes the file");
+	}
+
+	// these threw past the per line catch + failed the whole load: empty journal for the run
+	@Test
+	void badValuesOnlyLoseTheirOwnLine(@TempDir Path dir) throws IOException {
+		Path path = dir.resolve("journal.jsonl");
+		String textPrice = JADE.replace("\"prices\":{}", "\"prices\":{\"JADE\":[\"abc\",12.5],\"ROUGH_JADE_GEM\":{\"buyOrder\":\"x\",\"sellOffer\":\"3\"}}");
+		String wrongType = TOPAZ.replace("\"durationMillis\":6753", "\"durationMillis\":\"long\"");
+		String wrongShape = TOPAZ.replace("\"sacksAdded\":{}", "\"sacksAdded\":[1]");
+		String torn = TOPAZ.substring(0, 300);
+		String text = String.join("\n", JADE, textPrice, wrongType, wrongShape, PERIDOT_0_2, torn);
+		Files.writeString(path, text, StandardCharsets.UTF_8);
+
+		JournalFile file = new JournalFile(path, Runnable::run);
+		List<JournalEntry> entries = file.load().join();
+		assertEquals(List.of("JADE_1", "JADE_1", "PERI_1"), entries.stream().map(JournalEntry::shaftId).toList());
+		assertEquals(new ItemPrice(null, 12.5, null, null), entries.get(1).prices().get("JADE"), "text that isnt a number = no price");
+		assertEquals(new ItemPrice(null, 3.0, null, null), entries.get(1).prices().get("ROUGH_JADE_GEM"), "a number as text still reads");
+		assertEquals(text, Files.readString(path, StandardCharsets.UTF_8), "load never changes the file");
+
+		file.append(EntryBuilder.from(entries.getFirst().withPrices(null)).shaftId("AMBE_1").enteredAt(1794175000000L).build());
+		String now = Files.readString(path, StandardCharsets.UTF_8);
+		assertTrue(now.startsWith(text + "\n{"), "append only adds, bad lines stay");
+		assertEquals(List.of("JADE_1", "JADE_1", "PERI_1", "AMBE_1"), file.load().join().stream().map(JournalEntry::shaftId).toList());
+	}
+
+	record Probe(String name) {
+		Probe {
+			if (name.equals("boom")) throw new IllegalStateException("boom");
+		}
+	}
+
+	@Test
+	void aLineThatThrowsAnythingOnlyLosesItself(@TempDir Path dir) throws IOException {
+		RuntimeException thrown = assertThrows(RuntimeException.class, () -> new Gson().fromJson("{\"name\":\"boom\"}", Probe.class));
+		assertFalse(thrown instanceof JsonParseException, "else this test checks nothing new: " + thrown);
+		Path path = dir.resolve("probe.jsonl");
+		Files.writeString(path, "{\"name\":\"a\"}\n{\"name\":\"boom\"}\n{}\n{\"name\":\"b\"}\n", StandardCharsets.UTF_8);
+		JsonLinesFile<Probe> file = new JsonLinesFile<>(path, Probe.class, probe -> true, Runnable::run);
+		assertEquals(List.of("a", "b"), file.load().join().stream().map(Probe::name).toList());
+		assertFalse(file.failed(), "skipped lines arent a failed read");
+	}
+
+	// first run hint waits on this, a player w/ shafts must never see it
+	@Test
+	void unreadableFileCountsAsFailed(@TempDir Path dir) throws IOException {
+		JournalFile missing = new JournalFile(dir.resolve("none.jsonl"), Runnable::run);
+		assertTrue(missing.load().join().isEmpty());
+		assertFalse(missing.failed(), "no file yet = new player");
+
+		Path folder = Files.createDirectory(dir.resolve("journal.jsonl"));
+		JournalFile broken = new JournalFile(folder, Runnable::run);
+		assertTrue(broken.load().join().isEmpty());
+		assertTrue(broken.failed());
 	}
 
 	@Test

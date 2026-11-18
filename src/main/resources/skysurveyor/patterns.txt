@@ -29,6 +29,8 @@ cave_in                ^The mineshaft entrance has caved in\.\.\. it doesn't loo
 
 tab.corpses_header     ^Frozen Corpses:$
 tab.corpse             ^ (?<type>\w+): (?<status>(?:NOT )?LOOTED)$
+# pity widget, max read from the line not hardcoded
+tab.pity_mineshafts    ^ Glacite Mineshafts: (?<now>[\d,]+)/(?<max>[\d,]+)$
 
 loot.start             ^  (?<type>[A-Z]+) CORPSE LOOT!$
 loot.bonus             ^  \+1 bonus drop!$
@@ -54,9 +56,14 @@ crystal.name           ^ +(?<item>\w+ Crystal)$
 # already had 1, so none given (research/05, nicks call 2026-11-12)
 crystal.owned          ^You have already obtained this Crystal!$
 supercraft             ^You Supercrafted (?:\p{Co} )?(?<item>.+) x(?<count>[\d,]+)!$
+# 0.27.3+, drops w/ base chance <= 5%. gems have an icon, glacite jewel doesnt (recording 6)
+# never seen w/o magic find or w/ an amount, those wont match
+rare_drop              ^RARE DROP! (?:\p{Co} )?(?<item>.+) \(\+[\d,]+\p{Co} Magic Find\)$
 
 # icon already removed
 gem.item               ^(?<quality>Rough|Flawed|Fine) (?<gem>\w+) Gemstone$
+# item names (rarity colour, icon), every tier
+gem.any_tier           ^(?<quality>Rough|Flawed|Fine|Flawless|Perfect) (?<gem>\w+) Gemstone$
 # gem crystals only, other "x crystal" items get their own price
 crystal.item           ^(?<gem>Ruby|Amber|Sapphire|Jade|Amethyst|Topaz|Jasper|Opal|Aquamarine|Citrine|Onyx|Peridot) Crystal$
 

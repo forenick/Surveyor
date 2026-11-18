@@ -59,6 +59,8 @@ final class PriceFeed {
 	private volatile CompletableFuture<?> download;
 	private volatile PriceBook book = PriceBook.EMPTY;
 	private volatile Map<String, String> names = Map.of();
+	// id -> rarity
+	private volatile Map<String, String> tiers = Map.of();
 	private long namesAt;
 	private long failedAt = Long.MIN_VALUE / 2;
 
@@ -83,6 +85,10 @@ final class PriceFeed {
 		return names;
 	}
 
+	Map<String, String> tiers() {
+		return tiers;
+	}
+
 	void loadCache() {
 		JsonObject prices = readJson(pricesFile);
 		if (prices != null) {
@@ -101,7 +107,15 @@ final class PriceFeed {
 				}
 				book = book.withNpc(PriceBook.parseBins(cached.getAsJsonObject("npc")));
 				names = Map.copyOf(loaded);
-				namesAt = cached.has("at") ? cached.get("at").getAsLong() : 0;
+				// caches from before 0.25.0 have no rarities, fetch again
+				namesAt = cached.has("at") && cached.has("tiers") ? cached.get("at").getAsLong() : 0;
+				if (cached.has("tiers")) {
+					Map<String, String> loadedTiers = new HashMap<>();
+					for (Map.Entry<String, JsonElement> e : cached.getAsJsonObject("tiers").entrySet()) {
+						loadedTiers.put(e.getKey(), e.getValue().getAsString());
+					}
+					tiers = Map.copyOf(loadedTiers);
+				}
 			} catch (RuntimeException e) {
 				LOGGER.warn("Ignoring broken {}: {}", itemsFile, e.toString());
 			}
@@ -147,6 +161,7 @@ final class PriceFeed {
 				Map<String, Double> npc = ItemIds.parseNpcPrices(items);
 				Map<String, String> parsed = nonEmpty(ItemIds.parseHypixelItems(items), "item list");
 				names = Map.copyOf(parsed);
+				tiers = Map.copyOf(ItemIds.parseTiers(items));
 				book = book.withNpc(npc);
 				namesAt = System.currentTimeMillis();
 				JsonObject json = new JsonObject();
@@ -157,6 +172,9 @@ final class PriceFeed {
 				JsonObject npcMap = new JsonObject();
 				npc.forEach(npcMap::addProperty);
 				json.add("npc", npcMap);
+				JsonObject tierMap = new JsonObject();
+				tiers.forEach(tierMap::addProperty);
+				json.add("tiers", tierMap);
 				writeJson(itemsFile, json);
 			} catch (IOException | RuntimeException e) {
 				failed("item names and NPC", e);

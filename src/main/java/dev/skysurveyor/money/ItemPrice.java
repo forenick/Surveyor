@@ -79,9 +79,17 @@ public record ItemPrice(Double buyOrder, Double sellOffer, Double lowestBin, Dou
 			return new ItemPrice(values[0], values[1], values[2], values[3]);
 		}
 
+		// text that isnt a number = none, not a lost line
 		private static Double number(JsonReader in) throws IOException {
 			JsonToken token = in.peek();
-			if (token == JsonToken.NUMBER || token == JsonToken.STRING) return in.nextDouble();
+			if (token == JsonToken.NUMBER) return in.nextDouble();
+			if (token == JsonToken.STRING) {
+				try {
+					return Double.parseDouble(in.nextString());
+				} catch (NumberFormatException e) {
+					return null;
+				}
+			}
 			in.skipValue();
 			return null;
 		}

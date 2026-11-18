@@ -128,8 +128,8 @@ class OutsideCoinsTest {
 
 		List<String> lines = CoinBreakdown.detailed(money, null, 0, true, null, 1000);
 		assertTrue(lines.contains("§fOutside shafts §6+1.2M §84%"), lines.toString());
-		assertTrue(lines.contains("  §70.1 Flawless Jade Gemstone §6+1.1M"), lines.toString());
-		assertTrue(lines.contains("  §72 Glossy Gemstone §6+100.0k"), lines.toString());
+		assertTrue(lines.contains("  §7§5Flawless Jade Gemstone §8x0.1 §6+1.1M"), lines.toString());
+		assertTrue(lines.contains("  §7§fGlossy Gemstone §8x2 §6+100.0k"), lines.toString());
 		assertTrue(lines.contains("§8Outside shafts counted since 0.24.0"));
 		assertTrue(lines.contains("§c1 item without a price"), "outside items count too");
 		assertFalse(CoinBreakdown.detailed(money, null, 0, false, null, 1000).contains("§8Outside shafts counted since 0.24.0"));
@@ -139,7 +139,7 @@ class OutsideCoinsTest {
 		assertTrue(tile.contains("§fShafts §6+30.0M"), tile.toString());
 		assertTrue(tile.contains("  §7Mined gems §6+30.0M"), tile.toString());
 		assertTrue(tile.contains("§fOutside shafts §6+1.2M"), tile.toString());
-		assertTrue(tile.contains("  §70.1 Flawless Jade Gemstone §6+1.1M"), tile.toString());
+		assertTrue(tile.contains("  §7§5Flawless Jade Gemstone §8x0.1 §6+1.1M"), tile.toString());
 		assertTrue(tile.contains("§7Earned §6+31.2M"), tile.toString());
 		assertTrue(tile.contains("§7Per shaft §6+30.0M §8(shafts only)"), tile.toString());
 		assertTrue(tile.contains("§7Per hour §6+40.0M"), tile.toString());

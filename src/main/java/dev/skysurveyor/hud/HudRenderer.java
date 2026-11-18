@@ -19,6 +19,8 @@ public final class HudRenderer {
 	private static final Identifier FRAME_BORDER = Identifier.withDefaultNamespace("tooltip/frame");
 	// vanilla tooltip sprites overhang the text by 12px
 	private static final int FRAME_OVERHANG = 12;
+	// sprite shows 1px past the padding. in bounds, so snap + margin use it
+	static final int FRAME_RIM = 1;
 	private static final String HINT = "§7(/sv hud)";
 
 	public record Bounds(int x, int y, int width, int height) {
@@ -37,31 +39,60 @@ public final class HudRenderer {
 		}
 	}
 
+	// a box measured once: text + right column widths per row, inner size w/ padding + hint, unscaled
+	public record Measured(List<HudRow> rows, int[] textWidths, int[] rightWidths, int width, int height, float hintScale,
+			int hintWidth) {
+	}
+
 	private HudRenderer() {
 	}
 
-	public static Bounds bounds(Font font, Box box, List<String> lines, int screenWidth, int screenHeight) {
+	public static Measured measure(Font font, Box box, List<HudRow> rows) {
 		float hintScale = hintScale(box);
-		int width = Math.round(Math.max(innerWidth(font, lines), hintWidth(font, box, hintScale) + 2 * PADDING) * box.scale);
-		int height = Math.round((innerHeight(font, lines) + hintHeight(font, box, hintScale)) * box.scale);
+		int hintWidth = hintWidth(font, box, hintScale);
+		int[] textWidths = new int[rows.size()];
+		int[] rightWidths = new int[rows.size()];
+		int width = Math.max(HudRow.minWidth(rows), hintWidth);
+		for (int i = 0; i < rows.size(); i++) {
+			HudRow row = rows.get(i);
+			textWidths[i] = row.text() == null ? 0 : font.width(row.text());
+			int text = row.text() == null ? 0 : row.indent() + textWidths[i];
+			if (row.columns() && !row.right().isEmpty()) {
+				rightWidths[i] = font.width(row.right());
+				text += HudRow.COLUMN_GAP + rightWidths[i];
+			}
+			width = Math.max(width, text);
+		}
+		int height = HudRow.height(rows, font.lineHeight, LINE_GAP) + 2 * PADDING + hintHeight(font, box, hintScale);
+		return new Measured(rows, textWidths, rightWidths, width + 2 * PADDING, height, hintScale, hintWidth);
+	}
+
+	public static Bounds bounds(Font font, Box box, List<HudRow> rows, int screenWidth, int screenHeight) {
+		return bounds(measure(font, box, rows), box, screenWidth, screenHeight);
+	}
+
+	public static Bounds bounds(Measured measured, Box box, int screenWidth, int screenHeight) {
+		int rim = rim(box);
+		int width = Math.round((measured.width() + 2 * rim) * box.scale);
+		int height = Math.round((measured.height() + 2 * rim) * box.scale);
 		return new Bounds(box.anchorX.start(box.offsetX, width, screenWidth),
 				box.anchorY.start(box.offsetY, height, screenHeight), width, height);
 	}
 
-	public static void draw(GuiGraphicsExtractor graphics, Font font, Box box, List<String> lines, Bounds bounds) {
-		int[] lineWidths = new int[lines.size()];
-		int widest = 0;
-		for (int i = 0; i < lineWidths.length; i++) {
-			lineWidths[i] = font.width(lines.get(i));
-			widest = Math.max(widest, lineWidths[i]);
-		}
-		float hintScale = hintScale(box);
-		int hintWidth = hintWidth(font, box, hintScale);
-		int width = Math.max(widest, hintWidth) + 2 * PADDING;
-		int height = innerHeight(font, lines) + hintHeight(font, box, hintScale);
+	public static void draw(GuiGraphicsExtractor graphics, Font font, Box box, List<HudRow> rows, Bounds bounds) {
+		draw(graphics, font, box, measure(font, box, rows), bounds);
+	}
+
+	public static void draw(GuiGraphicsExtractor graphics, Font font, Box box, Measured measured, Bounds bounds) {
+		List<HudRow> rows = measured.rows();
+		float hintScale = measured.hintScale();
+		int hintWidth = measured.hintWidth();
+		int width = measured.width();
+		int height = measured.height();
 		graphics.pose().pushMatrix();
 		graphics.pose().translate(bounds.x(), bounds.y());
 		graphics.pose().scale(box.scale, box.scale);
+		graphics.pose().translate(rim(box), rim(box));
 		switch (box.background) {
 			case DARK -> graphics.fill(0, 0, width, height, DARK);
 			case FRAME -> drawFrame(graphics, width, height, -1);
@@ -70,30 +101,74 @@ public final class HudRenderer {
 		}
 		int textWidth = width - 2 * PADDING;
 		int y = PADDING;
-		for (int i = 0; i < lineWidths.length; i++) {
-			String line = lines.get(i);
-			int lineWidth = lineWidths[i];
-			int x = PADDING + switch (box.align) {
-				case LEFT -> 0;
-				case CENTER -> (textWidth - lineWidth) / 2;
-				case RIGHT -> textWidth - lineWidth;
-			};
-			drawLine(graphics, font, line, x, y);
-			y += font.lineHeight + LINE_GAP;
+		for (int i = 0; i < rows.size(); i++) {
+			HudRow row = rows.get(i);
+			int top = y;
+			if (row.rule()) {
+				graphics.fill(PADDING, y + HudRow.RULE_ABOVE, PADDING + textWidth, y + HudRow.RULE_ABOVE + 1, HudRow.RULE);
+				y += HudRow.RULE_HEIGHT;
+			}
+			if (row.columns()) {
+				drawColumns(graphics, font, row, measured.rightWidths()[i], y, textWidth);
+			} else if (row.text() != null) {
+				drawLine(graphics, font, row.text(), PADDING + (int) alignX(box.align, textWidth, measured.textWidths()[i]), y);
+			}
+			if (row.graph() != null) {
+				drawGraph(graphics, row.graph(), box.align, PADDING, y + (row.text() == null ? 0 : font.lineHeight) + HudGraph.ABOVE, textWidth);
+			}
+			y = top + row.height(font.lineHeight);
+			if (i < rows.size() - 1) y += row.gapBelow(LINE_GAP);
 		}
 		if (hintWidth > 0) {
-			float x = PADDING + switch (box.align) {
-				case LEFT -> 0;
-				case CENTER -> (textWidth - hintWidth) / 2f;
-				case RIGHT -> textWidth - hintWidth;
-			};
+			float x = PADDING + alignX(box.align, textWidth, hintWidth);
 			graphics.pose().pushMatrix();
-			graphics.pose().translate(x, y - LINE_GAP + HINT_GAP);
+			graphics.pose().translate(x, y + HINT_GAP);
 			graphics.pose().scale(hintScale, hintScale);
 			graphics.text(font, HINT, 0, 0, 0xFFFFFFFF, true);
 			graphics.pose().popMatrix();
 		}
 		graphics.pose().popMatrix();
+	}
+
+	private static float alignX(HudLayout.Align align, int room, float width) {
+		return switch (align) {
+			case LEFT -> 0;
+			case CENTER -> (room - width) / 2;
+			case RIGHT -> room - width;
+		};
+	}
+
+	private static void drawColumns(GuiGraphicsExtractor graphics, Font font, HudRow row, int rightWidth, int y, int textWidth) {
+		if (row.text() != null) drawLine(graphics, font, row.text(), PADDING + row.indent(), y);
+		if (!row.right().isEmpty()) drawLine(graphics, font, row.right(), PADDING + textWidth - rightWidth, y);
+	}
+
+	private static void drawGraph(GuiGraphicsExtractor graphics, HudGraph graph, HudLayout.Align align, int x, int y, int width) {
+		switch (graph) {
+			case HudGraph.Bar bar -> {
+				int filled = bar.filled(width);
+				graphics.fill(x, y, x + width, y + bar.height(), HudGraph.Bar.TRACK);
+				if (filled > 0) graphics.fill(x, y, x + filled, y + bar.height(), bar.argb());
+			}
+			case HudGraph.Chart chart -> {
+				int w = chart.width();
+				int left = x + (int) alignX(align, width, w);
+				int bottom = y + chart.height();
+				for (int i = 0; i < chart.columns().size(); i++) {
+					int cx = left + i * (HudGraph.Chart.COLUMN + HudGraph.Chart.GAP);
+					graphics.fill(cx, bottom - chart.columnHeight(i), cx + HudGraph.Chart.COLUMN, bottom, chart.columns().get(i).argb());
+				}
+				Integer lineY = chart.lineY();
+				if (lineY == null) return;
+				for (int dx = 0; dx < w; dx += 2 * HudGraph.Chart.DASH) {
+					graphics.fill(left + dx, y + lineY, left + Math.min(dx + HudGraph.Chart.DASH, w), y + lineY + 1, HudGraph.Chart.LINE);
+				}
+			}
+		}
+	}
+
+	private static int rim(Box box) {
+		return box.background == HudLayout.Background.FRAME ? FRAME_RIM : 0;
 	}
 
 	// not via TooltipRenderUtil, iconographic recolours that w/ the last hovered item
@@ -132,15 +207,5 @@ public final class HudRenderer {
 	// below the last line, font height w/o the gap under it
 	private static int hintHeight(Font font, Box box, float scale) {
 		return box.hint() ? HINT_GAP + (int) Math.ceil((font.lineHeight - 1) * scale) : 0;
-	}
-
-	private static int innerWidth(Font font, List<String> lines) {
-		int width = 0;
-		for (String line : lines) width = Math.max(width, font.width(line));
-		return width + 2 * PADDING;
-	}
-
-	private static int innerHeight(Font font, List<String> lines) {
-		return Math.max(0, lines.size() * (font.lineHeight + LINE_GAP) - LINE_GAP) + 2 * PADDING;
 	}
 }

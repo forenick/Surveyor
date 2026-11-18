@@ -1,0 +1,310 @@
+{
+  "version": 3,
+  "boxes": [
+    {
+      "id": "session",
+      "title": "Session",
+      "showTitle": true,
+      "showInShaft": true,
+      "showInMines": true,
+      "showElsewhere": false,
+      "background": "FRAME",
+      "scale": 1.0,
+      "align": "LEFT",
+      "labelColor": "7",
+      "valueColor": "f",
+      "labelBold": false,
+      "valueBold": false,
+      "anchorX": "START",
+      "anchorY": "START",
+      "offsetX": 3,
+      "offsetY": 30,
+      "lines": [
+        {
+          "value": "session_shafts",
+          "prefix": "Shafts: ",
+          "shown": true,
+          "format": 0,
+          "range": "SESSION",
+          "advanced": false,
+          "readyRule": false
+        },
+        {
+          "value": "shafts_per_hour",
+          "prefix": "Shafts/h: ",
+          "shown": true,
+          "format": 0,
+          "advanced": false,
+          "readyRule": false
+        },
+        {
+          "value": "average_spawn",
+          "prefix": "Avg spawn: ",
+          "shown": false,
+          "format": 1,
+          "range": "SESSION",
+          "advanced": false,
+          "readyRule": false
+        },
+        {
+          "value": "session_powder",
+          "prefix": "Shaft powder: ",
+          "valueColor": "b",
+          "shown": true,
+          "format": 0,
+          "range": "SESSION",
+          "advanced": false,
+          "readyRule": false
+        },
+        {
+          "value": "session_corpse_fine",
+          "prefix": "Corpse Fine: ",
+          "valueColor": "9",
+          "shown": true,
+          "format": 0,
+          "range": "SESSION",
+          "advanced": false,
+          "readyRule": false
+        }
+      ]
+    },
+    {
+      "id": "spawn",
+      "title": "Spawn",
+      "showTitle": false,
+      "showInShaft": false,
+      "showInMines": true,
+      "showElsewhere": false,
+      "background": "NONE",
+      "scale": 1.0,
+      "align": "CENTER",
+      "labelColor": "7",
+      "valueColor": "f",
+      "labelBold": false,
+      "valueBold": true,
+      "anchorX": "START",
+      "anchorY": "MIDDLE",
+      "offsetX": 3,
+      "offsetY": -21,
+      "lines": [
+        {
+          "value": "spawn_timer",
+          "prefix": "Spawn: ",
+          "shown": true,
+          "format": 0,
+          "advanced": false,
+          "readyRule": false
+        },
+        {
+          "value": "average_spawn",
+          "prefix": "Avg: ",
+          "shown": true,
+          "format": 0,
+          "range": "SESSION",
+          "advanced": false,
+          "readyRule": false
+        },
+        {
+          "value": "pity",
+          "prefix": "Pity: ",
+          "valueColor": "e",
+          "shown": false,
+          "format": 0,
+          "advanced": false,
+          "readyRule": false,
+          "showAs": "both"
+        }
+      ]
+    },
+    {
+      "id": "shaft",
+      "title": "{shaft_type} Shaft",
+      "showTitle": true,
+      "showInShaft": true,
+      "showInMines": false,
+      "showElsewhere": false,
+      "background": "FRAME",
+      "scale": 1.0,
+      "align": "LEFT",
+      "labelColor": "7",
+      "valueColor": "f",
+      "labelBold": false,
+      "valueBold": false,
+      "anchorX": "END",
+      "anchorY": "START",
+      "offsetX": 0,
+      "offsetY": 0,
+      "lines": [
+        {
+          "value": "shaft_time",
+          "prefix": "Time inside: ",
+          "shown": true,
+          "format": 0,
+          "advanced": false,
+          "readyRule": false
+        },
+        {
+          "value": "shaft_corpses",
+          "prefix": "Corpses: ",
+          "shown": true,
+          "format": 0,
+          "advanced": false,
+          "readyRule": false
+        },
+        {
+          "value": "shaft_campfires",
+          "prefix": "Campfires: ",
+          "valueColor": "6",
+          "shown": true,
+          "format": 0,
+          "advanced": false,
+          "readyRule": false
+        },
+        {
+          "value": "coins",
+          "prefix": "Coins: ",
+          "valueColor": "6",
+          "shown": true,
+          "format": 0,
+          "range": "SHAFT",
+          "advanced": false,
+          "readyRule": false
+        }
+      ],
+      "titleColor": "shaft"
+    },
+    {
+      "id": "money",
+      "title": "Session profit",
+      "showTitle": true,
+      "showInShaft": true,
+      "showInMines": true,
+      "showElsewhere": false,
+      "background": "FRAME",
+      "scale": 0.9,
+      "align": "LEFT",
+      "labelColor": "7",
+      "valueColor": "f",
+      "labelBold": false,
+      "valueBold": false,
+      "anchorX": "START",
+      "anchorY": "START",
+      "offsetX": 3,
+      "offsetY": 98,
+      "lines": [
+        {
+          "value": "coins",
+          "prefix": "Total: ",
+          "valueColor": "6",
+          "shown": true,
+          "format": 0,
+          "range": "SESSION",
+          "advanced": false,
+          "readyRule": false
+        },
+        {
+          "value": "coins",
+          "prefix": "Per hour: ",
+          "valueColor": "6",
+          "shown": true,
+          "format": 0,
+          "range": "PER_HOUR",
+          "advanced": false,
+          "readyRule": false
+        },
+        {
+          "value": "coins_per_shaft",
+          "prefix": "Per shaft: ",
+          "valueColor": "6",
+          "shown": true,
+          "format": 0,
+          "range": "SESSION",
+          "advanced": false,
+          "readyRule": false
+        },
+        {
+          "value": "session_time",
+          "prefix": "Time: ",
+          "shown": true,
+          "format": 0,
+          "advanced": false,
+          "readyRule": false
+        },
+        {
+          "value": "drops",
+          "prefix": "",
+          "shown": true,
+          "format": 0,
+          "range": "SESSION",
+          "advanced": false,
+          "readyRule": false
+        }
+      ]
+    },
+    {
+      "id": "box1",
+      "title": "New box",
+      "showTitle": false,
+      "showInShaft": false,
+      "showInMines": true,
+      "showElsewhere": false,
+      "background": "NONE",
+      "scale": 1.0,
+      "align": "CENTER",
+      "labelColor": "7",
+      "valueColor": "f",
+      "labelBold": false,
+      "valueBold": false,
+      "anchorX": "MIDDLE",
+      "anchorY": "MIDDLE",
+      "offsetX": 0,
+      "offsetY": 24,
+      "lines": [
+        {
+          "value": "pity",
+          "prefix": "Pity: ",
+          "valueColor": "b",
+          "shown": true,
+          "format": 0,
+          "advanced": false,
+          "text": "Pity:\u0026e{pity}",
+          "readyRule": false,
+          "colorRules": [],
+          "showAs": "both"
+        }
+      ],
+      "titleColor": "7"
+    },
+    {
+      "id": "box2",
+      "title": "Time",
+      "showTitle": false,
+      "showInShaft": true,
+      "showInMines": true,
+      "showElsewhere": false,
+      "background": "DARK",
+      "scale": 1.0,
+      "align": "LEFT",
+      "labelColor": "7",
+      "valueColor": "f",
+      "labelBold": false,
+      "valueBold": false,
+      "anchorX": "MIDDLE",
+      "anchorY": "END",
+      "offsetX": -121,
+      "offsetY": 0,
+      "lines": [
+        {
+          "value": "clock",
+          "prefix": "",
+          "shown": true,
+          "format": 0,
+          "advanced": false,
+          "text": "Clock: \u0026v{clock}",
+          "readyRule": false,
+          "colorRules": []
+        }
+      ]
+    }
+  ]
+}

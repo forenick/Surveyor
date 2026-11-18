@@ -4,9 +4,11 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.toasts.Toast;
 import net.minecraft.client.gui.components.toasts.ToastManager;
+import net.minecraft.util.Util;
 
 import dev.skysurveyor.journal.ToastText;
 import dev.skysurveyor.settings.SummarySettings.Style;
+import dev.skysurveyor.util.Guard;
 
 // vanilla toast slot, top right. manager does the slide + stacking
 public final class ShaftToast implements Toast {
@@ -19,7 +21,9 @@ public final class ShaftToast implements Toast {
 	private final ToastRenderer.Size size;
 	private final int width;
 	private final int height;
+	private final ToastClock clock = new ToastClock();
 	private Visibility wanted = Visibility.SHOW;
+	private boolean broken;
 
 	public ShaftToast(Font font, ToastText text, Style style, double seconds) {
 		this.text = text;
@@ -36,19 +40,31 @@ public final class ShaftToast implements Toast {
 		return wanted;
 	}
 
-	// time = ms since shown, notification time option stretches it like vanillas own
+	// own clock, not vanillas time: pauses on mod screens. notification time option stretches it like vanillas own
+	// vanilla calls these, guarded. a broken toast just goes away
 	@Override
 	public void update(ToastManager manager, long time) {
-		wanted = time < millis * manager.getNotificationDisplayTimeMultiplier() ? Visibility.SHOW : Visibility.HIDE;
+		if (!broken) broken = !Guard.run("toast", () -> {
+			long age = clock.tick(Util.getMillis(), LiveHud.modScreenOpen());
+			wanted = age < millis * manager.getNotificationDisplayTimeMultiplier() ? Visibility.SHOW : Visibility.HIDE;
+		});
+		if (broken) wanted = Visibility.HIDE;
 	}
 
 	@Override
 	public void extractRenderState(GuiGraphicsExtractor graphics, Font font, long time) {
-		int inset = inset();
-		graphics.pose().pushMatrix();
-		graphics.pose().translate(inset, inset);
-		ToastRenderer.draw(graphics, font, text, style, size, 1);
-		graphics.pose().popMatrix();
+		if (broken) return;
+		broken = !Guard.run("toast render", () -> {
+			if (LiveHud.modScreenOpen()) return;
+			int inset = inset();
+			graphics.pose().pushMatrix();
+			try {
+				graphics.pose().translate(inset, inset);
+				ToastRenderer.draw(graphics, font, text, style, size, 1);
+			} finally {
+				graphics.pose().popMatrix();
+			}
+		});
 	}
 
 	@Override

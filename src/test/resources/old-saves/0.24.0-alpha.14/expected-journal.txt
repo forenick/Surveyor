@@ -2,7 +2,7 @@ shafts 75
 sessions 15
 time 17667570
 powder 616549
-looted {Lapis=95, Umber=2, Tungsten=1}
+looted {Lapis=96, Umber=2, Tungsten=1}
 seen {Lapis=98, Umber=50, Tungsten=55, Vanguard=6}
 types {PERI={1=4, 2=2, C=1}, JADE={1=7}, ONYX={1=4, 2=1, C=1}, RUBY={1=2, 2=1, C=3}, JASP={1=2, C=4}, TOPA={1=6}, FAIR={1=6}, TITA={1=5}, AQUA={1=1, 2=1, C=3}, AMBE={1=5}, AMET={1=4}, SAPP={1=4}, TUNG={1=3}, LITT={L=2}, CITR={1=1, 2=1}, OPAL={C=1}}
 average spawn 85967
@@ -54,7 +54,7 @@ coins 105323650.0
 1794755271793 TOPA_1 BYE powder=7094 corpses={Lapis=CorpseCount[looted=1, total=1], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=36296.0
 1794755363587 TOPA_1 BYE powder=6832 corpses={Lapis=CorpseCount[looted=1, total=1], Tungsten=CorpseCount[looted=0, total=2]} gems=null coins=120885.3
 1794755463255 AQUA_1 BYE powder=1000 corpses={Umber=CorpseCount[looted=0, total=1], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=0.0
-1794755564094 AMBE_1 BYE powder=5836 corpses={Lapis=CorpseCount[looted=0, total=1], Umber=CorpseCount[looted=0, total=1], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=57524.8
+1794755564094 AMBE_1 BYE powder=5836 corpses={Lapis=CorpseCount[looted=1, total=1], Umber=CorpseCount[looted=0, total=1], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=57524.8
 1794755696410 TOPA_1 BYE powder=5748 corpses={Lapis=CorpseCount[looted=1, total=1], Umber=CorpseCount[looted=0, total=1], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=140795.7
 1794755765854 FAIR_1 BYE powder=1000 corpses={Vanguard=CorpseCount[looted=0, total=1]} gems=null coins=0.0
 1794755833419 ONYX_C BYE powder=5333 corpses={Lapis=CorpseCount[looted=1, total=1], Umber=CorpseCount[looted=0, total=1], Tungsten=CorpseCount[looted=0, total=1]} gems=null coins=139648.6

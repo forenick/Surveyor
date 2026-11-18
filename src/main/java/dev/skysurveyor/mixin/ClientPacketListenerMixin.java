@@ -13,9 +13,12 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import dev.skysurveyor.Surveyor;
+import dev.skysurveyor.util.Guard;
 
 // read only, never cancels or edits a packet
-// after ensureRunningOnSameThread (not HEAD) = once, on client thread, before other mods hide it
+// after ensureRunningOnSameThread (not HEAD) = once, on client thread
+// sees chat before fabric msg events + the chat hud, a cancelling HEAD inject in another mod still hides it
+// guarded, a throw here = vanilla disconnects. chat required, rest require 0 so a moved target in a hotfix cant crash on join
 @Mixin(value = ClientPacketListener.class, priority = 500)
 public abstract class ClientPacketListenerMixin {
 	private static final String ENSURE_THREAD =
@@ -23,33 +26,33 @@ public abstract class ClientPacketListenerMixin {
 
 	@Inject(method = "handleSystemChat", at = @At(value = "INVOKE", target = ENSURE_THREAD, shift = At.Shift.AFTER))
 	private void skysurveyor$onSystemChat(ClientboundSystemChatPacket packet, CallbackInfo ci) {
-		Surveyor.RECORDER.onGameMessage(packet.content(), packet.overlay());
-		Surveyor.TRACKER.onGameMessage(packet.content(), packet.overlay());
+		Guard.run("recorder chat", () -> Surveyor.RECORDER.onGameMessage(packet.content(), packet.overlay()));
+		Guard.run("chat", () -> Surveyor.TRACKER.onGameMessage(packet.content(), packet.overlay()));
 	}
 
-	@Inject(method = "setTitleText", at = @At(value = "INVOKE", target = ENSURE_THREAD, shift = At.Shift.AFTER))
+	@Inject(method = "setTitleText", require = 0, at = @At(value = "INVOKE", target = ENSURE_THREAD, shift = At.Shift.AFTER))
 	private void skysurveyor$onTitle(ClientboundSetTitleTextPacket packet, CallbackInfo ci) {
-		Surveyor.RECORDER.onTitle(packet.text(), false);
+		Guard.run("recorder title", () -> Surveyor.RECORDER.onTitle(packet.text(), false));
 	}
 
-	@Inject(method = "setSubtitleText", at = @At(value = "INVOKE", target = ENSURE_THREAD, shift = At.Shift.AFTER))
+	@Inject(method = "setSubtitleText", require = 0, at = @At(value = "INVOKE", target = ENSURE_THREAD, shift = At.Shift.AFTER))
 	private void skysurveyor$onSubtitle(ClientboundSetSubtitleTextPacket packet, CallbackInfo ci) {
-		Surveyor.RECORDER.onTitle(packet.text(), true);
+		Guard.run("recorder title", () -> Surveyor.RECORDER.onTitle(packet.text(), true));
 	}
 
 	// every server switch, even same dimension (that keeps the old ClientLevel)
-	@Inject(method = "handleLogin", at = @At(value = "INVOKE", target = ENSURE_THREAD, shift = At.Shift.AFTER))
+	@Inject(method = "handleLogin", require = 0, at = @At(value = "INVOKE", target = ENSURE_THREAD, shift = At.Shift.AFTER))
 	private void skysurveyor$onLogin(ClientboundLoginPacket packet, CallbackInfo ci) {
-		Surveyor.HUD.onServerChange();
+		Guard.run("server change", () -> Surveyor.HUD.onServerChange());
 	}
 
-	@Inject(method = "handleRespawn", at = @At(value = "INVOKE", target = ENSURE_THREAD, shift = At.Shift.AFTER))
+	@Inject(method = "handleRespawn", require = 0, at = @At(value = "INVOKE", target = ENSURE_THREAD, shift = At.Shift.AFTER))
 	private void skysurveyor$onRespawn(ClientboundRespawnPacket packet, CallbackInfo ci) {
-		Surveyor.HUD.onServerChange();
+		Guard.run("server change", () -> Surveyor.HUD.onServerChange());
 	}
 
-	@Inject(method = "handleBlockChangedAck", at = @At(value = "INVOKE", target = ENSURE_THREAD, shift = At.Shift.AFTER))
+	@Inject(method = "handleBlockChangedAck", require = 0, at = @At(value = "INVOKE", target = ENSURE_THREAD, shift = At.Shift.AFTER))
 	private void skysurveyor$onBlockAck(ClientboundBlockChangedAckPacket packet, CallbackInfo ci) {
-		Surveyor.HUD.onBlockAck(packet.sequence());
+		Guard.run("block ack", () -> Surveyor.HUD.onBlockAck(packet.sequence()));
 	}
 }

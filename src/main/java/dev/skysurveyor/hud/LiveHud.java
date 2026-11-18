@@ -1,11 +1,6 @@
 package dev.skysurveyor.hud;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -14,29 +9,27 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
-import java.util.function.IntFunction;
-import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 
-import com.google.gson.JsonParseException;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.renderer.item.MissingItemModel;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.Util;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import dev.skysurveyor.Surveyor;
+import dev.skysurveyor.data.ItemNames;
 import dev.skysurveyor.data.ShaftNames;
 import dev.skysurveyor.detection.LiveTracker;
 import dev.skysurveyor.detection.Shaft;
+import dev.skysurveyor.detection.TabListParser;
 import dev.skysurveyor.detection.TextPatterns;
 import dev.skysurveyor.hud.HudData.SessionTotals;
 import dev.skysurveyor.hud.HudData.Totals;
@@ -47,24 +40,27 @@ import dev.skysurveyor.journal.Journal;
 import dev.skysurveyor.journal.JournalEntry;
 import dev.skysurveyor.journal.JournalStats;
 import dev.skysurveyor.journal.LiveJournal;
+import dev.skysurveyor.journal.MetalYield;
 import dev.skysurveyor.journal.MiningEntry;
 import dev.skysurveyor.journal.PersonalBests;
 import dev.skysurveyor.journal.ToastText;
+import dev.skysurveyor.money.DropList;
 import dev.skysurveyor.money.LiveMoney;
 import dev.skysurveyor.money.MoneyStats;
+import dev.skysurveyor.money.ShaftValue;
+import dev.skysurveyor.screen.ModScreen;
 import dev.skysurveyor.settings.LiveSettings;
 import dev.skysurveyor.settings.SummarySettings;
 import dev.skysurveyor.util.DataFolder;
-import dev.skysurveyor.util.SafeWrite;
 
 public final class LiveHud {
 	private static final Logger LOGGER = LoggerFactory.getLogger("Surveyor");
 	private static final int REFRESH_TICKS = 4;
+	private static final Identifier HYPIXEL_GEM = Identifier.parse("hypixel_skyblock:item/collections/gemstone/jasper/fine_jasper_gem");
 	// shafts today never get near this, keeps the scan short
 	private static final int TODAY_LOOKBACK = 2000;
 	// display choice
 	private static final long TOAST_FADE = 300;
-	private static final DateTimeFormatter BACKUP_TIME = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 	private static final String DEFAULT_JSON = HudLayout.firstStart().toJson();
 	// locale's own 12h/24h
 	private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT);
@@ -77,8 +73,9 @@ public final class LiveHud {
 	private HudLayout layout = HudLayout.firstStart();
 	// movable shaft toast, client thread only
 	private ToastText toast;
-	private long toastAt;
-	private HudData data = HudData.live(SessionTotals.NONE, Totals.NONE, null, null, null, 0, ShaftNames.defaults());
+	private ToastClock toastClock;
+	private HudData data = HudData.live(SessionTotals.NONE, Totals.NONE, null, null, null, 0, ShaftNames.defaults(),
+			MetalYield.ENCHANTED);
 	// new object per saved shaft, compared by identity
 	private Journal.Session totalsSession;
 	private SessionTotals totals = SessionTotals.NONE;
@@ -91,56 +88,50 @@ public final class LiveHud {
 	private List<JournalEntry> sessionEntries = List.of();
 	private Double sessionCoins;
 	private Double lastShaftCoins;
-	private final RunningTotal<JournalEntry> allTimeCoins;
 	// mining outside shafts
 	private Double outsideSession;
 	private int outsideCount = -1;
 	private MiningEntry outsideFirst;
-	private final RunningTotal<MiningEntry> outsideAllTime;
+	// the shaft ur in, redone when it changes
+	private Shaft totalsShaft;
+	private int totalsVersion;
+	private Totals shaftTotals;
 	// type code -> shafts since, from saved shafts. redone when one is saved
 	private Map<String, Long> savedDry = Map.of();
 	private int dryEntries = -1;
 	private JournalEntry dryFirst;
-	// pbs over the whole journal, done on the io thread. key -> result, client thread only
-	private Map<String, PersonalBests.Result> pbResults = Map.of();
-	private List<PersonalBests.Def> pbList;
-	private int pbEntries = -1;
-	private int pbChanges = -1;
-	private JournalEntry pbFirst;
-	private MiningEntry pbFirstMining;
-	private int pbMining = -1;
-	private int pbBreaks = -1;
-	private boolean pbPending;
-	// io thread only. kept until prices or settings change, new shafts valued on top
-	private final Map<JournalEntry, Double> pbNets = new java.util.IdentityHashMap<>();
-	private int pbNetsChanges = -1;
-	// io thread only, each mining entry valued once per price change, for pbs + all-time outside coins
-	// null values too, so no HashMap.computeIfAbsent
-	private final Map<MiningEntry, Double> ioOutside = new java.util.IdentityHashMap<>();
-	private int ioOutsideChanges = -1;
+	// avg spawn chart, redone when a shaft is saved
+	private List<HudData.Spawn> recentSpawns = List.of();
+	private int spawnEntries = -1;
+	private JournalEntry spawnFirst;
+	// all-time coins, drops + pbs, summed on sumsIo
+	private final HudSums sums;
+	// a drawn box read a pb at the last prepare, pbs only redone then
+	private boolean pbsDrawn;
 	private long todayCount;
 	private LocalDate todayDate;
 	private int todayEntries = -1;
 	private List<Prepared> prepared;
 	private int preparedWidth;
 	private int preparedHeight;
-	// single thread = read before first save, saves stay in order
-	private final ExecutorService io = Executors.newSingleThreadExecutor(task -> {
-		Thread thread = new Thread(task, "Surveyor HUD");
-		thread.setDaemon(true);
-		return thread;
-	});
-	private boolean loaded;
-	// io thread only. null = no backup, ".bad" unreadable, ".old" older format
-	private String backupSuffix;
+	// single thread = read before first save, saves stay in order. own thread so a save never waits behind sums
+	private final ExecutorService fileIo = thread("Surveyor HUD file");
+	private final ExecutorService sumsIo = thread("Surveyor HUD");
 	private boolean inMines;
 	private boolean inShaft;
-	private Path file;
+	private HudFile file;
 	private int tick;
 	private final TickRate tickRate = new TickRate();
+	private final TabListParser tabList = new TabListParser(TextPatterns.defaults());
+	// client thread. null = no widget, or a new world till the next tab list
+	private TabListParser.Pity pity;
 	private final PingTimer pingTimer = new PingTimer();
+	// drops line, redone when an input changes + a line wants it. client thread
+	private final Cached sessionDrops = new Cached();
+	private final Cached shaftDrops = new Cached();
+	private final Cached allTimeDrops = new Cached();
 
-	private record Prepared(Box box, List<String> lines, HudRenderer.Bounds bounds) {
+	private record Prepared(Box box, HudRenderer.Measured measured, HudRenderer.Bounds bounds) {
 	}
 
 	public LiveHud(LiveTracker tracker, LiveJournal journal, LiveMoney money, LiveSettings settings) {
@@ -148,23 +139,40 @@ public final class LiveHud {
 		this.journal = journal;
 		this.money = money;
 		this.settings = settings;
-		allTimeCoins = new RunningTotal<>("all-time coins", journal::entryCount, journal::firstEntry, journal::entries,
-				list -> MoneyStats.coins(list, money::value), list -> MoneyStats.coins(list, money::compute));
-		outsideAllTime = new RunningTotal<>("all-time outside coins", journal::miningCount, journal::firstMining, journal::mining,
-				list -> MoneyStats.outside(list, money::value), list -> MoneyStats.outside(list, this::ioOutside));
+		sums = new HudSums(new HudSums.Journal(journal::entryCount, journal::firstEntry, journal::entries, journal::miningCount,
+				journal::firstMining, journal::mining, journal::breakCount, journal::breaks),
+				new HudSums.Money(money::value, money::lines, money::compute, money::computeLines), sumsIo,
+				task -> Minecraft.getInstance().execute(task));
+	}
+
+	private static ExecutorService thread(String name) {
+		return Executors.newSingleThreadExecutor(task -> {
+			Thread thread = new Thread(task, name);
+			thread.setDaemon(true);
+			return thread;
+		});
+	}
+
+	public void onTabList(List<String> lines) {
+		pity = tabList.pity(lines);
+	}
+
+	// old island's number never lingers after a warp
+	public void onWorldChange() {
+		pity = null;
 	}
 
 	public void start(Minecraft client) {
-		file = DataFolder.in(client.gameDirectory.toPath()).resolve("hud.json");
-		CompletableFuture.supplyAsync(this::read, io).thenAccept(read -> client.execute(() -> loaded(read)));
+		file = new HudFile(DataFolder.in(client.gameDirectory.toPath()).resolve("hud.json"), fileIo);
+		file.load().thenAccept(read -> client.execute(() -> loaded(read)));
 	}
 
 	private void loaded(HudLayout read) {
-		loaded = true;
+		file.loaded();
 		if (read == null) return;
 		// editor changes made before the load win
 		if (!unchanged()) {
-			LOGGER.warn("Loaded {} after the HUD was changed in the editor; keeping the changes", file);
+			LOGGER.warn("Loaded {} after the HUD was changed in the editor; keeping the changes", file.path());
 			return;
 		}
 		layout = read;
@@ -175,68 +183,18 @@ public final class LiveHud {
 		return layout.toJson().equals(DEFAULT_JSON);
 	}
 
-	private HudLayout read() {
-		if (!Files.exists(file)) return null;
-		String json;
-		try {
-			json = Files.readString(file, StandardCharsets.UTF_8);
-		} catch (IOException e) {
-			// maybe just locked, keep it, first save backs it up
-			backupSuffix = ".bad";
-			LOGGER.warn("Could not read {}, using the default HUD", file, e);
-			return null;
-		}
-		try {
-			HudLayout layout = HudLayout.fromJson(json);
-			// older format or repaired hand edit, keep the original
-			if (!layout.toJson().equals(json)) backupSuffix = ".old";
-			return layout;
-		} catch (JsonParseException e) {
-			// else the next save overwrites a hand edit
-			try {
-				Path backup = Files.move(file, backupPath(".bad"));
-				LOGGER.warn("Could not read {}, moved it to {} and using the default HUD", file, backup, e);
-			} catch (IOException moveFailed) {
-				backupSuffix = ".bad";
-				LOGGER.warn("Could not read {} or move it away, using the default HUD", file, e);
-			}
-			return null;
-		}
-	}
-
-	private Path backupPath(String suffix) {
-		return file.resolveSibling("hud.json." + LocalDateTime.now().format(BACKUP_TIME) + suffix);
-	}
-
 	// client thread, after changing the layout
 	public void save() {
 		prepared = null;
-		// still loading, saving defaults would overwrite the file
-		if (file == null || (!loaded && unchanged())) return;
-		String json = layout.toJson();
-		Runnable write = () -> {
-			try {
-				if (backupSuffix != null && Files.exists(file)) {
-					Files.copy(file, backupPath(backupSuffix));
-					backupSuffix = null;
-				}
-				SafeWrite.write(file, json);
-			} catch (IOException e) {
-				LOGGER.error("Could not save the HUD to {}", file, e);
-			}
-		};
-		try {
-			io.execute(write);
-		} catch (RejectedExecutionException e) {
-			// game closing w/ editor open, io thread already gone
-			write.run();
-		}
+		if (file != null) file.save(layout.toJson(), this::unchanged);
 	}
 
+	// sums are thrown away, saves still run
 	public void close() {
-		io.shutdown();
+		sumsIo.shutdownNow();
+		fileIo.shutdown();
 		try {
-			if (!io.awaitTermination(5, TimeUnit.SECONDS)) LOGGER.warn("HUD save did not finish in time");
+			if (!fileIo.awaitTermination(5, TimeUnit.SECONDS)) LOGGER.warn("HUD save did not finish in time");
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
 		}
@@ -280,6 +238,10 @@ public final class LiveHud {
 
 	public void onTick(Minecraft client) {
 		if (++tick % REFRESH_TICKS != 0) return;
+		// gem icon glyphs come w/ hypixels pack, its models say if its loaded. models null until the loading overlay is gone
+		if (client.gui.overlay() == null) {
+			ItemNames.iconsLoaded(!(client.getModelManager().getItemModel(HYPIXEL_GEM) instanceof MissingItemModel));
+		}
 		long now = System.currentTimeMillis();
 		Shaft shaft = tracker.currentShaft();
 		inShaft = shaft != null;
@@ -312,31 +274,129 @@ public final class LiveHud {
 			}
 		}
 		if (lastEntry != last || revalue) lastShaftCoins = lastEntry == null ? null : MoneyStats.net(money.value(lastEntry));
-		allTimeCoins.update(client, changes);
+		sums.update(changes);
 		int miningCount = journal.miningCount();
 		if (newSession || revalue || miningCount != outsideCount || journal.firstMining() != outsideFirst) {
 			outsideSession = MoneyStats.outside(journal.sessionMining(session), money::value);
 			outsideCount = miningCount;
 			outsideFirst = journal.firstMining();
 		}
-		outsideAllTime.update(client, changes);
-		Totals thisShaft = shaft != null ? Totals.of(shaft, patterns) : lastShaft;
-		Double shaftCoins = shaft != null ? MoneyStats.net(money.live(shaft)) : lastShaftCoins;
+		Totals thisShaft = shaft != null ? shaftTotals(shaft, patterns) : lastShaft;
+		ShaftValue live = shaft != null ? money.live(shaft) : null;
+		Double shaftCoins = shaft != null ? MoneyStats.net(live) : lastShaftCoins;
 		int metalTier = money.settings().metalTierUsed().tier();
 		List<BreakEntry> breaks = journal.sessionBreaks(session, now);
 		long breakMillis = session == null ? 0 : Breaks.counted(breaks, session.id(), now);
+		HudSums.AllTime coins = sums.allTime();
+		// editor shows every pb in its value list
+		boolean wantPbs = pbsDrawn || client.gui.screen() instanceof EditHudScreen;
 		data = HudData.live(totals.withBreaks(breaks), allTime, thisShaft, journal.spawnTimerMillis(now), shaft, now, ShaftNames.defaults(),
 				metalTier)
 				.lastShaft(lastEntry, ShaftNames.defaults())
-				.money(new HudData.Money(shaftCoins, sessionCoins, allTimeCoins.total, allTimeCoins.upTo, outsideSession,
-						outsideAllTime.total,
-						session == null ? null : session.id(), breakMillis))
-				.extra(extra(session, shaft, now))
+				.money(new HudData.Money(shaftCoins, sessionCoins, coins.coins(), coins.shafts(), outsideSession, coins.outside(),
+						session == null ? null : session.id(), breakMillis, shaft != null ? shaftCoins : null))
+				.extra(extra(session, shaft, now, changes, wantPbs, metalTier))
+				.pity(pity)
+				.recentSpawns(recentSpawns())
 				.game(game(client, now));
+		drops(client, session, shaft, live, changes, miningCount);
 		prepared = null;
 	}
 
-	private HudData.Extra extra(Journal.Session session, Shaft shaft, long now) {
+	// cold changes dont bump the version, totals dont use it
+	private Totals shaftTotals(Shaft shaft, TextPatterns patterns) {
+		if (shaft != totalsShaft || shaft.version() != totalsVersion || shaftTotals == null) {
+			shaftTotals = Totals.of(shaft, patterns);
+			totalsShaft = shaft;
+			totalsVersion = shaft.version();
+		}
+		return shaftTotals;
+	}
+
+	private void drops(Minecraft client, Journal.Session session, Shaft shaft, ShaftValue live, int changes, int miningCount) {
+		boolean wantSession = false;
+		boolean wantShaft = false;
+		boolean wantAllTime = false;
+		// editor shows every box + line
+		boolean editing = client.gui.screen() instanceof EditHudScreen;
+		for (Box box : layout.boxes) {
+			if (!editing && !visible(box)) continue;
+			for (HudLayout.Line line : box.lines) {
+				HudValue value = line.hudValue();
+				if (value == null || !value.multiRow() || !editing && !line.shown) continue;
+				switch (line.range()) {
+					case SHAFT -> wantShaft = true;
+					case ALL_TIME -> wantAllTime = true;
+					default -> wantSession = true;
+				}
+			}
+		}
+		if (wantSession) {
+			data.drops(HudValue.Range.SESSION, sessionDrops.get(() -> {
+				DropList.Lines in = new DropList.Lines();
+				for (JournalEntry entry : sessionEntries) in.shaft(money.value(entry));
+				if (shaft != null) in.shaft(live);
+				for (MiningEntry entry : journal.sessionMining(session)) in.outside(money.lines(entry));
+				return list(in);
+			}, sessionEntries, session, shaft, live, changes, miningCount, journal.firstMining()));
+		}
+		if (wantShaft) {
+			data.drops(HudValue.Range.SHAFT, shaftDrops.get(() -> {
+				DropList.Lines in = new DropList.Lines();
+				if (shaft != null) in.shaft(live);
+				else if (lastEntry != null) in.shaft(money.value(lastEntry));
+				return list(in);
+			}, shaft, live, lastEntry, changes));
+		}
+		if (wantAllTime) {
+			DropList.Lines shafts = sums.allTime().shaftLines();
+			DropList.Lines outside = sums.allTime().outsideLines();
+			// shaft ur in counts like in all-time coins
+			if (shafts != null && outside != null) {
+				data.drops(HudValue.Range.ALL_TIME, allTimeDrops.get(() -> {
+					DropList.Lines in = shafts.plus(outside);
+					return list(shaft == null ? in : in.plus(new DropList.Lines().shaft(live)));
+				}, shafts, outside, shaft, live, changes));
+			}
+		}
+	}
+
+	private DropList list(DropList.Lines in) {
+		return in.list(money.settings().isIronman(), TextPatterns.defaults());
+	}
+
+	// inputs compared by identity, numbers by value
+	private static final class Cached {
+		private Object[] inputs;
+		private DropList list;
+
+		DropList get(Supplier<DropList> compute, Object... now) {
+			if (inputs == null || !same(inputs, now)) {
+				list = compute.get();
+				inputs = now;
+			}
+			return list;
+		}
+
+		private static boolean same(Object[] a, Object[] b) {
+			for (int i = 0; i < a.length; i++) {
+				if (a[i] != b[i] && !(a[i] instanceof Number && a[i].equals(b[i]))) return false;
+			}
+			return true;
+		}
+	}
+
+	private List<HudData.Spawn> recentSpawns() {
+		JournalEntry first = journal.firstEntry();
+		if (journal.entryCount() != spawnEntries || first != spawnFirst) {
+			recentSpawns = HudData.lastSpawns(journal.entries());
+			spawnEntries = journal.entryCount();
+			spawnFirst = first;
+		}
+		return recentSpawns;
+	}
+
+	private HudData.Extra extra(Journal.Session session, Shaft shaft, long now, int changes, boolean wantPbs, int metalTier) {
 		ShaftNames names = ShaftNames.defaults();
 		JournalEntry first = journal.firstEntry();
 		if (journal.entryCount() != dryEntries || first != dryFirst) {
@@ -355,130 +415,10 @@ public final class LiveHud {
 			todayDate = today;
 			todayEntries = journal.entryCount();
 		}
-		return new HudData.Extra(dry, sessionMillis, since, todayCount, pbTexts(inType));
-	}
-
-	private Map<String, String> pbTexts(String inType) {
-		List<PersonalBests.Def> list = settings.get().personalBests().list();
-		HudValue.personalBests(list);
-		JournalEntry first = journal.firstEntry();
-		MiningEntry firstMining = journal.firstMining();
-		int changes = money.changes();
-		// outside coins + breaks count in session pbs too
-		if (!pbPending && (!list.equals(pbList) || journal.entryCount() != pbEntries || changes != pbChanges || first != pbFirst
-				|| firstMining != pbFirstMining || journal.miningCount() != pbMining || journal.breakCount() != pbBreaks)) {
-			List<JournalEntry> all = journal.entries();
-			pbList = list;
-			pbEntries = all.size();
-			pbChanges = changes;
-			pbFirst = first;
-			pbFirstMining = firstMining;
-			pbMining = journal.miningCount();
-			pbBreaks = journal.breakCount();
-			computePbs(list, all, journal.mining(0), journal.breaks(), changes);
-		}
-		int tier = money.settings().metalTierUsed().tier();
-		Map<String, String> texts = new HashMap<>();
-		for (PersonalBests.Def def : list) {
-			PersonalBests.Result result = pbResults.get(PersonalBests.key(def));
-			if (result == null) continue;
-			String text = HudData.pbText(def, PersonalBests.live(def, result, inType), tier);
-			if (text != null) texts.put(PersonalBests.key(def), text);
-		}
-		return texts;
-	}
-
-	// each shaft valued once, uncached compute is safe on the io thread
-	private void computePbs(List<PersonalBests.Def> list, List<JournalEntry> all, List<MiningEntry> mining, List<BreakEntry> breaks,
-			int changes) {
-		Minecraft client = Minecraft.getInstance();
-		try {
-			pbPending = true;
-			CompletableFuture.supplyAsync(() -> {
-				if (changes != pbNetsChanges || pbNets.size() > all.size()) {
-					pbNets.clear();
-					pbNetsChanges = changes;
-				}
-				for (JournalEntry entry : all) pbNets.computeIfAbsent(entry, e -> MoneyStats.net(money.compute(e)));
-				List<JournalStats.SessionSummary> sessions = JournalStats.sessions(all, mining, breaks);
-				PersonalBests.Coins coins = PersonalBests.Coins.of(pbNets::get, this::ioOutside);
-				Map<String, PersonalBests.Result> results = new HashMap<>();
-				for (PersonalBests.Def def : list) results.put(PersonalBests.key(def), PersonalBests.best(def, all, sessions, coins));
-				return results;
-			}, io).whenComplete((results, error) -> client.execute(() -> {
-				pbPending = false;
-				if (error != null) LOGGER.warn("Could not work out personal bests", error);
-				else pbResults = results;
-			}));
-		} catch (RejectedExecutionException e) {
-			// closing
-			pbPending = false;
-		}
-	}
-
-	private Double ioOutside(MiningEntry entry) {
-		int changes = money.changes();
-		if (changes != ioOutsideChanges) {
-			ioOutside.clear();
-			ioOutsideChanges = changes;
-		}
-		if (!ioOutside.containsKey(entry)) ioOutside.put(entry, money.compute(entry));
-		return ioOutside.get(entry);
-	}
-
-	// list [0, upTo) at prices at, from first on. new ones added here, all again on the io thread (thousands = a hitch)
-	private final class RunningTotal<E> {
-		private final String what;
-		private final IntSupplier count;
-		private final Supplier<E> first;
-		private final IntFunction<List<E>> from;
-		// client thread, cached values
-		private final Function<List<E>, Double> cached;
-		// io thread, uncached
-		private final Function<List<E>, Double> compute;
-		private Double total;
-		private int upTo;
-		private int at = -1;
-		private E firstSeen;
-		private boolean pending;
-
-		RunningTotal(String what, IntSupplier count, Supplier<E> first, IntFunction<List<E>> from, Function<List<E>, Double> cached,
-				Function<List<E>, Double> compute) {
-			this.what = what;
-			this.count = count;
-			this.first = first;
-			this.from = from;
-			this.cached = cached;
-			this.compute = compute;
-		}
-
-		void update(Minecraft client, int changes) {
-			if (at == changes && firstSeen == first.get()) {
-				int now = count.getAsInt();
-				if (upTo < now) {
-					total = MoneyStats.plus(total, cached.apply(from.apply(upTo)));
-					upTo = now;
-				}
-				return;
-			}
-			if (pending) return;
-			List<E> all = from.apply(0);
-			try {
-				pending = true;
-				CompletableFuture.supplyAsync(() -> compute.apply(all), io).whenComplete((coins, error) -> client.execute(() -> {
-					pending = false;
-					if (error != null) LOGGER.warn("Could not add up {}", what, error);
-					else total = coins;
-					// on error too, else it retries every refresh
-					upTo = all.size();
-					at = changes;
-					firstSeen = all.isEmpty() ? null : all.getFirst();
-				}));
-			} catch (RejectedExecutionException e) {
-				// closing
-				pending = false;
-			}
-		}
+		List<PersonalBests.Def> pbs = settings.get().personalBests().list();
+		HudValue.personalBests(pbs);
+		sums.updatePbs(pbs, changes, wantPbs);
+		return new HudData.Extra(dry, sessionMillis, since, todayCount, sums.pbTexts(pbs, inType, metalTier));
 	}
 
 	private HudData.Game game(Minecraft client, long now) {
@@ -497,11 +437,20 @@ public final class LiveHud {
 			return;
 		}
 		toast = text;
-		toastAt = Util.getMillis();
+		toastClock = new ToastClock();
+		toastClock.tick(Util.getMillis(), false);
+	}
+
+	// toast hides + pauses while one is open
+	public static boolean modScreenOpen() {
+		return Minecraft.getInstance().gui.screen() instanceof ModScreen;
 	}
 
 	public void render(GuiGraphicsExtractor graphics, DeltaTracker delta) {
 		Minecraft client = Minecraft.getInstance();
+		boolean modScreen = modScreenOpen();
+		// before the early return, so mod screen time doesnt count
+		if (toast != null) toastClock.tick(Util.getMillis(), modScreen);
 		// editor draws the boxes itself
 		if (client.gui.hud.isHidden() || client.gui.screen() instanceof EditHudScreen) return;
 		int width = graphics.guiWidth();
@@ -511,15 +460,15 @@ public final class LiveHud {
 			preparedWidth = width;
 			preparedHeight = height;
 		}
-		for (Prepared box : prepared) HudRenderer.draw(graphics, client.font, box.box(), box.lines(), box.bounds());
-		drawToast(graphics, client, width, height);
+		for (Prepared box : prepared) HudRenderer.draw(graphics, client.font, box.box(), box.measured(), box.bounds());
+		if (!modScreen) drawToast(graphics, client, width, height);
 	}
 
 	private void drawToast(GuiGraphicsExtractor graphics, Minecraft client, int width, int height) {
 		if (toast == null) return;
 		SummarySettings summary = settings.get().summary();
 		long shown = Math.round(summary.seconds() * 1000 * client.gui.toastManager().getNotificationDisplayTimeMultiplier());
-		long age = Util.getMillis() - toastAt;
+		long age = toastClock.age();
 		if (!summary.movableToast() || age >= shown + TOAST_FADE) {
 			toast = null;
 			return;
@@ -536,10 +485,12 @@ public final class LiveHud {
 		List<Prepared> result = new ArrayList<>();
 		for (Box box : layout.boxes) {
 			if (!visible(box)) continue;
-			List<String> lines = HudBoxText.lines(box, data, false);
-			if (lines.isEmpty()) continue;
-			result.add(new Prepared(box, lines, HudRenderer.bounds(client.font, box, lines, width, height)));
+			List<HudRow> rows = HudBoxText.rows(box, data, false);
+			if (rows.isEmpty()) continue;
+			HudRenderer.Measured measured = HudRenderer.measure(client.font, box, rows);
+			result.add(new Prepared(box, measured, HudRenderer.bounds(measured, box, width, height)));
 		}
+		pbsDrawn = data.pbRead();
 		return result;
 	}
 }

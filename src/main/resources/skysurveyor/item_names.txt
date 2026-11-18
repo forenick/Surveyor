@@ -1,0 +1,38 @@
+# hypixels look for item names: rarity colour, gem icon, name, §8x count
+# rarity from hypixels item list (items.json), no tier there = COMMON
+
+# rarity -> § colour, hypixels own
+rarity COMMON       = f
+rarity UNCOMMON     = a
+rarity RARE         = 9
+rarity EPIC         = 5
+rarity LEGENDARY    = 6
+rarity MYTHIC       = d
+rarity DIVINE       = b
+rarity SPECIAL      = c
+rarity VERY_SPECIAL = c
+rarity UNOBTAINABLE = 4
+rarity SUPREME      = 4
+
+# gems until the item list loads (hypixel item list, 2026-11-17)
+quality Rough    = COMMON
+quality Flawed   = UNCOMMON
+quality Fine     = RARE
+quality Flawless = EPIC
+quality Perfect  = LEGENDARY
+
+# not items, colour from chat (corpse loot, BYE!)
+color Glacite Powder = b
+
+# gem icon glyphs, private use chars only hypixels pack draws. from recordings 2026-11-11 to 11-15
+# ruby + opal not seen yet, unknown = no icon
+icon Amber      = e015
+icon Amethyst   = e008
+icon Aquamarine = e00c
+icon Citrine    = e054
+icon Jade       = e053
+icon Jasper     = e00d
+icon Onyx       = e007
+icon Peridot    = e051
+icon Sapphire   = e003
+icon Topaz      = e01c

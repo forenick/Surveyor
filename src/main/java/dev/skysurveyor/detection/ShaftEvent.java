@@ -75,4 +75,8 @@ public sealed interface ShaftEvent {
 
 	record Supercraft(ItemCount result) implements ShaftEvent {
 	}
+
+	// "RARE DROP!" chat line, 0.27.3+
+	record RareDrop(ItemCount item) implements ShaftEvent {
+	}
 }

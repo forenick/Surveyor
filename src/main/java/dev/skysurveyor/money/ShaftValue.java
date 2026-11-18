@@ -26,6 +26,9 @@ import dev.skysurveyor.settings.MoneySettings.OwnMetal;
 public record ShaftValue(List<Line> lines, List<CorpseValue> corpses) {
 	// mining fiesta drop, own row bc its worth so much
 	public static final String GLOSSY = "Glossy Gemstone";
+	private static final String FLAWLESS = "Flawless ";
+	private static final String FINE = "Fine ";
+	private static final String GEMSTONE = " Gemstone";
 
 	public enum Part {
 		MINED("Mined gems"),
@@ -213,8 +216,20 @@ public record ShaftValue(List<Line> lines, List<CorpseValue> corpses) {
 	static Line minedGem(PriceRules v, MoneySettings settings, String gem, double fine) {
 		boolean flawless = !settings.isIronman() && settings.gemTier() == GemTier.FLAWLESS;
 		Double perFine = v.gemPerFine(gem);
-		return new Line(Part.MINED, (flawless ? "Flawless " : "Fine ") + gem + " Gemstone", flawless ? fine / GemYield.RECIPE : fine,
+		return new Line(Part.MINED, (flawless ? FLAWLESS : FINE) + gem + GEMSTONE, flawless ? fine / GemYield.RECIPE : fine,
 				perFine == null ? null : perFine * fine);
+	}
+
+	// gem of a minedGem line, null = not one
+	public static String minedGemName(Line line) {
+		if (line.part != Part.MINED || !line.item.endsWith(GEMSTONE)) return null;
+		String tier = line.item.startsWith(FLAWLESS) ? FLAWLESS : line.item.startsWith(FINE) ? FINE : null;
+		return tier == null ? null : line.item.substring(tier.length(), line.item.length() - GEMSTONE.length());
+	}
+
+	// a minedGem lines count back in fine
+	public static double minedFine(Line line) {
+		return line.item.startsWith(FLAWLESS) ? line.count * GemYield.RECIPE : line.count;
 	}
 
 	static Line drop(PriceRules v, String item, long count) {

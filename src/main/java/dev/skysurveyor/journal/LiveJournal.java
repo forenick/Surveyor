@@ -3,6 +3,7 @@ package dev.skysurveyor.journal;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -21,6 +22,7 @@ import dev.skysurveyor.money.LiveMoney;
 import dev.skysurveyor.settings.LiveSettings;
 import dev.skysurveyor.settings.SummarySettings;
 import dev.skysurveyor.util.DataFolder;
+import dev.skysurveyor.util.Guard;
 
 // summary only goes to local chat or a toast, nothing sent to the server
 public final class LiveJournal {
@@ -31,6 +33,7 @@ public final class LiveJournal {
 	private final Stash stash;
 	private final PriceCheck priceCheck = new PriceCheck();
 	private final Breaks breaks;
+	private final FirstRunHint firstRun = new FirstRunHint();
 	private final LiveMoney money;
 	private final LiveSettings settings;
 	// every .jsonl write + load, in order per file
@@ -71,12 +74,9 @@ public final class LiveJournal {
 
 	public void start(Minecraft client) {
 		Path folder = DataFolder.in(client.gameDirectory.toPath());
-		saved.load(client, new JournalFile(folder.resolve("journal.jsonl"), io), () -> {
-			journal.resume(entries);
-			resumeActivity();
-		});
+		saved.load(client, new JournalFile(folder.resolve("journal.jsonl"), io), () -> Resume.shafts(journal, breaks, entries, mining));
 		savedMining.load(client, new JsonLinesFile<>(folder.resolve("mining.jsonl"), MiningEntry.class, entry -> entry.items() != null, io),
-				this::resumeActivity);
+				() -> Resume.activity(journal, breaks, entries, mining));
 		savedStash.load(client, new JsonLinesFile<>(folder.resolve("stash.jsonl"), StashEntry.class, entry -> entry.grew() > 0, io), () -> {
 		});
 		savedBreaks.load(client, new JsonLinesFile<>(folder.resolve("breaks.jsonl"), BreakEntry.class, entry -> entry.to() > entry.from(), io),
@@ -87,14 +87,18 @@ public final class LiveJournal {
 	// client thread list + its file
 	private static final class Saved<T> {
 		final List<T> list = new ArrayList<>();
+		// read w/o failing, client thread
+		boolean complete;
 		private JsonLinesFile<T> file;
 
 		void load(Minecraft client, JsonLinesFile<T> file, Runnable after) {
 			this.file = file;
 			file.load().thenAccept(loaded -> client.execute(() -> {
 				list.addAll(0, loaded);
-				after.run();
+				complete = !file.failed();
 				LOGGER.info("Loaded {} entries from {}", loaded.size(), file.path());
+				// entries stay loaded if resuming throws
+				Guard.run("resume " + file.path().getFileName(), after);
 			}));
 		}
 
@@ -104,27 +108,18 @@ public final class LiveJournal {
 		}
 	}
 
-	// a restart mid session is a gap too
-	private void resumeActivity() {
-		Journal.Session session = journal.session();
-		if (session == null) return;
-		long last = -1;
-		if (!entries.isEmpty() && entries.getLast().sessionId() == session.id()) last = entries.getLast().endedAt();
-		if (!mining.isEmpty() && mining.getLast().sessionId() == session.id()) last = Math.max(last, mining.getLast().at());
-		if (last < 0) return;
-		journal.resumeActivity(session.id(), last);
-		breaks.resume(session.id(), last);
-	}
-
+	// each part guarded, one bug doesnt stop the others
 	public void onEvent(ShaftEvent event) {
 		boolean wasRunning = journal.searchRunning();
 		long now = System.currentTimeMillis();
-		journal.onEvent(event, now);
-		outside.onEvent(event, now);
-		stash.onEvent(event, now);
-		breaks.onEvent(event, now);
+		Guard.run("journal", () -> journal.onEvent(event, now));
+		Guard.run("outside mining", () -> outside.onEvent(event, now));
+		Guard.run("stash", () -> stash.onEvent(event, now));
+		Guard.run("breaks", () -> breaks.onEvent(event, now));
 		// prices age in a long shaft too
-		if (priceCheck.onEvent(event, now)) money.refresh();
+		Guard.run("price check", () -> {
+			if (priceCheck.onEvent(event, now)) money.refresh();
+		});
 		logTimerStart(wasRunning);
 	}
 
@@ -135,12 +130,19 @@ public final class LiveJournal {
 	public void onBlockHit() {
 		boolean wasRunning = journal.searchRunning();
 		long now = System.currentTimeMillis();
-		journal.onBlockHit(now);
-		outside.onBlockHit(now);
-		stash.onBlockHit(now);
-		priceCheck.onBlockHit(now);
-		breaks.onBlockHit(now);
+		Guard.run("journal block hit", () -> journal.onBlockHit(now));
+		Guard.run("outside mining block hit", () -> outside.onBlockHit(now));
+		Guard.run("stash block hit", () -> stash.onBlockHit(now));
+		Guard.run("price check block hit", () -> priceCheck.onBlockHit(now));
+		Guard.run("breaks block hit", () -> breaks.onBlockHit(now));
 		logTimerStart(wasRunning);
+	}
+
+	// local chat only, nothing sent. client thread
+	public void onTick(boolean inMines) {
+		if (firstRun.check(inMines, saved.complete, entries.size())) {
+			Minecraft.getInstance().gui.hud.getChat().addClientSystemMessage(Component.literal(FirstRunHint.TEXT));
+		}
 	}
 
 	public void onWorldChange() {
@@ -218,6 +220,11 @@ public final class LiveJournal {
 		return List.copyOf(paused);
 	}
 
+	// changes when the file loads (loaded entries go in front). client thread only
+	public BreakEntry firstBreak() {
+		return paused.isEmpty() ? null : paused.getFirst();
+	}
+
 	// saved + the one going on now, for live rates. client thread only
 	public List<BreakEntry> sessionBreaks(Journal.Session session, long now) {
 		if (session == null) return List.of();
@@ -246,23 +253,28 @@ public final class LiveJournal {
 
 	// keeps prices fresh while mining, fetches only whats stale
 	private void onMining(MiningEntry found) {
-		savedMining.add(money.withPrices(found));
+		savedMining.add(Guard.get("mining prices", () -> money.withPrices(found), () -> found.withPrices(Map.of())));
 		money.refresh();
 	}
 
 
 
+	// called from inside journal.onEvent, a throw here would leave the journal half done
 	private void onEntry(JournalEntry finished) {
-		JournalEntry entry = money.withPrices(finished);
+		JournalEntry entry = Guard.get("entry prices", () -> money.withPrices(finished), () -> finished.withPrices(Map.of()));
 		saved.add(entry);
-		entryListeners.forEach(listener -> listener.accept(entry));
+		Guard.each("entry listener", entryListeners, entry);
 		SummarySettings.Show show = settings.get().summary().show();
 		if (show.chat()) {
-			var chat = Minecraft.getInstance().gui.hud.getChat();
-			for (String line : SummaryText.lines(entry, journal.session(), money.value(entry), money.settings())) {
-				chat.addClientSystemMessage(Component.literal(line));
-			}
+			Guard.run("chat summary", () -> {
+				var chat = Minecraft.getInstance().gui.hud.getChat();
+				for (String line : SummaryText.lines(entry, journal.session(), money.value(entry), money.settings())) {
+					chat.addClientSystemMessage(Component.literal(line));
+				}
+			});
 		}
-		if (show.toast()) toasts.accept(ToastText.of(entry, journal.session(), money.value(entry), money.settings().isIronman()));
+		if (show.toast()) {
+			Guard.run("toast", () -> toasts.accept(ToastText.of(entry, journal.session(), money.value(entry), money.settings().isIronman())));
+		}
 	}
 }

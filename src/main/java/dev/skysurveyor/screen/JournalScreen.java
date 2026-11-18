@@ -5,18 +5,16 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.Consumer;
-import java.util.function.DoubleFunction;
-import java.util.function.DoubleUnaryOperator;
+import java.util.Objects;
 import java.util.function.IntConsumer;
 import java.util.function.UnaryOperator;
+import java.util.stream.IntStream;
 
 import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.BoxComponent;
@@ -33,42 +31,41 @@ import io.wispforest.owo.ui.core.CursorStyle;
 import io.wispforest.owo.ui.core.HorizontalAlignment;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
-import io.wispforest.owo.ui.core.ParentUIComponent;
 import io.wispforest.owo.ui.core.Positioning;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.Surface;
 import io.wispforest.owo.ui.core.UIComponent;
 import io.wispforest.owo.ui.core.VerticalAlignment;
+import io.wispforest.owo.ui.util.FocusHandler;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
 import dev.skysurveyor.Surveyor;
 import dev.skysurveyor.data.CorpseType;
+import dev.skysurveyor.data.ItemNames;
 import dev.skysurveyor.data.ShaftNames;
 import dev.skysurveyor.detection.CorpseLoot;
 import dev.skysurveyor.detection.ItemCount;
 import dev.skysurveyor.detection.TextPatterns;
 import dev.skysurveyor.hud.EditHudScreen;
-import dev.skysurveyor.hud.HudData;
 import dev.skysurveyor.journal.BreakEntry;
 import dev.skysurveyor.journal.Breaks;
+import dev.skysurveyor.journal.CorpseCounts;
+import dev.skysurveyor.journal.GemYield;
 import dev.skysurveyor.journal.Journal;
 import dev.skysurveyor.journal.JournalEntry;
 import dev.skysurveyor.journal.JournalStats;
 import dev.skysurveyor.journal.JournalStats.AllTime;
 import dev.skysurveyor.journal.JournalStats.CorpseCount;
 import dev.skysurveyor.journal.JournalStats.SessionSummary;
+import dev.skysurveyor.journal.LiveJournal;
 import dev.skysurveyor.journal.LootSummary;
 import dev.skysurveyor.journal.MiningEntry;
 import dev.skysurveyor.journal.OutsideMining;
-import dev.skysurveyor.journal.PersonalBests;
-import dev.skysurveyor.journal.PersonalBests.Def;
-import dev.skysurveyor.journal.PersonalBests.Per;
-import dev.skysurveyor.journal.PersonalBests.Stat;
 import dev.skysurveyor.journal.StatsRange;
 import dev.skysurveyor.journal.SummaryText;
 import dev.skysurveyor.money.ChartTips;
@@ -79,6 +76,7 @@ import dev.skysurveyor.money.PriceRules;
 import dev.skysurveyor.money.ShaftValue;
 import dev.skysurveyor.money.ShaftValue.Line;
 import dev.skysurveyor.money.ShaftValue.Part;
+import dev.skysurveyor.screen.TableColumns.Column;
 import dev.skysurveyor.settings.JournalSettings;
 import dev.skysurveyor.settings.JournalSettings.ChartType;
 import dev.skysurveyor.settings.MoneySettings;
@@ -86,49 +84,33 @@ import dev.skysurveyor.settings.Setting;
 import dev.skysurveyor.settings.SettingsList;
 import dev.skysurveyor.util.Format;
 
+import static dev.skysurveyor.screen.JournalTable.barCell;
+import static dev.skysurveyor.screen.JournalTable.cell;
+import static dev.skysurveyor.screen.JournalTable.tableRow;
+import static dev.skysurveyor.screen.ScreenParts.PANEL;
+import static dev.skysurveyor.screen.ScreenParts.applyTooltip;
+import static dev.skysurveyor.screen.ScreenParts.label;
+import static dev.skysurveyor.screen.ScreenParts.withTips;
+import static dev.skysurveyor.screen.ScreenParts.wrapped;
+
 // mc font only so pack fonts work
-public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
+public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements ModScreen {
 	private enum Tab { OVERVIEW, SESSION, STATS }
 
-	// the builders picks, saved on Done. original null = new, found again by value (list can change under it)
-	private static final class PbDraft {
-		final Def original;
-		Stat stat;
-		String shaft;
-		String best;
-		String name;
+	// stats tab w/o prices, per range. stats null = no shafts in it
+	private record StatsData(List<SessionSummary> sessions, List<JournalEntry> entries, List<MiningEntry> mining, AllTime stats,
+			JournalStats.Campfires campfires, Long recentSpawn, Long allTimeSpawn) {
+	}
 
-		PbDraft(Def original, Def def) {
-			this.original = original;
-			this.stat = def.type();
-			this.shaft = def.shaftOrDefault();
-			this.best = def.best();
-			this.name = def.name();
-		}
-
-		Def def() {
-			String typed = name == null || name.isBlank() ? null : name.strip();
-			return new Def(stat.id(), shaft, best, typed);
-		}
+	// the prices part, coins per session in oldestFirst order
+	private record MoneyData(StatsData of, int changes, MoneyStats money, double tax, List<Double> sessionCoins) {
 	}
 
 	private record ShiftTip(FlowLayout row, List<ClientTooltipComponent> normal, List<ClientTooltipComponent> shifted) {
 	}
 
-	// higher dropOrder hides first, 0 = never. extra = spare room handed out by fit()
-	private record Column(String key, String title, int width, boolean right, int dropOrder, int extra) {
-		Column(String key, String title, int width, boolean right, int dropOrder) {
-			this(key, title, width, right, dropOrder, 0);
-		}
-
-		int total() {
-			return width + extra;
-		}
-	}
-
-	private static final Surface PANEL = Surface.flat(0xE8141414).and(Surface.outline(0x30FFFFFF));
 	// opaque, it covers the table
-	private static final Surface OVERLAY = Surface.flat(0xFF141414).and(Surface.outline(0x50FFFFFF));
+	static final Surface OVERLAY = Surface.flat(0xFF141414).and(Surface.outline(0x50FFFFFF));
 	private static final Surface ROW_EVEN = Surface.flat(0x0DFFFFFF);
 	private static final Surface ROW_DAY = Surface.flat(0x1CFFFFFF);
 	private static final Surface ROW_HOVER = Surface.flat(HoverFlow.ROW);
@@ -137,27 +119,38 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 	private static final int BAR_GREEN = 0xCC55FF55;
 	private static final int BAR_GOLD = 0xCCFFAA00;
 	private static final int BAR_RED = 0xCCFF5555;
-	private static final Color GREEN = Color.ofArgb(BAR_GREEN);
-	private static final int ROW_HEIGHT = 12;
-	private static final int SPAWN_BAR = 26;
-	private static final int PADDING = 8;
+	private static final int ROW_HEIGHT = JournalTable.ROW_HEIGHT;
+	// display choices from here, not game numbers
+	static final int PADDING = 8;
 	private static final int GAP = 5;
 	private static final int COLUMN_PADDING = 6;
-	private static final int COLUMN_GAP = 6;
+	private static final int SECTION_GAP = 6;
 	// table padding + row padding + scrollbar
 	private static final int TABLE_CHROME = 10 + 4 + 4;
 	// in %, middle gets the rest
 	private static final int STATS_LEFT = 32;
 	private static final int STATS_RIGHT = 27;
-	private static final int AXIS_GAP = 3;
 	private static final int BAR_PADDING = 4;
 	private static final int BAR_GAP = 4;
 	private static final int ARROW_WIDTH = 16;
+	// least widths, measured past them
+	private static final int BAR_NAME = 62;
+	private static final int BAR_VALUE = 26;
+	private static final int BAR_ROW_GAP = 4;
+	// display choice: a narrower bar says nothing
+	private static final int BAR_MIN = 24;
 	private static final int INDENT = 6;
+	private static final int DOT = 3;
+	private static final int DOT_GAP = 2;
+	private static final int DOTS_MARGIN = 3;
+	private static final int ARROW_TEX = 3;
+	private static final int ARROW_PAD = 3;
+	private static final int ARROWS_WIDTH = 2 * (ARROW_TEX + 2 * ARROW_PAD);
 	// display choice
 	private static final int DAY_GAP = 8;
 	// display choice
 	private static final int LINE_GAP = 8;
+	private static final int FOOTER_GAP = 16;
 	// display choice: narrower and the session list folds to a strip
 	private static final int SIDE_MIN_WIDTH = 560;
 	private static final int STRIP_WIDTH = 12;
@@ -167,106 +160,133 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 	private static final Identifier STATS_ICON = Identifier.fromNamespaceAndPath("skysurveyor", "textures/gui/stats_icon.png");
 	static final Identifier SETTINGS_ICON = Identifier.fromNamespaceAndPath("skysurveyor", "textures/gui/settings_icon.png");
 	private static final Identifier MOVE_ICON = Identifier.fromNamespaceAndPath("skysurveyor", "textures/gui/move_icon.png");
-	private static final Identifier OPEN_ARROW = Identifier.fromNamespaceAndPath("skysurveyor", "textures/gui/open_arrow.png");
-	private static final Identifier PREV_ARROW = Identifier.fromNamespaceAndPath("skysurveyor", "textures/gui/prev_arrow.png");
+	// label grey, the dark ones got lost on the panel
+	private static final Identifier PREV_ARROW_LIGHT = Identifier.fromNamespaceAndPath("skysurveyor", "textures/gui/prev_arrow_light.png");
+	private static final Identifier OPEN_ARROW_LIGHT = Identifier.fromNamespaceAndPath("skysurveyor", "textures/gui/open_arrow_light.png");
 	private static final int RECENT_SESSIONS = 5;
-	// seconds
-	private static final double[] SPAWN_STEPS = {5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600};
-	// 1, 2, 5 x 10^n coins
-	private static final double[] COIN_STEPS = coinSteps();
 	private static final ZoneId ZONE = ZoneId.systemDefault();
 	private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT);
 	private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss", Locale.ROOT);
 	private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("MMM d", Locale.ENGLISH);
 	private static final DateTimeFormatter DAY_YEAR = DateTimeFormatter.ofPattern("MMM d yyyy", Locale.ENGLISH);
 
-	// width 0 = measured per table, see measured()
-	private static final List<Column> SHAFT_COLUMNS = List.of(
-			new Column("number", "#", 14, false, 5), new Column("shaft", "Shaft", 44, false, 0),
-			new Column("time", "Time", 32, false, 3), new Column("spawn", "Spawn", 66, false, 0),
-			new Column("inside", "Inside", 0, true, 2), new Column("corpses", "Corpses", 0, false, 0),
-			new Column("powder", "Powder", 44, true, 1), new Column("mined", "Mined", 40, true, 4),
-			new Column("coins", "Coins", 0, true, 0), new Column("campfire", "Campfire", 0, false, 6));
-	// by day: start time goes under the days date, no start column
-	private static final List<Column> SESSION_COLUMNS = List.of(
-			new Column("date", "Date", 56, false, 0), new Column("start", "Start", 32, false, 5),
-			new Column("length", "Length", 44, true, 4), new Column("shafts", "Shafts", 36, true, 0),
-			new Column("spawn", "Avg spawn", 78, false, 0), new Column("rate", "Per hour", 46, true, 3),
-			new Column("powder", "Powder", 58, true, 0), new Column("lapis", "Lapis", 36, true, 6),
-			new Column("coins", "Coins", 0, true, 0), new Column("coinRate", "Coins / h", 0, true, 2));
-
-	private final List<JournalEntry> entries;
-	private final List<MiningEntry> mining;
-	private final List<BreakEntry> breaks;
-	private final List<SessionSummary> sessions;
+	private List<JournalEntry> entries;
+	private List<MiningEntry> mining;
+	private List<BreakEntry> breaks;
+	private List<SessionSummary> sessions;
+	// what the snapshot was taken at, checked every tick
+	private int seenEntries;
+	private JournalEntry seenFirstEntry;
+	private int seenMining;
+	private MiningEntry seenFirstMining;
+	private int seenBreaks;
+	private BreakEntry seenFirstBreak;
+	private Long seenActive;
 	private final ItemIcons icons = new ItemIcons();
 	private final ShaftNames shaftNames = ShaftNames.defaults();
+	private final PbPanel pbs = new PbPanel(this);
+	private final JournalTable tables = new JournalTable(font, () -> rebuild(true));
 	private Tab tab;
 	// an older session opened from overview or stats, tab stays where it came from
 	private boolean viewing;
-	private final boolean current;
-	private final boolean started;
+	// session tab = only the one still going, started = going but no shaft yet
+	private boolean current;
+	private boolean started;
 	private boolean byDay = byDaySetting();
 	private int sessionIndex;
 	private int selected;
+	// next build scrolls the table to the selected shaft, not on kept-view rebuilds
+	private boolean revealSelected = true;
+	private KeptScroll tableScroll;
 	private FlowLayout root;
 	private int builtWidth;
 	private int builtHeight;
 	private FlowLayout detail;
+	private int detailInner;
 	private final List<FlowLayout> shaftRows = new ArrayList<>();
 	private final List<KeptScroll> scrolls = new ArrayList<>();
 	private final List<ShiftTip> shiftTips = new ArrayList<>();
 	// kept while the game runs, not saved
 	private static StatsRange statsRange = StatsRange.ALL_TIME;
-	// session table order, null = played order. kept while the game runs
-	private static String shaftSort;
-	private static boolean shaftSortFlipped;
+	// arrows + pb edits rebuild the tab, a new snapshot drops these
+	private final Map<StatsRange, StatsData> statsCache = new EnumMap<>(StatsRange.class);
+	private final Map<StatsRange, MoneyData> moneyCache = new EnumMap<>(StatsRange.class);
 	// display row -> entry index
 	private int[] shaftOrder = new int[0];
 	private int statsShafts;
 	private boolean shiftShown;
 	private int moneyChanges = Surveyor.MONEY.changes();
 	private boolean stripOpen;
-	// personal bests: edit mode, builder, drag
-	private boolean editingPbs;
-	private PbDraft draft;
-	// "value" or "shaft", null = none open
-	private String dropdown;
-	private UIComponent dropdownAnchor;
-	private TextBoxComponent nameField;
-	private TextBoxComponent homeField;
-	private LabelComponent previewLabel;
-	private String previewName;
-	// name doesnt change it, only the builder rebuild does
-	private PersonalBests.Result previewResult;
-	private List<JournalEntry> pbEntries = List.of();
-	private List<SessionSummary> pbSessions = List.of();
-	// builder + edit clicks rebuild the tab, same range + prices = same results
-	private final Map<Def, PersonalBests.Result> pbCache = new HashMap<>();
-	private List<Object> pbCacheKey = List.of();
-	private final List<FlowLayout> pbRows = new ArrayList<>();
-	private final List<FlowLayout> pbGrips = new ArrayList<>();
-	// the list the rows were built from, drag indexes point into it
-	private List<Def> pbShown = List.of();
-	private int pbDrag = -1;
-	private int pbGap = -1;
 	private KeptScroll sideScroll;
 	// list clicks keep the list where it was
 	private Double keptSideOffset;
 
-	// mining = outside shafts, breaks = gaps not counted per hour
-	public JournalScreen(List<JournalEntry> entries, List<MiningEntry> mining, List<BreakEntry> breaks) {
+	public JournalScreen() {
 		super(Component.literal("Shaft Journal"));
-		this.entries = List.copyOf(entries);
-		this.mining = List.copyOf(mining);
-		this.breaks = List.copyOf(breaks);
-		this.sessions = JournalStats.sessions(this.entries, this.mining, this.breaks);
-		selectLastShaft();
-		// session tab = only the one still going
-		Journal.Session active = Surveyor.JOURNAL.activeSession(System.currentTimeMillis());
-		current = active != null && !sessions.isEmpty() && sessions.getFirst().id() == active.id();
-		started = active != null && !current;
+		snapshot();
+		apply(JournalRefresh.opened(sessions, seenActive));
 		tab = current ? Tab.SESSION : Tab.OVERVIEW;
+	}
+
+	// mining = outside shafts, breaks = gaps not counted per hour
+	private void snapshot() {
+		LiveJournal journal = Surveyor.JOURNAL;
+		seenEntries = journal.entryCount();
+		seenFirstEntry = journal.firstEntry();
+		seenMining = journal.miningCount();
+		seenFirstMining = journal.firstMining();
+		seenBreaks = journal.breakCount();
+		seenFirstBreak = journal.firstBreak();
+		seenActive = activeId();
+		entries = journal.entries();
+		mining = journal.mining(0);
+		breaks = journal.breaks();
+		sessions = JournalStats.sessions(entries, mining, breaks);
+	}
+
+	private static Long activeId() {
+		Journal.Session active = Surveyor.JOURNAL.activeSession(System.currentTimeMillis());
+		return active == null ? null : active.id();
+	}
+
+	// ints + refs only, runs every tick
+	private boolean journalChanged() {
+		LiveJournal journal = Surveyor.JOURNAL;
+		return journal.entryCount() != seenEntries || journal.firstEntry() != seenFirstEntry || journal.miningCount() != seenMining
+				|| journal.firstMining() != seenFirstMining || journal.breakCount() != seenBreaks || journal.firstBreak() != seenFirstBreak
+				|| !Objects.equals(activeId(), seenActive);
+	}
+
+	// not under the players hands, caught up once it ends
+	private boolean busy() {
+		if (pbs.busy()) return true;
+		FocusHandler focus = root == null ? null : root.focusHandler();
+		UIComponent focused = focus == null ? null : focus.focused();
+		return focused instanceof TextBoxComponent && focused.hasParent();
+	}
+
+	// new snapshot, same tab + session + shaft, nothing indexes the old lists
+	private void takeChanges() {
+		List<SessionSummary> before = sessions;
+		JournalRefresh.View view = new JournalRefresh.View(sessionIndex, selected, viewing, current, started);
+		boolean sessionTab = !viewing && tab == Tab.SESSION;
+		JournalEntry shown = selectedEntry();
+		snapshot();
+		apply(JournalRefresh.after(before, sessions, view, seenActive, sessionTab));
+		// f.e. following the newest shaft
+		if (!Objects.equals(selectedEntry(), shown)) revealSelected = true;
+		pbs.forget();
+		statsCache.clear();
+		moneyCache.clear();
+		moneyChanges = Surveyor.MONEY.changes();
+	}
+
+	private void apply(JournalRefresh.View view) {
+		sessionIndex = view.sessionIndex();
+		selected = view.selected();
+		viewing = view.viewing();
+		current = view.current();
+		started = view.started();
 	}
 
 	@Override
@@ -274,20 +294,74 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		return OwoUIAdapter.create(this, UIContainers::verticalFlow);
 	}
 
-	// prices + settings load on the io thread after the journal opens
+	// prices + settings load on the io thread after the journal opens, the journal file too
 	@Override
 	public void tick() {
 		super.tick();
 		// caxton cancels onValueChange, poll
-		updatePreview();
+		pbs.updatePreview();
 		if (byDayChanged()) {
 			rebuild();
+			return;
+		}
+		if (journalChanged() && !busy()) {
+			takeChanges();
+			rebuild(true);
 			return;
 		}
 		int changes = Surveyor.MONEY.changes();
 		if (changes == moneyChanges) return;
 		moneyChanges = changes;
 		rebuild(true);
+	}
+
+	// esc goes back one step before it closes the journal, also while typing
+	@Override
+	public boolean keyPressed(KeyEvent key) {
+		if (key.isEscape() && stepBack()) return true;
+		if (arrowKey(key)) return true;
+		return super.keyPressed(key);
+	}
+
+	// left/right = the top bars < >, up/down = the shaft above or below. only our own screen
+	private boolean arrowKey(KeyEvent key) {
+		boolean sideways = key.isLeft() || key.isRight();
+		if (!sideways && !key.isUp() && !key.isDown()) return false;
+		// detail = a session view is built, not overview or stats
+		if (detail == null || busy() || stripOpen && width < SIDE_MIN_WIDTH) return false;
+		if (sideways) {
+			if (!viewing) return false;
+			int target = key.isLeft() ? sessionIndex + 1 : sessionIndex - 1;
+			if (target >= 0 && target < sessions.size()) showSession(target);
+			return true;
+		}
+		int position = -1;
+		for (int i = 0; i < shaftOrder.length; i++) {
+			if (shaftOrder[i] == selected) position = i;
+		}
+		int next = position < 0 ? (key.isDown() ? 0 : shaftOrder.length - 1) : position + (key.isDown() ? 1 : -1);
+		if (next < 0 || next >= shaftOrder.length || next == position) return true;
+		select(shaftOrder[next]);
+		if (tableScroll != null) tableScroll.reveal(next * ROW_HEIGHT, (next + 1) * ROW_HEIGHT, ROW_HEIGHT);
+		return true;
+	}
+
+	private boolean stepBack() {
+		// pb dropdown, builder, edit mode first
+		if (!viewing && tab == Tab.STATS && pbs.stepBack()) {
+			rebuild(true);
+			return true;
+		}
+		if (stripOpen && width < SIDE_MIN_WIDTH && (viewing || tab == Tab.SESSION && current)) {
+			stripOpen = false;
+		} else if (viewing) {
+			back();
+			return true;
+		} else {
+			return false;
+		}
+		rebuild(true);
+		return true;
 	}
 
 	@Override
@@ -308,8 +382,13 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 	@Override
 	protected void init() {
 		super.init();
-		// back from settings, before the 1st frame
-		if (root != null && (byDayChanged() || width != builtWidth || height != builtHeight)) rebuild();
+		// back from settings or edit hud, before the 1st frame
+		if (root == null) return;
+		boolean journal = journalChanged() && !busy();
+		if (journal) takeChanges();
+		if (byDayChanged()) rebuild();
+		// resize keeps the scrolls the new layout still has
+		else if (journal || width != builtWidth || height != builtHeight) rebuild(true);
 	}
 
 	// by day lives on the settings page now
@@ -336,17 +415,28 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		rebuild(false);
 	}
 
-	// keepScroll = same view w/ new prices, scrolls stay put
-	private void rebuild(boolean keepScroll) {
-		List<Double> offsets = keepScroll ? scrolls.stream().map(KeptScroll::offset).toList() : List.of();
+	// keepScroll = same view w/ new prices or size, scrolls stay put
+	void rebuild(boolean keepScroll) {
+		List<KeptScroll> before = keepScroll ? List.copyOf(scrolls) : List.of();
+		List<Double> offsets = before.stream().map(KeptScroll::offset).toList();
 		scrolls.clear();
 		buildScreen();
-		if (offsets.size() == scrolls.size()) {
+		if (before.isEmpty()) return;
+		List<String> tags = scrolls.stream().map(KeptScroll::tag).toList();
+		if (before.stream().map(KeptScroll::tag).toList().equals(tags)) {
 			for (int i = 0; i < offsets.size(); i++) scrolls.get(i).offset(offsets.get(i));
+			return;
+		}
+		// side list came or went (resize past SIDE_MIN_WIDTH): the tagged ones by tag
+		for (int i = 0; i < before.size(); i++) {
+			String tag = before.get(i).tag();
+			if (tag == null || tags.indexOf(tag) != tags.lastIndexOf(tag)) continue;
+			int now = tags.indexOf(tag);
+			if (now >= 0) scrolls.get(now).offset(offsets.get(i));
 		}
 	}
 
-	private KeptScroll scroll(Sizing horizontalSizing, Sizing verticalSizing, FlowLayout child) {
+	KeptScroll scroll(Sizing horizontalSizing, Sizing verticalSizing, FlowLayout child) {
 		KeptScroll scroll = new KeptScroll(horizontalSizing, verticalSizing, child);
 		scrolls.add(scroll);
 		return scroll;
@@ -356,19 +446,18 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		builtWidth = width;
 		builtHeight = height;
 		sideScroll = null;
-		pbRows.clear();
-		pbGrips.clear();
-		if (draft != null) keepTypedName();
-		nameField = null;
-		previewLabel = null;
+		pbs.beforeBuild();
 		root.clearChildren();
 		shaftRows.clear();
 		shiftTips.clear();
 		detail = null;
+		tableScroll = null;
 		root.child(topBar());
 		FlowLayout content = UIContainers.verticalFlow(Sizing.fill(100), Sizing.expand());
 		content.gap(GAP);
-		if (entries.isEmpty()) {
+		if (entries.isEmpty() && !viewing && tab == Tab.SESSION && started) {
+			noSession(content);
+		} else if (entries.isEmpty()) {
 			content.child(panelWith(label("§7No shafts yet. Each shaft shows up here after you leave it."),
 					Sizing.fill(100), Sizing.content()));
 		} else {
@@ -384,23 +473,38 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		}
 		root.child(content);
 		FlowLayout footer = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-		footer.gap(16);
+		footer.gap(FOOTER_GAP);
+		footerLines().forEach(line -> footer.child(label(line)));
+		root.child(footer);
+		if (!viewing && tab == Tab.STATS) pbs.buildBuilder(root);
+		revealSelected = false;
+	}
+
+	// nothing to explain w/o shafts
+	private List<String> footerLines() {
+		if (entries.isEmpty()) return List.of();
+		List<String> lines = new ArrayList<>();
+		boolean table = viewing || tab == Tab.SESSION && current || tab == Tab.OVERVIEW;
 		if (viewing) {
-			footer.child(label("§8Click a shaft for details"));
-			footer.child(label("§8< > other sessions"));
+			lines.add("§8Click a shaft for details");
+			lines.add("§8< > other sessions");
 		} else switch (tab) {
 			case SESSION -> {
-				if (current) footer.child(label("§8Click a shaft for details"));
+				if (current) lines.add("§8Click a shaft for details");
 			}
-			case OVERVIEW -> footer.child(label("§8Click a session to open it"));
+			case OVERVIEW -> lines.add("§8Click a session to open it");
 			case STATS -> {
-				footer.child(label("§8Counted from your own " + statsShafts + " shafts"));
-				footer.child(label("§8Hover a row for details"));
-				footer.child(label(editingPbs ? "§8Drag the grips to reorder" : "§8Click a PB to open it"));
+				if (statsShafts == 0) return List.of();
+				lines.add("§8Counted from your own " + statsShafts + " shafts");
+				lines.add("§8Hover a row for details");
+				lines.add(pbs.editing() ? "§8Drag the grips to reorder" : "§8Click a PB to open it");
 			}
 		}
-		root.child(footer);
-		if (draft != null && !viewing && tab == Tab.STATS) buildPbBuilder();
+		// one line only, left out when it doesnt fit
+		String hint = "§8Hover a column for what it counts";
+		int used = lines.stream().mapToInt(line -> font.width(line) + FOOTER_GAP).sum() + font.width(hint);
+		if (table && used <= width - 2 * PADDING) lines.add(hint);
+		return lines;
 	}
 
 	private FlowLayout topBar() {
@@ -481,8 +585,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		return new IconButton(text, icon, 9, 8, b -> {
 			viewing = false;
 			stripOpen = false;
-			draft = null;
-			dropdown = null;
+			pbs.closeBuilder();
 			tab = target;
 			if (target == Tab.SESSION) {
 				sessionIndex = 0;
@@ -525,26 +628,44 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		rebuild();
 	}
 
-	private void openShaft(JournalEntry entry) {
+	void openShaft(JournalEntry entry) {
 		for (int i = 0; i < sessions.size(); i++) {
 			int index = sessions.get(i).entries().indexOf(entry);
 			if (index >= 0) {
 				sessionIndex = i;
 				selected = index;
 				viewing = true;
+				revealSelected = true;
 				rebuild();
 				return;
 			}
 		}
 	}
 
-	private void openSession(SessionSummary session) {
+	void openSession(SessionSummary session) {
 		int index = sessions.indexOf(session);
 		if (index >= 0) showSession(index);
 	}
 
 	private void selectLastShaft() {
 		selected = sessions.isEmpty() ? -1 : sessions.get(sessionIndex).shafts() - 1;
+		revealSelected = true;
+	}
+
+	// selected row + a row of context in view, after the table is built
+	private void revealSelected() {
+		if (tableScroll == null) return;
+		for (int position = 0; position < shaftOrder.length; position++) {
+			if (shaftOrder[position] != selected) continue;
+			tableScroll.reveal(position * ROW_HEIGHT, (position + 1) * ROW_HEIGHT, ROW_HEIGHT);
+			return;
+		}
+	}
+
+	private JournalEntry selectedEntry() {
+		if (sessionIndex < 0 || sessionIndex >= sessions.size()) return null;
+		List<JournalEntry> shafts = sessions.get(sessionIndex).entries();
+		return selected >= 0 && selected < shafts.size() ? shafts.get(selected) : null;
 	}
 
 	private void buildSessionTab(FlowLayout content) {
@@ -558,7 +679,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		int tileWidth = (width - 2 * PADDING - 5 * GAP) / 6;
 		tiles.child(tile(tileWidth, "Shafts", "§f" + session.shafts()));
 		tiles.child(tile(tileWidth, "Avg spawn", spawn(session.averageSearchMillis())));
-		FlowLayout rateTile = tile(tileWidth, "Per hour", rate == null ? "§8-" : "§f" + Format.decimal(rate));
+		FlowLayout rateTile = tile(tileWidth, "Shafts / h", shaftRate(rate));
 		breakTooltip(rateTile, session.breakMillis());
 		tiles.child(rateTile);
 		tiles.child(tile(tileWidth, "Powder", "§b" + Format.number(session.powder())));
@@ -586,20 +707,28 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 				.mapToLong(JournalEntry::searchMillis).max().orElse(1);
 		int detailWidth = Math.clamp(width * (side ? 25 : 30) / 100, 140, 230);
 		List<Double> shaftCoins = session.entries().stream().map(e -> MoneyStats.net(Surveyor.MONEY.value(e))).toList();
-		List<Column> measured = measured(SHAFT_COLUMNS, "inside",
+		List<Column> measured = tables.measured(TableColumns.SHAFTS, "inside",
 				session.entries().stream().map(e -> Format.duration(e.durationMillis())).toList());
-		measured = measured(measured, "corpses", session.entries().stream().map(JournalScreen::corpses).toList());
+		measured = tables.measured(measured, "number", IntStream.rangeClosed(1, session.entries().size()).mapToObj(n -> "§8" + n).toList());
+		measured = tables.measured(measured, "shaft", session.entries().stream().map(JournalScreen::shaftCell).toList());
+		measured = tables.measured(measured, "spawn", tables.barCellWidth(session.entries().stream().map(e -> spawnCell(e.searchMillis())).toList()));
+		measured = tables.measured(measured, "powder", session.entries().stream().map(e -> "§f" + Format.number(JournalStats.powder(e))).toList());
+		List<String> minedTexts = new ArrayList<>(session.entries().stream().map(JournalScreen::minedText).toList());
+		if (!session.mining().isEmpty()) minedTexts.add(outsideMined(session));
+		measured = tables.measured(measured, "mined", minedTexts);
+		measured = tables.measured(measured, "time", session.entries().stream().map(e -> "§7" + clock(e.enteredAt())).toList());
+		measured = tables.measured(measured, "corpses", session.entries().stream().map(JournalScreen::corpses).toList());
 		List<String> coinTexts = new ArrayList<>(shaftCoins.stream().map(JournalScreen::coinText).toList());
 		if (!session.mining().isEmpty()) coinTexts.add(coinText(sessionMoney.outside()));
-		measured = measured(measured, "coins", coinTexts);
-		if (session.entries().stream().allMatch(e -> campfires(e) == 0)) {
+		measured = tables.measured(measured, "coins", coinTexts);
+		if (session.entries().stream().allMatch(e -> TableColumns.campfires(e) == 0)) {
 			measured = measured.stream().filter(c -> !c.key().equals("campfire")).toList();
 		} else {
-			measured = measured(measured, "campfire", session.entries().stream().map(JournalScreen::campfireCell).toList());
+			measured = tables.measured(measured, "campfire", session.entries().stream().map(JournalScreen::campfireCell).toList());
 		}
-		List<Column> columns = fit(measured, width - 2 * PADDING - 2 * GAP - sideWidth - detailWidth - TABLE_CHROME);
+		List<Column> columns = JournalTable.fit(measured, width - 2 * PADDING - 2 * GAP - sideWidth - detailWidth - TABLE_CHROME);
 		FlowLayout rows = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
-		shaftOrder = shaftOrder(session.entries(), shaftCoins);
+		shaftOrder = JournalTable.shaftOrder(session.entries(), shaftCoins, columns);
 		for (int position = 0; position < shaftOrder.length; position++) {
 			int i = shaftOrder[position];
 			JournalEntry entry = session.entries().get(i);
@@ -607,7 +736,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 			for (Column column : columns) {
 				row.child(switch (column.key()) {
 					case "number" -> cell(column, "§8" + (i + 1));
-					case "shaft" -> cell(column, "§b" + (entry.shaftId() == null ? "?" : entry.shaftId()));
+					case "shaft" -> cell(column, shaftCell(entry));
 					case "time" -> cell(column, "§7" + clock(entry.enteredAt()));
 					case "spawn" -> barCell(column, entry.searchMillis(), slowest);
 					case "inside" -> cell(column, "§f" + Format.duration(entry.durationMillis()));
@@ -633,13 +762,16 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 			note.margins(Insets.of(4, 0, 2, 0));
 			rows.child(note);
 		}
-		main.child(table(columns, rows, this::sortShafts));
+		main.child(table(columns, rows, true));
+		if (revealSelected) revealSelected();
 
 		detail = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
 		detail.gap(2);
+		detailInner = detailWidth - 2 * COLUMN_PADDING;
 		KeptScroll detailScroll = scroll(Sizing.fixed(detailWidth), Sizing.fill(100), detail);
+		detailScroll.tag("detail");
 		detailScroll.surface(PANEL);
-		detailScroll.padding(Insets.of(COLUMN_PADDING));
+		detailScroll.paddedWithBar(COLUMN_PADDING);
 		main.child(detailScroll);
 		// stack, so the open list takes no room from the table
 		StackLayout area = UIContainers.stack(Sizing.fill(100), Sizing.expand());
@@ -669,8 +801,8 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		FlowLayout row = tableRow();
 		int first = 0;
 		while (first < columns.size() && !columns.get(first).key().equals("mined") && !columns.get(first).key().equals("coins")) first++;
-		int span = -COLUMN_GAP;
-		for (Column column : columns.subList(0, first)) span += column.total() + COLUMN_GAP;
+		int span = -JournalTable.COLUMN_GAP;
+		for (Column column : columns.subList(0, first)) span += column.total() + JournalTable.COLUMN_GAP;
 		if (first > 0) {
 			LabelComponent name = label("§fOutside shafts");
 			name.horizontalSizing(Sizing.fixed(span));
@@ -689,10 +821,10 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		withTips(row, TooltipLines.of(CoinBreakdown.outside(money, tooltipHeight())));
 		Map<String, Double> fine = OutsideMining.fineGems(session.mining(), TextPatterns.defaults());
 		if (gems != null && !fine.isEmpty()) {
-			gems.text(Component.literal("§f" + Format.decimal(fine.values().stream().mapToDouble(Double::doubleValue).sum())));
+			gems.text(Component.literal(outsideMined(session)));
 			List<Component> tooltip = new ArrayList<>();
 			tooltip.add(Component.literal("§fGems mined outside shafts"));
-			fine.forEach((gem, count) -> tooltip.add(Component.literal(minedColor(gem) + Format.decimal(count) + " Fine " + gem)));
+			fine.forEach((gem, count) -> tooltip.add(Component.literal(ItemNames.current().styled(GemYield.fineName(gem), Format.decimal(count)))));
 			gems.tooltip(tooltip);
 		}
 		rows.child(row);
@@ -760,7 +892,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 			rows.child(row);
 		}
 		KeptScroll scroll = scroll(Sizing.fill(100), Sizing.expand(), rows);
-		scroll.scrollbarThiccness(3);
+		scroll.tag("side");
 		// a few rows of context above the open one, layout clamps it
 		double offset = keptSideOffset != null ? keptSideOffset : Math.max(0, (selectedY - 3) * ROW_HEIGHT);
 		keptSideOffset = null;
@@ -801,16 +933,6 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		return strip;
 	}
 
-	// measured bc pack fonts (caxton, bold) are wider. +1 slack
-	private List<Column> measured(List<Column> columns, String key, List<String> texts) {
-		return columns.stream().map(c -> {
-			if (!c.key().equals(key)) return c;
-			int widest = font.width(c.title());
-			for (String text : texts) widest = Math.max(widest, font.width(text));
-			return new Column(c.key(), c.title(), widest + 1, c.right(), c.dropOrder());
-		}).toList();
-	}
-
 	private void select(int index) {
 		selected = index;
 		for (int i = 0; i < shaftRows.size(); i++) shaftRows.get(i).surface(rowSurface(i, shaftOrder[i], false));
@@ -833,18 +955,25 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		detail.child(keyValue("Spawned in", entry.searchMillis() == null ? "§8not timed" : spawn(entry.searchMillis())));
 		detail.child(keyValue("Inside", "§f" + Format.duration(entry.durationMillis())));
 		if (!entry.mayhemBuffs().isEmpty()) detail.child(keyValue("Mayhem", "§e" + String.join(", ", entry.mayhemBuffs())));
-		String powder = "§b" + Format.number(JournalStats.powder(entry));
+		detail.child(keyValue("Powder", "§b" + Format.number(JournalStats.powder(entry))));
 		if (entry.corpsePowder() > 0 && entry.exitPowder() > 0) {
-			powder += " §8(" + Format.number(entry.corpsePowder()) + " corpses + " + Format.number(entry.exitPowder()) + " exit)";
+			String corpses = "§8" + Format.number(entry.corpsePowder()) + " corpses";
+			String exit = "+ " + Format.number(entry.exitPowder()) + " exit";
+			// too wide: split at the +, not wherever the wrap lands
+			if (font.width(corpses + " " + exit) <= detailInner) {
+				detail.child(wrapped(corpses + " " + exit));
+			} else {
+				detail.child(wrapped(corpses));
+				detail.child(wrapped("§8" + exit));
+			}
 		}
-		detail.child(keyValue("Powder", powder));
-		if (campfires(entry) > 0) {
+		if (TableColumns.campfires(entry) > 0) {
 			String colds = colds(entry);
-			detail.child(keyValue("Campfires", "§f" + campfires(entry) + (colds == null ? "" : " §7at " + colds)));
+			detail.child(keyValue("Campfires", "§f" + TableColumns.campfires(entry) + (colds == null ? "" : " §7at " + colds)));
 		}
 		if (entry.coldAtExit() != null) detail.child(keyValue("Cold at exit", "§b" + entry.coldAtExit() + "❄"));
 
-		detail.child(section(lootTitle(entry.loots())));
+		detail.child(lootSection(entry.loots()));
 		LootSummary loot = LootSummary.of(entry.loots(), TextPatterns.defaults());
 		if (loot.gems() == null && loot.items().isEmpty()) {
 			detail.child(wrapped("§8No corpses looted"));
@@ -854,20 +983,20 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 			if (loot.gems() != null) {
 				List<Component> tooltip = new ArrayList<>();
 				tooltip.add(Component.literal("§fGemstones §7" + fine(loot.gems().fine()) + " Fine"));
-				for (ItemCount part : loot.gems().parts()) tooltip.add(Component.literal("§7" + Format.number(part.count()) + " " + part.item()));
+				for (ItemCount part : loot.gems().parts()) tooltip.add(Component.literal(ItemNames.current().styled(part.item(), Format.number(part.count()))));
 				// parts sorted, first = most common
 				grid.child(slot(loot.gems().parts().getFirst().item(), compact(loot.gems().fine()), tooltip));
 			}
 			for (ItemCount item : loot.items()) {
 				grid.child(slot(item.item(), Format.number(item.count()),
-						List.of(Component.literal("§f" + item.item()), Component.literal("§7× " + Format.number(item.count())))));
+						List.of(Component.literal(ItemNames.current().styled(item.item(), Format.number(item.count()))))));
 			}
 			detail.child(grid);
 		}
 
 		if (entry.gems() != null) {
 			detail.child(section("Gems mined"));
-			detail.child(wrapped(minedColor(entry.gems().gem()) + minedGems(entry)));
+			detail.child(wrapped(ItemNames.current().styled(GemYield.fineName(entry.gems().gem()), Format.decimal(entry.gems().fineEquivalent()))));
 			if (entry.pristineProcs() > 0) detail.child(wrapped("§8" + entry.pristineProcs() + " pristine procs"));
 		} else if (entry.metal() == null) {
 			// metal shafts skip the empty gems section
@@ -876,7 +1005,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		}
 		if (entry.metal() != null) {
 			detail.child(section("Metal mined"));
-			detail.child(wrapped(minedColor(entry.metal().metal()) + entry.metal().text(Surveyor.MONEY.settings().metalTierUsed().tier())));
+			detail.child(wrapped(entry.metal().styledText(Surveyor.MONEY.settings().metalTierUsed().tier(), ItemNames.current())));
 		}
 		coinsSection(entry, value);
 	}
@@ -906,7 +1035,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 			List<Component> tooltip = new ArrayList<>();
 			tooltip.add(Component.literal("§f" + part.displayName()));
 			for (Line line : lines) {
-				tooltip.add(Component.literal("§7" + CoinBreakdown.count(line.part(), line.item(), line.count()) + " " + line.item() + "  "
+				tooltip.add(Component.literal(ItemNames.current().styled(line.item(), CoinBreakdown.count(line.part(), line.item(), line.count())) + "  "
 						+ (PriceRules.free(settings, part, line.item()) ? "§8used" : line.coins() == null ? CoinBreakdown.noPrice(ironman) : CoinBreakdown.coins(line.coins()))));
 			}
 			String total = used ? "§7" + Math.round(lines.stream().mapToDouble(Line::count).sum()) + " used"
@@ -933,7 +1062,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 							default -> "at insta-buy";
 						}),
 						Component.literal("§8Change it in Settings"));
-		withTooltip(heading, how);
+		withTips(heading, ScreenParts.tips(how));
 		entry.savedKeys().forEach((key, count) -> detail.child(wrapped("§7" + count + " " + key + (count == 1 ? "" : "s") + " saved by Resourceful")));
 		int unpriced = value.unpriced().size();
 		if (unpriced > 0) detail.child(wrapped(CoinBreakdown.unpriced(unpriced, ironman)));
@@ -944,16 +1073,11 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 
 	// cold at use, count for shafts from before 0.22.0 or when some werent used
 	private static String campfireCell(JournalEntry entry) {
-		int count = campfires(entry);
+		int count = TableColumns.campfires(entry);
 		if (count == 0) return "§8-";
 		String colds = colds(entry);
 		if (colds == null) return "§f" + count;
 		return count > entry.campfireColds().size() ? "§f" + count + " §7at " + colds : colds;
-	}
-
-	// placed or used, whichever saw more
-	private static int campfires(JournalEntry entry) {
-		return Math.max(entry.campfiresAt().size(), entry.campfireColds() == null ? 0 : entry.campfireColds().size());
 	}
 
 	// null = no cold saved
@@ -964,16 +1088,33 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 	}
 
 	private static FlowLayout tipRow(String key, String value, List<Component> tooltip) {
-		return withTooltip(keyValue(key, value), tooltip);
+		return withTips(keyValue(key, value), ScreenParts.tips(tooltip));
 	}
 
-	private static String lootTitle(List<CorpseLoot> loots) {
-		if (loots.isEmpty()) return "Corpse loot";
+	// counts on the right, 1st letters when the full words dont fit
+	private FlowLayout lootSection(List<CorpseLoot> loots) {
+		String title = "Corpse loot";
+		if (loots.isEmpty()) return section(title);
 		Map<String, Integer> byType = new LinkedHashMap<>();
 		for (CorpseLoot loot : loots) byType.merge(loot.type(), 1, Integer::sum);
-		List<String> parts = new ArrayList<>();
-		byType.forEach((type, count) -> parts.add(count + " " + type));
-		return "Corpse loot (" + String.join(", ", parts) + ")";
+		List<String> full = new ArrayList<>();
+		List<String> letters = new ArrayList<>();
+		byType.forEach((type, count) -> {
+			full.add(count + " " + type);
+			letters.add(count + " " + type.charAt(0));
+		});
+		String counts = String.join(", ", full);
+		if (font.width(title) + SECTION_GAP + font.width(counts) > detailInner) counts = String.join(", ", letters);
+		FlowLayout section = section(null);
+		FlowLayout heading = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+		heading.gap(SECTION_GAP);
+		heading.child(label("§7" + title));
+		LabelComponent right = label("§8" + counts);
+		right.horizontalSizing(Sizing.expand());
+		right.horizontalTextAlignment(HorizontalAlignment.RIGHT);
+		heading.child(right);
+		section.child(heading);
+		return section;
 	}
 
 	private StackLayout slot(String name, String count, List<Component> tooltip) {
@@ -1038,10 +1179,35 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 				rateTexts.add(dayRate(day));
 			}
 		}
-		List<Column> measured = measured(SESSION_COLUMNS.stream().filter(c -> !byDay || !c.key().equals("start")).toList(),
+		List<Column> measured = tables.measured(TableColumns.SESSIONS.stream().filter(c -> !byDay || !c.key().equals("start")).toList(),
 				"coins", coinTexts);
-		measured = measured(measured, "coinRate", rateTexts);
-		List<Column> columns = fit(measured, width - 2 * PADDING - TABLE_CHROME);
+		measured = tables.measured(measured, "coinRate", rateTexts);
+		measured = tables.measured(measured, "rate", sessions.stream().map(s -> shaftRate(s.shaftsPerHour())).toList());
+		// day rows count too, by day the sessions go indented under the date
+		List<String> dates = new ArrayList<>(byDay ? days.stream().map(d -> "§f" + day(d.start())).toList()
+				: sessions.stream().map(s -> "§f" + day(s.start())).toList());
+		int indented = byDay ? INDENT + tables.widest(sessions.stream().map(s -> "§7" + clock(s.start())).toList()) : 0;
+		measured = tables.measured(measured, "date", Math.max(tables.widest(dates), indented));
+		measured = tables.measured(measured, "start", sessions.stream().map(s -> "§7" + clock(s.start())).toList());
+		List<String> lengths = new ArrayList<>(sessions.stream().map(s -> "§f" + Format.duration(s.lengthMillis())).toList());
+		List<String> shaftCounts = new ArrayList<>(sessions.stream().map(s -> "§f" + s.shafts()).toList());
+		List<String> powders = new ArrayList<>(sessions.stream().map(s -> "§b" + Format.number(s.powder())).toList());
+		List<String> sessionCounts = new ArrayList<>();
+		if (byDay) {
+			for (Day day : days) {
+				lengths.add("§f" + Format.duration(day.millis()));
+				shaftCounts.add("§f" + day.shafts());
+				powders.add("§b" + Format.number(day.powder()));
+				sessionCounts.add(daySessions(day));
+			}
+		}
+		measured = tables.measured(measured, "length", lengths);
+		measured = tables.measured(measured, "shafts", shaftCounts);
+		measured = tables.measured(measured, "spawn",
+				Math.max(tables.widest(sessionCounts), tables.barCellWidth(sessions.stream().map(s -> spawnCell(s.averageSearchMillis())).toList())));
+		measured = tables.measured(measured, "powder", powders);
+		measured = tables.measured(measured, "lapis", sessions.stream().map(s -> "§9" + s.looted(CorpseType.LAPIS.label())).toList());
+		List<Column> columns = JournalTable.fit(measured, width - 2 * PADDING - TABLE_CHROME);
 		FlowLayout rows = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
 		for (Day day : days) {
 			if (byDay) {
@@ -1051,7 +1217,6 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 			}
 			for (int i : day.sessions()) {
 				SessionSummary session = sessions.get(i);
-				Double rate = session.shaftsPerHour();
 				FlowLayout row = row(i, i);
 				for (Column column : columns) {
 					row.child(switch (column.key()) {
@@ -1060,7 +1225,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 						case "length" -> breakTooltip(cell(column, "§f" + Format.duration(session.lengthMillis())), session.breakMillis());
 						case "shafts" -> cell(column, "§f" + session.shafts());
 						case "spawn" -> barCell(column, session.averageSearchMillis(), slowest);
-						case "rate" -> cell(column, rate == null ? "§8-" : "§f" + Format.decimal(rate));
+						case "rate" -> cell(column, shaftRate(session.shaftsPerHour()));
 						case "powder" -> cell(column, "§b" + Format.number(session.powder()));
 						case "coins" -> cell(column, coinText(sessionCoins.get(i)));
 						case "coinRate" -> cell(column, rateText(coinRates.get(i)));
@@ -1075,19 +1240,18 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 				rows.child(row);
 			}
 		}
-		content.child(table(columns, rows, null));
+		content.child(table(columns, rows, false));
 	}
 
 	private FlowLayout dayRow(List<Column> columns, Day day) {
 		FlowLayout row = tableRow();
 		row.surface(ROW_DAY);
-		int count = day.sessions().size();
 		for (Column column : columns) {
 			row.child(switch (column.key()) {
 				case "date" -> cell(column, "§f" + day(day.start()));
 				case "length" -> breakTooltip(cell(column, "§f" + Format.duration(day.millis())), day.millis() - day.rateMillis());
 				case "shafts" -> cell(column, "§f" + day.shafts());
-				case "spawn" -> cell(column, "§7" + count + (count == 1 ? " session" : " sessions"));
+				case "spawn" -> cell(column, daySessions(day));
 				case "powder" -> cell(column, "§b" + Format.number(day.powder()));
 				case "coins" -> cell(column, coinText(day.coins()));
 				case "coinRate" -> cell(column, dayRate(day));
@@ -1095,6 +1259,11 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 			});
 		}
 		return row;
+	}
+
+	private static String daySessions(Day day) {
+		int count = day.sessions().size();
+		return "§7" + count + (count == 1 ? " session" : " sessions");
 	}
 
 	private static LabelComponent indented(Column column, String text) {
@@ -1109,10 +1278,49 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		return rateText(perHour) + (perHour == null ? "" : " §8(avg)");
 	}
 
+	// same range + snapshot = same numbers. last 7 days can lose a session while open
+	private StatsData statsData() {
+		List<SessionSummary> rangeSessions = statsRange.sessions(sessions, System.currentTimeMillis());
+		StatsData cached = statsCache.get(statsRange);
+		if (cached != null && sameItems(cached.sessions(), rangeSessions)) return cached;
+		boolean all = statsRange == StatsRange.ALL_TIME;
+		List<JournalEntry> rangeEntries = all ? entries : StatsRange.flat(rangeSessions, SessionSummary::entries);
+		List<MiningEntry> rangeMining = StatsRange.flat(rangeSessions, SessionSummary::mining);
+		StatsData data = rangeEntries.isEmpty() ? new StatsData(rangeSessions, rangeEntries, rangeMining, null, null, null, null)
+				: new StatsData(rangeSessions, rangeEntries, rangeMining,
+						JournalStats.allTime(rangeEntries, rangeMining, StatsRange.flat(rangeSessions, SessionSummary::breaks)),
+						JournalStats.campfires(rangeEntries), JournalStats.recentAverage(sessions, RECENT_SESSIONS),
+						JournalStats.averageSearch(entries));
+		statsCache.put(statsRange, data);
+		return data;
+	}
+
+	// prices or money settings moved = new changes count
+	private MoneyData moneyData(StatsData data) {
+		int changes = Surveyor.MONEY.changes();
+		MoneyData cached = moneyCache.get(statsRange);
+		if (cached != null && cached.of() == data && cached.changes() == changes) return cached;
+		MoneyStats money = MoneyStats.of(data.entries(), Surveyor.MONEY::value, data.mining(), Surveyor.MONEY::lines,
+				Surveyor.MONEY.settings().isIronman());
+		List<Double> coins = data.stats().oldestFirst().stream().map(JournalScreen::sessionCoins).toList();
+		MoneyData fresh = new MoneyData(data, changes, money, tax(data.entries(), data.mining(), money), coins);
+		moneyCache.put(statsRange, fresh);
+		return fresh;
+	}
+
+	private static <T> boolean sameItems(List<T> a, List<T> b) {
+		if (a.size() != b.size()) return false;
+		for (int i = 0; i < a.size(); i++) {
+			if (a.get(i) != b.get(i)) return false;
+		}
+		return true;
+	}
+
 	private void buildStatsTab(FlowLayout content) {
 		boolean all = statsRange == StatsRange.ALL_TIME;
-		List<SessionSummary> rangeSessions = statsRange.sessions(sessions, System.currentTimeMillis());
-		List<JournalEntry> rangeEntries = all ? entries : StatsRange.flat(rangeSessions, SessionSummary::entries);
+		StatsData data = statsData();
+		List<SessionSummary> rangeSessions = data.sessions();
+		List<JournalEntry> rangeEntries = data.entries();
 		statsShafts = rangeEntries.size();
 		FlowLayout columns = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.fill(100));
 		columns.gap(GAP);
@@ -1126,12 +1334,11 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 			content.child(columns);
 			return;
 		}
-		List<MiningEntry> rangeMining = StatsRange.flat(rangeSessions, SessionSummary::mining);
-		AllTime stats = JournalStats.allTime(rangeEntries, rangeMining, StatsRange.flat(rangeSessions, SessionSummary::breaks));
-		MoneyStats money = MoneyStats.of(rangeEntries, Surveyor.MONEY::value, rangeMining, Surveyor.MONEY::lines,
-				Surveyor.MONEY.settings().isIronman());
+		AllTime stats = data.stats();
+		MoneyData moneyData = moneyData(data);
+		MoneyStats money = moneyData.money();
 
-		totals.child(coinsTotal(money, stats, beforeOutside(rangeSessions), tax(rangeEntries, rangeMining, money)));
+		totals.child(coinsTotal(money, stats, beforeOutside(rangeSessions), moneyData.tax()));
 		totals.child(keyValue("Powder", "§b" + Format.number(stats.powder())));
 		FlowLayout shafts = keyValue("Shafts", "§f" + stats.shafts());
 		shafts.margins(Insets.top(LINE_GAP));
@@ -1139,7 +1346,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		totals.child(keyValue("Sessions", "§f" + stats.sessions()));
 		long breakMillis = rangeSessions.stream().mapToLong(SessionSummary::breakMillis).sum();
 		totals.child(breakTooltip(keyValue("Time shafting", "§f" + Format.duration(stats.timeMillis())), breakMillis));
-		JournalStats.Campfires campfires = JournalStats.campfires(rangeEntries);
+		JournalStats.Campfires campfires = data.campfires();
 		if (campfires.placed() > 0) {
 			Double cold = campfires.averageCold();
 			totals.child(keyValue("Campfires", "§f" + campfires.placed()
@@ -1149,7 +1356,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		for (String type : stats.corpsesSeen().keySet()) {
 			totals.child(corpseRow(type, stats.looted().getOrDefault(type, 0), money, stats.drops().get(type)));
 		}
-		personalBests(totals, rangeEntries, rangeSessions);
+		pbs.addTo(totals, rangeEntries, rangeSessions);
 		columns.child(scrollColumn(Sizing.fill(STATS_LEFT), totals));
 
 		FlowLayout spawn = column();
@@ -1157,14 +1364,14 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		if (all) {
 			spawn.child(keyValue("All-time avg", stats.averageSearchMillis() == null ? "§8-"
 					: "§e" + Format.duration(stats.averageSearchMillis())));
-			Long recent = JournalStats.recentAverage(sessions, RECENT_SESSIONS);
+			Long recent = data.recentSpawn();
 			if (recent != null && stats.averageSearchMillis() != null && sessions.size() > RECENT_SESSIONS) {
 				spawn.child(keyValue("Last " + RECENT_SESSIONS + " sessions",
 						"§f" + Format.duration(recent) + change(recent, stats.averageSearchMillis())));
 			}
 		} else {
 			Long average = stats.averageSearchMillis();
-			Long allTime = JournalStats.averageSearch(entries);
+			Long allTime = data.allTimeSpawn();
 			spawn.child(keyValue("Avg", average == null ? "§8-"
 					: "§e" + Format.duration(average) + (allTime == null ? "" : change(average, allTime))));
 			spawn.child(keyValue("All-time avg", allTime == null ? "§8-" : "§f" + Format.duration(allTime)));
@@ -1173,11 +1380,16 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		spawn.child(chartSection("Avg spawn per session", journalSettings().spawnChart(),
 				step -> changeJournal(j -> j.withSpawnChart(j.spawnChart().next(step)))));
 		spawn.child(spawnChart(stats.oldestFirst(), stats.averageSearchMillis(), legend));
-		spawn.child(section("Corpse % per shaft"));
-		for (String type : stats.corpsesSeen().keySet()) {
+		spawn.child(section("Shafts with a corpse"));
+		List<String> corpseTypes = List.copyOf(stats.corpsesSeen().keySet());
+		List<String> corpseShares = corpseTypes.stream()
+				.map(type -> "§f" + Math.round(100.0 * stats.shaftsWithCorpse().getOrDefault(type, 0) / stats.shafts()) + "%").toList();
+		BarSizes corpseSizes = barSizes(corpseTypes, corpseShares, statsMiddleRoom());
+		for (int i = 0; i < corpseTypes.size(); i++) {
+			String type = corpseTypes.get(i);
 			int with = stats.shaftsWithCorpse().getOrDefault(type, 0);
-			FlowLayout row = barRow(CorpseType.color(type) + type, with / (double) stats.shafts(),
-					Math.round(100.0 * with / stats.shafts()) + "%", CorpseType.argb(type));
+			FlowLayout row = barRow(CorpseType.color(type) + type, with / (double) stats.shafts(), corpseShares.get(i), CorpseType.argb(type),
+					corpseSizes);
 			row.tooltip(List.of(Component.literal("§f" + type + " corpses"),
 					Component.literal("§7In " + with + " of " + stats.shafts() + " shafts"),
 					Component.literal("§7" + String.format(Locale.ROOT, "%.2f", stats.corpsesSeen().get(type) / (double) stats.shafts())
@@ -1187,17 +1399,24 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		spawn.child(chartSection("Coins / h per session", journalSettings().coinChart(),
 				step -> changeJournal(j -> j.withCoinChart(j.coinChart().next(step)))));
 		Double averageRate = money.total() == null ? null : JournalStats.perHour(money.total(), stats.timeMillis());
-		spawn.child(coinChart(stats.oldestFirst(), averageRate, money.total() != null, legend, stats.timeMillis()));
+		spawn.child(coinChart(stats.oldestFirst(), moneyData.sessionCoins(), averageRate, money.total() != null, legend, stats.timeMillis()));
 		columns.child(scrollColumn(Sizing.expand(), spawn));
 
 		FlowLayout odds = column();
 		odds.child(header("Shaft types seen"));
 		int typed = stats.typedShafts();
+		// both right column groups, so their bars line up
+		List<String> rightNames = new ArrayList<>();
+		stats.types().keySet().forEach(code -> rightNames.add(shaftNames.name(code)));
+		money.types().keySet().forEach(code -> rightNames.add(shaftNames.name(code)));
+		List<String> typeShares = stats.types().values().stream()
+				.map(variants -> "§f" + Math.round(100.0 * variants.values().stream().mapToInt(Integer::intValue).sum() / typed) + "%").toList();
+		BarSizes typeSizes = barSizes(rightNames, typeShares, statsRightRoom());
 		for (Map.Entry<String, Map<String, Integer>> type : stats.types().entrySet()) {
 			String name = shaftNames.name(type.getKey());
 			int total = type.getValue().values().stream().mapToInt(Integer::intValue).sum();
 			FlowLayout row = barRow("§f" + name, total / (double) typed,
-					Math.round(100.0 * total / typed) + "%", 0xFF000000 | shaftNames.rgb(type.getKey()));
+					"§f" + Math.round(100.0 * total / typed) + "%", 0xFF000000 | shaftNames.rgb(type.getKey()), typeSizes);
 			List<Component> tooltip = new ArrayList<>();
 			tooltip.add(Component.literal("§f" + name + " shafts §7" + total));
 			type.getValue().forEach((variant, count) -> {
@@ -1206,7 +1425,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 			row.tooltip(tooltip);
 			odds.child(row);
 		}
-		typeCoins(odds, money);
+		typeCoins(odds, money, typeSizes.name());
 		columns.child(scrollColumn(Sizing.fill(STATS_RIGHT), odds));
 		content.child(columns);
 	}
@@ -1230,25 +1449,26 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 	private FlowLayout corpseRow(String type, int looted, MoneyStats money, JournalStats.Drops drops) {
 		MoneyStats.CorpseCoins corpse = money.corpses().get(type);
 		String value = CorpseType.color(type) + looted;
-		FlowLayout row = keyValue(type, corpse == null ? value : value + " §7(" + CoinBreakdown.coins(corpse.each()) + " §7avg.)");
+		FlowLayout row = keyValue(type, corpse == null ? value : value + " §7(" + CoinBreakdown.coins(corpse.each()) + " §7avg)");
 		if (corpse == null && drops == null) return row;
 		return withTips(row, TooltipLines.of(CoinBreakdown.corpse(type, looted, corpse, drops, tooltipHeight(),
 				Surveyor.MONEY.settings().isIronman())));
 	}
 
 	// best avg first, bar = share of the coins all types made
-	private void typeCoins(FlowLayout column, MoneyStats money) {
+	private void typeCoins(FlowLayout column, MoneyStats money, int nameWidth) {
 		List<Map.Entry<String, MoneyStats.TypeCoins>> types = money.types().entrySet().stream()
 				.sorted(Comparator.comparingDouble((Map.Entry<String, MoneyStats.TypeCoins> e) -> -e.getValue().each())).toList();
 		if (types.isEmpty()) return;
 		column.child(section("Avg coins per shaft"));
 		double made = types.stream().mapToDouble(e -> Math.max(0, e.getValue().coins())).sum();
 		int valueWidth = types.stream().mapToInt(e -> font.width(CoinBreakdown.coins(e.getValue().each()))).max().orElse(0);
+		BarSizes sizes = new BarSizes(nameWidth, valueWidth, statsRightRoom());
 		for (Map.Entry<String, MoneyStats.TypeCoins> type : types) {
 			String name = shaftNames.name(type.getKey());
 			Double share = made > 0 ? Math.max(0, type.getValue().coins()) / made : null;
 			FlowLayout row = barRow(name, share == null ? 0 : share, CoinBreakdown.coins(type.getValue().each()),
-					0xFF000000 | shaftNames.rgb(type.getKey()), valueWidth);
+					0xFF000000 | shaftNames.rgb(type.getKey()), sizes);
 			column.child(withTips(row, TooltipLines.of(CoinBreakdown.shaftType(name, type.getValue(), share,
 					v -> capitalized(ShaftNames.variantName(v))))));
 		}
@@ -1260,48 +1480,54 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		row.surface(Surface.flat(0x14FFFFFF));
 		row.padding(Insets.of(2, 2, 4, 1));
 		row.margins(Insets.bottom(4));
-		LabelComponent name = label("§7Range §e" + statsRange.displayName());
+		int count = StatsRange.values().length;
+		int widest = 0;
+		for (StatsRange range : StatsRange.values()) widest = Math.max(widest, font.width(range.displayName()));
+		// row padding 4 + 1
+		int room = statsLeftRoom() - 5;
+		RangeFit.Fit fit = RangeFit.fit(room, font.width("Range "), widest, dotsWidth(count), ARROWS_WIDTH);
+		LabelComponent name = label((fit == RangeFit.Fit.FULL ? "§7Range §e" : "§e") + statsRange.displayName());
 		name.horizontalSizing(Sizing.expand());
 		row.child(name);
-		row.child(cycler(statsRange.ordinal(), StatsRange.values().length, step -> statsRange = statsRange.next(step)));
-		List<Component> tooltip = List.of(Component.literal("§fTime range"),
+		row.child(cycler(statsRange.ordinal(), count, fit != RangeFit.Fit.NO_DOTS, step -> statsRange = statsRange.next(step)));
+		String title = fit == RangeFit.Fit.FULL ? "§fTime range" : "§fRange §e" + statsRange.displayName();
+		List<Component> tooltip = List.of(Component.literal(title),
 				Component.literal("§7Which sessions the whole Stats tab counts"),
 				Component.literal("§8Click the arrows to cycle"));
 		applyTooltip(row, tooltip);
 		return row;
 	}
 
-	private static void applyTooltip(UIComponent component, List<Component> tooltip) {
-		component.tooltip(tooltip);
-		if (component instanceof ParentUIComponent parent) {
-			for (UIComponent child : parent.children()) applyTooltip(child, tooltip);
-		}
-	}
-
 	// dots show where u are, arrows wrap around
 	private FlowLayout cycler(int index, int count, IntConsumer step) {
+		return cycler(index, count, true, step);
+	}
+
+	private FlowLayout cycler(int index, int count, boolean withDots, IntConsumer step) {
 		FlowLayout cycler = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
 		cycler.verticalAlignment(VerticalAlignment.CENTER);
-		FlowLayout dots = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
-		dots.gap(2);
-		dots.margins(Insets.right(3));
-		for (int i = 0; i < count; i++) {
-			BoxComponent dot = UIComponents.box(Sizing.fixed(3), Sizing.fixed(3));
-			dot.fill(true);
-			dot.color(Color.ofArgb(i == index ? 0xFFFFFF55 : 0xFF555555));
-			dots.child(dot);
+		if (withDots) {
+			FlowLayout dots = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
+			dots.gap(DOT_GAP);
+			dots.margins(Insets.right(DOTS_MARGIN));
+			for (int i = 0; i < count; i++) {
+				BoxComponent dot = UIComponents.box(Sizing.fixed(DOT), Sizing.fixed(DOT));
+				dot.fill(true);
+				dot.color(Color.ofArgb(i == index ? 0xFFFFFF55 : 0xFF555555));
+				dots.child(dot);
+			}
+			cycler.child(dots);
 		}
-		cycler.child(dots);
-		cycler.child(cyclerArrow(PREV_ARROW, () -> step.accept(-1)));
-		cycler.child(cyclerArrow(OPEN_ARROW, () -> step.accept(1)));
+		cycler.child(cyclerArrow(PREV_ARROW_LIGHT, () -> step.accept(-1)));
+		cycler.child(cyclerArrow(OPEN_ARROW_LIGHT, () -> step.accept(1)));
 		return cycler;
 	}
 
 	// padding = bigger click area
 	private UIComponent cyclerArrow(Identifier texture, Runnable action) {
 		FlowLayout arrow = new HoverFlow(Sizing.content(), Sizing.content(), HoverFlow.SMALL);
-		arrow.padding(Insets.of(2, 2, 3, 3));
-		arrow.child(UIComponents.texture(texture, 0, 0, 3, 5, 3, 5).blend(true));
+		arrow.padding(Insets.of(2, 2, ARROW_PAD, ARROW_PAD));
+		arrow.child(UIComponents.texture(texture, 0, 0, ARROW_TEX, 5, ARROW_TEX, 5).blend(true));
 		arrow.mouseDown().subscribe((event, doubleClick) -> {
 			action.run();
 			rebuild(true);
@@ -1345,12 +1571,6 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		withTips(row, shiftShown ? tip.shifted() : tip.normal());
 	}
 
-	private static FlowLayout withTips(FlowLayout row, List<ClientTooltipComponent> tooltip) {
-		row.tooltip(tooltip);
-		row.children().forEach(child -> child.tooltip(tooltip));
-		return row;
-	}
-
 	@Override
 	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
 		boolean shift = minecraft.hasShiftDown();
@@ -1358,20 +1578,9 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 			shiftShown = shift;
 			for (ShiftTip tip : shiftTips) withTips(tip.row(), shift ? tip.shifted() : tip.normal());
 		}
-		// caxton: text set at 0 width can scroll 1st letter out, rehome next frame
-		if (homeField != null) {
-			homeField.moveCursorToEnd(false);
-			homeField.moveCursorToStart(false);
-			homeField = null;
-		}
+		pbs.rehome();
 		super.extractRenderState(graphics, mouseX, mouseY, delta);
-		drawPbDrag(graphics);
-	}
-
-	private static FlowLayout withTooltip(FlowLayout row, List<Component> tooltip) {
-		row.tooltip(tooltip);
-		row.children().forEach(child -> child.tooltip(tooltip));
-		return row;
+		pbs.drawDrag(graphics);
 	}
 
 	// shafts + outside
@@ -1390,6 +1599,10 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		return coinText(coins, null);
 	}
 
+	private static String shaftRate(Double rate) {
+		return rate == null ? "§8-" : "§f" + Format.decimal(rate);
+	}
+
 	// gray so only the totals are gold
 	private static String rateText(Double coins) {
 		return coinText(coins, "§7");
@@ -1402,476 +1615,49 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		return color == null ? CoinBreakdown.coins(coins) : color + Coins.signed(coins);
 	}
 
-	private List<Def> pbList() {
-		return Surveyor.SETTINGS.get().personalBests().list();
-	}
-
-	private void savePbs(List<Def> list) {
-		Surveyor.SETTINGS.change(s -> s.withPersonalBests(s.personalBests().withList(list)));
-	}
-
-	private static final PersonalBests.Coins PB_COINS = PersonalBests.Coins.of(entry -> MoneyStats.net(Surveyor.MONEY.value(entry)),
-			Surveyor.MONEY::value);
-
-	private PersonalBests.Result pbResult(Def def) {
-		return pbCache.computeIfAbsent(def, d -> PersonalBests.best(d, pbEntries, pbSessions, PB_COINS));
-	}
-
-	private void personalBests(FlowLayout totals, List<JournalEntry> entries, List<SessionSummary> sessions) {
-		pbEntries = entries;
-		pbSessions = sessions;
-		// both ends, so new shafts + loaded older ones count as a change
-		List<Object> cacheKey = Arrays.asList(entries.size(), entries.isEmpty() ? null : entries.getFirst(),
-				entries.isEmpty() ? null : entries.getLast(), sessions.size(), Surveyor.MONEY.changes());
-		if (!cacheKey.equals(pbCacheKey)) {
-			pbCache.clear();
-			pbCacheKey = cacheKey;
-		}
-		FlowLayout header = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
-		header.margins(Insets.vertical(4));
-		header.gap(3);
-		header.child(divider());
-		FlowLayout title = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-		title.verticalAlignment(VerticalAlignment.CENTER);
-		LabelComponent name = label("§7Personal bests");
-		name.horizontalSizing(Sizing.expand());
-		title.child(name);
-		title.child(textButton(editingPbs ? "§eDone" : "§7Edit", editingPbs ? "Stop editing" : "Add, remove or reorder personal bests", () -> {
-			editingPbs = !editingPbs;
-			rebuild(true);
-		}));
-		header.child(title);
-		totals.child(header);
-
-		List<Def> list = pbList();
-		pbShown = list;
-		ShaftNames names = ShaftNames.defaults();
-		for (Def def : list) {
-			PersonalBests.Result result = pbResult(def);
-			String key = PersonalBests.name(def, names);
-			// metal record only once u have metal shafts
-			if (!editingPbs && def.type() == Stat.SHAFT_METAL && result.value() == null && def.shaft() == null) continue;
-			if (editingPbs) {
-				totals.child(editRow(def, key, pbText(def, result, key)));
-				continue;
-			}
-			Runnable open = result.entry() != null ? () -> openShaft(result.entry())
-					: result.session() != null ? () -> openSession(result.session()) : null;
-			String target = result.entry() != null ? result.entry().shaftId() : result.session() != null ? sessionName(result.session()) : null;
-			totals.child(record(key, pbText(def, result, key), open, target));
-		}
-		if (editingPbs) {
-			FlowLayout buttons = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-			buttons.gap(6);
-			buttons.margins(Insets.top(3));
-			buttons.child(textButton("§a+ Add PB", "Make your own personal best", () -> {
-				draft = new PbDraft(null, new Def(Stat.SHAFT_COINS.id(), null, null, null));
-				rebuild(true);
-			}));
-			if (!list.equals(PersonalBests.DEFAULTS)) {
-				buttons.child(textButton("§7Reset", "Back to the default list", () -> {
-					savePbs(PersonalBests.DEFAULTS);
-					rebuild(true);
-				}));
-			}
-			totals.child(buttons);
-		}
-	}
-
-	// null result value = "-". same text as the hud line, plus colours
-	private String pbText(Def def, PersonalBests.Result result, String key) {
-		Stat stat = def.type();
-		if (stat == null || result.value() == null) return null;
-		int tier = Surveyor.MONEY.settings().metalTierUsed().tier();
-		String text = HudData.pbText(def, result, tier);
-		// scale 4: tier word would wrap the label to 3 lines
-		int room = (width - 2 * PADDING) * STATS_LEFT / 100 - 2 * COLUMN_PADDING - 20;
-		if (stat == Stat.SHAFT_METAL && font.width(key + " " + text) > room) text = result.entry().metal().amount(tier);
-		String color = switch (stat) {
-			case SHAFT_COINS, SESSION_COINS, SESSION_COIN_RATE -> Math.round(result.value()) < 0 ? "§c" : "§6";
-			case SHAFT_POWDER, SESSION_POWDER, SHAFT_COLD -> "§b";
-			case SHAFT_SPAWN, SESSION_SPAWN -> "§a";
-			case SHAFT_LAPIS -> "§9";
-			default -> "§f";
-		};
-		return color + text.replace(" avg", " §7avg").replace(" (longest", " §7(longest");
-	}
-
-	private FlowLayout editRow(Def def, String key, String value) {
-		FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-		row.gap(3);
-		row.verticalAlignment(VerticalAlignment.CENTER);
-		FlowLayout grip = UIContainers.horizontalFlow(Sizing.fixed(7), Sizing.fixed(9));
-		grip.surface(EditHudScreen.GRIP);
-		grip.cursorStyle(CursorStyle.MOVE);
-		grip.tooltip(Component.literal("§7Drag to move"));
-		row.child(grip);
-		pbGrips.add(grip);
-		FlowLayout name = new HoverFlow(Sizing.expand(), Sizing.content(), HoverFlow.ROW);
-		name.gap(4);
-		LabelComponent keyLabel = label("§7" + key);
-		keyLabel.horizontalSizing(Sizing.expand());
-		name.child(keyLabel);
-		name.child(label(value == null ? "§8-" : value));
-		applyTooltip(name, List.of(Component.literal("§7Click to change it")));
-		name.mouseDown().subscribe((event, doubleClick) -> {
-			draft = new PbDraft(def, def);
-			rebuild(true);
-			return true;
-		});
-		row.child(name);
-		row.child(textButton("§c×", "Remove", () -> {
-			List<Def> list = new ArrayList<>(pbList());
-			if (list.remove(def)) savePbs(list);
-			rebuild(true);
-		}));
-		pbRows.add(row);
-		return row;
-	}
-
-	private FlowLayout textButton(String text, String tip, Runnable action) {
-		FlowLayout button = new HoverFlow(Sizing.content(), Sizing.content(), HoverFlow.SMALL);
-		button.padding(Insets.of(1, 1, 2, 2));
-		button.child(label(text));
-		applyTooltip(button, List.of(Component.literal("§7" + tip)));
-		button.mouseDown().subscribe((event, doubleClick) -> {
-			action.run();
-			return true;
-		});
-		return button;
-	}
-
-	private void buildPbBuilder() {
-		ShaftNames names = ShaftNames.defaults();
-		Def def = draft.def();
-		boolean streak = draft.stat.per() == Per.STREAK;
-		FlowLayout dim = UIContainers.horizontalFlow(Sizing.fixed(width), Sizing.fixed(height));
-		dim.positioning(Positioning.absolute(-PADDING, -PADDING));
-		dim.surface(Surface.flat(0x99000000));
-		dim.mouseDown().subscribe((event, doubleClick) -> {
-			if (dropdown != null) dropdown = null;
-			else draft = null;
-			rebuild(true);
-			return true;
-		});
-		root.child(dim);
-
-		int cardWidth = Math.min(250, width - 2 * PADDING);
-		FlowLayout card = UIContainers.verticalFlow(Sizing.fixed(cardWidth), Sizing.content());
-		card.surface(OVERLAY);
-		card.padding(Insets.of(6));
-		card.gap(3);
-		card.positioning(Positioning.relative(50, 35));
-		// clicks on the card stay on it
-		card.mouseDown().subscribe((event, doubleClick) -> {
-			if (dropdown == null) return true;
-			dropdown = null;
-			rebuild(true);
-			return true;
-		});
-		card.child(label("§f" + (draft.original == null ? "New personal best" : "Edit personal best")));
-
-		ButtonComponent value = choice(draft.stat.label() + " §7▾", false, b -> openDropdown("value", b));
-		value.horizontalSizing(Sizing.expand());
-		card.child(builderRow("Value", value));
-		if (!streak) {
-			Stat shaftTwin = draft.stat.in(Per.SHAFT);
-			Stat sessionTwin = draft.stat.in(Per.SESSION);
-			ButtonComponent perShaft = choice("Shaft", draft.stat.per() == Per.SHAFT, b -> setStat(shaftTwin));
-			perShaft.active(shaftTwin != null);
-			ButtonComponent perSession = choice("Session", draft.stat.per() == Per.SESSION, b -> setStat(sessionTwin));
-			perSession.active(sessionTwin != null);
-			card.child(builderRow("Per", perShaft, perSession));
-			boolean lowest = def.lowest();
-			card.child(builderRow("Best is", choice("Highest", !lowest, b -> setBest(false)), choice("Lowest", lowest, b -> setBest(true))));
-		}
-		String shaftText = draft.shaft == null ? "Any" : names.name(draft.shaft);
-		ButtonComponent shaft = choice(shaftText + " §7▾", false, b -> openDropdown("shaft", b));
-		shaft.horizontalSizing(Sizing.expand());
-		card.child(builderRow("Shaft", shaft));
-
-		String typed = nameField == null ? (draft.name == null ? "" : draft.name) : nameField.getValue();
-		nameField = UIComponents.textBox(Sizing.expand());
-		nameField.verticalSizing(Sizing.fixed(14));
-		nameField.setMaxLength(40);
-		nameField.text(typed);
-		nameField.setHint(Component.literal(PersonalBests.name(new Def(def.stat(), def.shaft(), def.best(), null), names))
-				.setStyle(EditBox.SEARCH_HINT_STYLE));
-		homeField = nameField;
-		card.child(builderRow("Name", nameField));
-
-		FlowLayout preview = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-		preview.surface(Surface.flat(0x80000000));
-		preview.padding(Insets.of(3, 3, 5, 5));
-		previewLabel = label("");
-		previewLabel.horizontalSizing(Sizing.fill(100));
-		previewName = null;
-		previewResult = null;
-		preview.child(previewLabel);
-		card.child(preview);
-		updatePreview();
-		LabelComponent hint = label("§8" + builderHint(def));
-		hint.horizontalSizing(Sizing.fill(100));
-		card.child(hint);
-
-		FlowLayout buttons = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-		buttons.horizontalAlignment(HorizontalAlignment.RIGHT);
-		buttons.gap(4);
-		buttons.margins(Insets.top(3));
-		buttons.child(choice("Cancel", false, b -> {
-			draft = null;
-			dropdown = null;
-			rebuild(true);
-		}));
-		buttons.child(choice("Done", false, b -> savePb()));
-		card.child(buttons);
-		root.child(card);
-		if (dropdown != null && dropdownAnchor != null) root.child(dropdownList());
-	}
-
-	private FlowLayout builderRow(String key, UIComponent... children) {
-		FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-		row.gap(3);
-		row.verticalAlignment(VerticalAlignment.CENTER);
-		LabelComponent label = label("§7" + key);
-		label.horizontalSizing(Sizing.fixed(52));
-		row.child(label);
-		for (UIComponent child : children) row.child(child);
-		return row;
-	}
-
-	private ButtonComponent choice(String text, boolean on, java.util.function.Consumer<ButtonComponent> action) {
-		ButtonComponent button = PackButton.button(Component.literal((on ? "§e" : "§f") + text), action);
-		button.verticalSizing(Sizing.fixed(14));
-		button.horizontalSizing(Sizing.fixed(font.width(text) + 12));
-		return button;
-	}
-
-	private static String builderHint(Def def) {
-		Stat stat = def.type();
-		if (stat.per() == Per.STREAK) return "Shafts since your last one, and your longest run without one";
-		if (stat.isRate()) {
-			return "Sessions with " + JournalStats.MIN_SHAFTS_FOR_RATE_RECORD + "+ shafts only";
-		}
-		if (def.shaft() == null) return stat.per() == Per.SHAFT ? "Every shaft counts" : "Every session counts";
-		return "Only " + ShaftNames.defaults().name(def.shaft()) + " shafts count, any variant";
-	}
-
-	private void setStat(Stat stat) {
-		if (stat == null) return;
-		draft.stat = stat;
-		draft.best = null;
-		if (stat == Stat.DRYSTREAK && draft.shaft == null) draft.shaft = PersonalBests.DEFAULT_DRY;
-		keepTypedName();
-		dropdown = null;
-		rebuild(true);
-	}
-
-	private void setBest(boolean lowest) {
-		draft.best = lowest == draft.stat.lowestByDefault() ? null : lowest ? Def.LOWEST : Def.HIGHEST;
-		keepTypedName();
-		rebuild(true);
-	}
-
-	private void keepTypedName() {
-		if (nameField != null) draft.name = nameField.getValue();
-	}
-
-	private void openDropdown(String which, UIComponent anchor) {
-		keepTypedName();
-		dropdown = which.equals(dropdown) ? null : which;
-		dropdownAnchor = anchor;
-		rebuild(true);
-	}
-
-	private FlowLayout dropdownList() {
-		FlowLayout items = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
-		if (dropdown.equals("value")) {
-			for (Per per : Per.values()) {
-				LabelComponent heading = label("§7" + per.displayName());
-				heading.margins(Insets.of(items.children().isEmpty() ? 0 : 3, 1, 1, 0));
-				items.child(heading);
-				for (Stat stat : PersonalBests.stats(per)) items.child(dropdownItem(stat.label(), stat == draft.stat, () -> setStat(stat)));
-			}
-		} else {
-			ShaftNames names = ShaftNames.defaults();
-			if (draft.stat.per() != Per.STREAK) items.child(dropdownItem("Any", draft.shaft == null, () -> setShaft(null)));
-			names.codes().stream().sorted(Comparator.comparing(names::name))
-					.forEach(code -> items.child(dropdownItem(names.name(code), code.equals(draft.shaft), () -> setShaft(code))));
-		}
-		int listWidth = Math.max(dropdownAnchor.width(), 90);
-		int top = dropdownAnchor.y() + dropdownAnchor.height();
-		int room = height - PADDING - top;
-		// owo cant content-size a vertical scroll, so rows + headings measured
-		int needed = items.children().stream().mapToInt(c -> c instanceof HoverFlow ? 11 : 13).sum();
-		KeptScroll scroll = scroll(Sizing.fixed(listWidth), Sizing.fixed(Math.max(40, Math.min(needed, room - 4))), items);
-		scroll.scrollbarThiccness(3);
-		FlowLayout panel = UIContainers.verticalFlow(Sizing.content(), Sizing.content());
-		panel.surface(OVERLAY);
-		panel.padding(Insets.of(2));
-		panel.child(scroll);
-		panel.positioning(Positioning.absolute(dropdownAnchor.x() - PADDING, top - PADDING));
-		return panel;
-	}
-
-	private FlowLayout dropdownItem(String text, boolean on, Runnable action) {
-		FlowLayout item = new HoverFlow(Sizing.fill(100), Sizing.fixed(11), HoverFlow.SMALL);
-		item.padding(Insets.horizontal(4));
-		item.verticalAlignment(VerticalAlignment.CENTER);
-		item.child(label((on ? "§e" : "§f") + text));
-		item.mouseDown().subscribe((event, doubleClick) -> {
-			action.run();
-			return true;
-		});
-		return item;
-	}
-
-	private void setShaft(String code) {
-		draft.shaft = code;
-		keepTypedName();
-		dropdown = null;
-		rebuild(true);
-	}
-
-	private void updatePreview() {
-		if (previewLabel == null || draft == null) return;
-		String typed = nameField == null ? draft.name : nameField.getValue();
-		if (typed != null && typed.equals(previewName)) return;
-		previewName = typed;
-		draft.name = typed;
-		Def def = draft.def();
-		String key = PersonalBests.name(def, ShaftNames.defaults());
-		if (previewResult == null) previewResult = pbResult(def);
-		String value = pbText(def, previewResult, key);
-		previewLabel.text(Component.literal("§7" + key + " " + (value == null ? "§8-" : value)));
-	}
-
-	private void savePb() {
-		keepTypedName();
-		List<Def> list = new ArrayList<>(pbList());
-		Def def = draft.def();
-		int index = draft.original == null ? -1 : list.indexOf(draft.original);
-		if (index < 0) list.add(def);
-		else list.set(index, def);
-		savePbs(list);
-		draft = null;
-		dropdown = null;
-		rebuild(true);
-	}
-
-	// drag a grip in edit mode, like the HUD editors lines
+	// drag a grip in pb edit mode
 	@Override
 	public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
-		if (editingPbs && draft == null && click.button() == 0) {
-			for (int i = 0; i < pbGrips.size(); i++) {
-				if (pbGrips.get(i).isInBoundingBox(click.x(), click.y())) {
-					pbDrag = i;
-					pbGap = i;
-					return true;
-				}
-			}
-		}
+		if (pbs.grab(click)) return true;
 		return super.mouseClicked(click, doubled);
 	}
 
 	@Override
 	public boolean mouseDragged(MouseButtonEvent drag, double dx, double dy) {
-		if (pbDrag < 0) return super.mouseDragged(drag, dx, dy);
-		pbGap = pbRows.size();
-		for (int i = 0; i < pbRows.size(); i++) {
-			FlowLayout row = pbRows.get(i);
-			if (drag.y() < row.y() + row.height() / 2.0) {
-				pbGap = i;
-				break;
-			}
-		}
+		if (!pbs.dragging()) return super.mouseDragged(drag, dx, dy);
+		pbs.dragTo(drag.y());
 		return true;
 	}
 
 	@Override
 	public boolean mouseReleased(MouseButtonEvent release) {
-		if (pbDrag < 0) return super.mouseReleased(release);
-		int from = pbDrag;
-		int gap = pbGap;
-		pbDrag = -1;
-		if (!pbList().equals(pbShown)) {
-			rebuild(true);
-		} else if (gap != from && gap != from + 1) {
-			List<Def> list = new ArrayList<>(pbList());
-			Def moved = list.remove(from);
-			list.add(gap > from ? gap - 1 : gap, moved);
-			savePbs(list);
-			rebuild(true);
-		}
+		if (!pbs.dragging()) return super.mouseReleased(release);
+		pbs.drop();
 		return true;
 	}
 
-	private void drawPbDrag(GuiGraphicsExtractor graphics) {
-		if (pbDrag < 0 || pbDrag >= pbRows.size()) return;
-		FlowLayout from = pbRows.get(pbDrag);
-		graphics.fill(from.x(), from.y(), from.x() + from.width(), from.y() + from.height(), 0x30FFFFFF);
-		if (pbGap == pbDrag || pbGap == pbDrag + 1) return;
-		FlowLayout last = pbRows.getLast();
-		int y = pbGap < pbRows.size() ? pbRows.get(pbGap).y() : last.y() + last.height();
-		graphics.fill(from.x(), y - 1, from.x() + from.width(), y + 1, 0xFFFFFF55);
-	}
-
-	private FlowLayout record(String key, String value, Runnable open, String target) {
-		FlowLayout row = open == null ? UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content())
-				: new HoverFlow(Sizing.fill(100), Sizing.content(), HoverFlow.ROW);
-		row.gap(4);
-		row.verticalAlignment(VerticalAlignment.TOP);
-		LabelComponent keyLabel = label("§7" + key);
-		keyLabel.horizontalSizing(Sizing.expand());
-		row.child(keyLabel);
-		row.child(label(value == null ? "§8-" : value));
-		if (open != null) {
-			FlowLayout arrow = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
-			arrow.padding(Insets.of(2, 0, 2, 1));
-			arrow.margins(Insets.top(-1));
-			arrow.child(UIComponents.texture(OPEN_ARROW, 0, 0, 3, 5, 3, 5).blend(true));
-			row.child(arrow);
-			applyTooltip(row, List.of(Component.literal("§7Open " + (target == null ? "shaft" : target))));
-			row.mouseDown().subscribe((event, doubleClick) -> {
-				open.run();
-				return true;
-			});
-		}
-		return row;
-	}
-
-	private static String sessionName(SessionSummary session) {
-		return "session from " + day(session.start()) + " " + clock(session.start());
-	}
-
-	private static double[] coinSteps() {
-		double[] steps = new double[3 * 13];
-		for (int i = 0; i < steps.length; i++) steps[i] = new double[] {1, 2, 5}[i % 3] * Math.pow(10, i / 3);
-		return steps;
-	}
-
-	private record Bar(SessionSummary session, double value, int argb, List<Component> tooltip) {
-	}
-
 	private FlowLayout spawnChart(List<SessionSummary> oldestFirst, Long average, String legend) {
-		List<Bar> bars = new ArrayList<>();
+		List<BarChart.Bar> bars = new ArrayList<>();
 		for (SessionSummary session : oldestFirst) {
 			if (session.averageSearchMillis() == null) continue;
-			bars.add(new Bar(session, session.averageSearchMillis() / 1000.0, BAR_GREEN, List.of(
+			bars.add(new BarChart.Bar(session, session.averageSearchMillis() / 1000.0, BAR_GREEN, List.of(
 					Component.literal("§f" + day(session.start()) + " " + clock(session.start())),
 					Component.literal("§7Avg spawn " + spawn(session.averageSearchMillis()) + " §7over " + session.timedSpawns() + " shafts"),
 					Component.literal("§8Click to open"))));
 		}
-		return barChart(bars, journalSettings().spawnChart(), 0xFF55FF55, SPAWN_STEPS, seconds -> axisLabel(Math.round(seconds)),
-				average == null ? null : average / 1000.0, 0xB0FFFF55, "§eYellow line§7: " + legend, ChartTips.spawn(oldestFirst),
-				"§8No timed spawns yet");
+		return barChart(bars, new BarChart.Look(journalSettings().spawnChart(), 0xFF55FF55, ChartAxis.SPAWN_STEPS,
+				seconds -> ChartAxis.seconds(Math.round(seconds)), average == null ? null : average / 1000.0, 0xB0FFFF55,
+				"§eYellow line§7: " + legend, ChartTips.spawn(oldestFirst), "§8No timed spawns yet"));
 	}
 
-	private FlowLayout coinChart(List<SessionSummary> oldestFirst, Double average, boolean priced, String legend, long totalMillis) {
-		List<Bar> bars = new ArrayList<>();
+	// coins = per session, same order
+	private FlowLayout coinChart(List<SessionSummary> oldestFirst, List<Double> coinsEach, Double average, boolean priced, String legend,
+			long totalMillis) {
+		List<BarChart.Bar> bars = new ArrayList<>();
 		List<ChartTips.SessionCoins> sessionCoins = new ArrayList<>();
-		for (SessionSummary session : oldestFirst) {
-			Double coins = sessionCoins(session);
+		for (int i = 0; i < oldestFirst.size(); i++) {
+			SessionSummary session = oldestFirst.get(i);
+			Double coins = coinsEach.get(i);
 			Double rate = coins == null ? null : session.perHour(coins, session.end());
 			sessionCoins.add(new ChartTips.SessionCoins(coins, rate));
 			if (rate == null) continue;
@@ -1882,308 +1668,63 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 			if (session.breakMillis() > 0) tip.add(Component.literal("§8Breaks left out: " + Format.duration(session.breakMillis())));
 			tip.add(Component.literal("§7Shafts §f" + session.shafts()));
 			tip.add(Component.literal("§8Click to open"));
-			bars.add(new Bar(session, rate, Math.round(rate) < 0 ? BAR_RED : BAR_GOLD, tip));
+			bars.add(new BarChart.Bar(session, rate, Math.round(rate) < 0 ? BAR_RED : BAR_GOLD, tip));
 		}
 		String empty = priced ? "§8Needs a session of " + JournalStats.MIN_RATE_MILLIS / 60_000 + "+ minutes" : "§8No prices yet";
-		return barChart(bars, journalSettings().coinChart(), 0xFFFFAA00, COIN_STEPS, JournalScreen::axisCoins, average, 0xB0FFFFFF,
-				"§fWhite line§7: " + legend, ChartTips.coins(sessionCoins, totalMillis), empty);
+		return barChart(bars, new BarChart.Look(journalSettings().coinChart(), 0xFFFFAA00, ChartAxis.COIN_STEPS, JournalScreen::axisCoins,
+				average, 0xB0FFFFFF, "§fWhite line§7: " + legend, ChartTips.coins(sessionCoins, totalMillis), empty));
 	}
 
 	private static String axisCoins(double coins) {
 		return Coins.whole(coins);
 	}
 
-	// up to 4 steps, bars under 0 hang down from the 0 line
-	private FlowLayout barChart(List<Bar> all, ChartType type, int lineArgb, double[] steps, DoubleFunction<String> axisText,
-			Double average, int averageArgb, String legend, List<String> averageTip, String empty) {
-		FlowLayout wrapper = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
-		if (all.isEmpty()) {
-			wrapper.child(label(empty));
-			return wrapper;
-		}
-		int chartHeight = Math.clamp(height / 3, 50, 110);
-		double highest = Math.max(0, all.stream().mapToDouble(Bar::value).max().orElse(0));
-		double lowest = Math.min(0, all.stream().mapToDouble(Bar::value).min().orElse(0));
-		double step = steps[steps.length - 1];
-		for (double candidate : steps) {
-			if (Math.ceil(highest / candidate) + Math.ceil(-lowest / candidate) <= 4) {
-				step = candidate;
-				break;
-			}
-		}
-		double top = Math.ceil(highest / step) * step;
-		double bottom = -Math.ceil(-lowest / step) * step;
-		if (top == bottom) top = step;
-		int axisWidth = 0;
-		for (double value = bottom; value <= top + step / 2; value += step) axisWidth = Math.max(axisWidth, font.width(axisText.apply(value)));
-		axisWidth += 2;
-
-		int plotWidth = Math.max(60, width - 2 * PADDING - 2 * GAP - width * STATS_LEFT / 100 - width * STATS_RIGHT / 100
-				- 2 * COLUMN_PADDING - axisWidth - AXIS_GAP);
-		// display choice: bars up to 24 wide, gap grows w/ them
-		int barWidth = Math.clamp((plotWidth - 2) * 4 / 5 / all.size(), 3, 24);
-		int barGap = Math.clamp(barWidth / 4, 2, 6);
-		int maxBars = Math.max(1, (plotWidth - 2) / (barWidth + barGap));
-		List<Bar> shown = all.size() > maxBars ? all.subList(all.size() - maxBars, all.size()) : all;
-
-		int plotTop = 4;
-		int base = chartHeight - 5;
-		int plotHeight = base - plotTop;
-		double span = top - bottom;
-		DoubleUnaryOperator y = value -> base - (int) (plotHeight * (value - bottom) / span);
-		FlowLayout chart = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.fixed(chartHeight));
-		chart.gap(AXIS_GAP);
-		StackLayout axis = UIContainers.stack(Sizing.fixed(axisWidth), Sizing.fixed(chartHeight));
-		StackLayout plot = UIContainers.stack(Sizing.expand(), Sizing.fixed(chartHeight));
-		for (double value = bottom; value <= top + step / 2; value += step) {
-			int lineY = (int) y.applyAsDouble(value);
-			LabelComponent tick = label("§8" + axisText.apply(value));
-			tick.horizontalSizing(Sizing.fixed(axisWidth));
-			tick.horizontalTextAlignment(HorizontalAlignment.RIGHT);
-			tick.positioning(Positioning.absolute(0, lineY - 4));
-			axis.child(tick);
-			plot.child(line(lineY, Math.abs(value) < step / 2 ? 0x40FFFFFF : 0x18FFFFFF));
-		}
-		int zero = (int) y.applyAsDouble(0);
-		if (type == ChartType.LINE) {
-			int[] xs = new int[shown.size()];
-			int[] ys = new int[shown.size()];
-			int[] dots = new int[shown.size()];
-			for (int i = 0; i < shown.size(); i++) {
-				xs[i] = 2 + i * (barWidth + barGap) + barWidth / 2;
-				ys[i] = (int) y.applyAsDouble(shown.get(i).value());
-				dots[i] = 0xFF000000 | shown.get(i).argb();
-			}
-			LinePlot line = new LinePlot(xs, ys, dots, lineArgb);
-			line.positioning(Positioning.absolute(0, 0));
-			plot.child(line);
-		}
-		for (int i = 0; i < shown.size(); i++) {
-			Bar bar = shown.get(i);
-			int end = (int) y.applyAsDouble(bar.value());
-			int barHeight = Math.max(1, Math.abs(zero - end));
-			BoxComponent box;
-			if (type == ChartType.LINE) {
-				// invisible column, easy to hover
-				box = new HoverFlow.Box(Sizing.fixed(barWidth + barGap), Sizing.fixed(base - plotTop + 1), HoverFlow.ROW);
-				box.color(Color.ofArgb(0));
-				box.positioning(Positioning.absolute(2 + i * (barWidth + barGap) - barGap / 2, plotTop));
-			} else {
-				box = new HoverFlow.Box(Sizing.fixed(barWidth), Sizing.fixed(barHeight), HoverFlow.SMALL);
-				box.color(Color.ofArgb(bar.argb()));
-				box.positioning(Positioning.absolute(2 + i * (barWidth + barGap), bar.value() < 0 ? zero + 1 : zero - barHeight));
-			}
-			box.fill(true);
-			box.tooltip(bar.tooltip());
-			box.mouseDown().subscribe((event, doubleClick) -> {
-				openSession(bar.session());
-				return true;
-			});
-			plot.child(box);
-		}
-		List<ClientTooltipComponent> averageTips = TooltipLines.of(averageTip);
-		if (average != null) {
-			int averageY = (int) y.applyAsDouble(Math.clamp(average, bottom, top));
-			plot.child(line(averageY, averageArgb));
-			if (!averageTips.isEmpty()) {
-				// 1 px line is too thin to hover
-				BoxComponent band = UIComponents.box(Sizing.fill(100), Sizing.fixed(5));
-				band.color(Color.ofArgb(0));
-				band.positioning(Positioning.absolute(0, averageY - 2));
-				band.tooltip(averageTips);
-				plot.child(band);
-			}
-		}
-		chart.child(axis);
-		chart.child(plot);
-		wrapper.child(chart);
-
-		StackLayout dates = UIContainers.stack(Sizing.fill(100), Sizing.fixed(10));
-		LabelComponent first = label("§8" + day(shown.getFirst().session().start()));
-		first.positioning(Positioning.absolute(axisWidth + AXIS_GAP + 2, 1));
-		dates.child(first);
-		if (shown.size() > 1) {
-			String lastText = "§8" + day(shown.getLast().session().start());
-			int lastX = axisWidth + AXIS_GAP + 2 + (shown.size() - 1) * (barWidth + barGap) + barWidth - font.width(lastText);
-			int firstEnd = axisWidth + AXIS_GAP + 2 + font.width("§8" + day(shown.getFirst().session().start()));
-			if (lastX > firstEnd + 6) {
-				LabelComponent last = label(lastText);
-				last.positioning(Positioning.absolute(lastX, 1));
-				dates.child(last);
-			}
-		}
-		wrapper.child(dates);
-		if (average != null) {
-			LabelComponent legendLabel = label(legend);
-			if (!averageTips.isEmpty()) legendLabel.tooltip(averageTips);
-			wrapper.child(legendLabel);
-		}
-		return wrapper;
+	// middle column inside its padding, a session per bar
+	private FlowLayout barChart(List<BarChart.Bar> bars, BarChart.Look look) {
+		int room = width - 2 * PADDING - 2 * GAP - width * STATS_LEFT / 100 - width * STATS_RIGHT / 100 - 2 * COLUMN_PADDING;
+		return BarChart.of(font, bars, look, room, height, this::openSession);
 	}
 
-	private static BoxComponent line(int y, int argb) {
-		BoxComponent line = UIComponents.box(Sizing.fill(100), Sizing.fixed(1));
-		line.fill(true);
-		line.color(Color.ofArgb(argb));
-		line.positioning(Positioning.absolute(0, y));
-		return line;
+	// name + value widths for one group of bar rows, room = the columns inner width
+	private record BarSizes(int name, int value, int room) {
 	}
 
-	private static String axisLabel(long seconds) {
-		if (seconds == 0) return "0";
-		if (seconds < 60) return seconds + "s";
-		return seconds % 60 == 0 ? seconds / 60 + "m" : seconds / 60 + "m " + seconds % 60 + "s";
+	private BarSizes barSizes(List<String> names, List<String> values, int room) {
+		return new BarSizes(TableColumns.atLeast(BAR_NAME, tables.widest(names)), TableColumns.atLeast(BAR_VALUE, tables.widest(values)), room);
 	}
 
-	private FlowLayout barRow(String name, double fraction, String value, int argb) {
-		return barRow(name, fraction, "§f" + value, argb, 26);
-	}
-
-	private FlowLayout barRow(String name, double fraction, String value, int argb, int valueWidth) {
+	// track left out when too narrow to say anything, name left + value right stay
+	private FlowLayout barRow(String name, double fraction, String value, int argb, BarSizes sizes) {
 		FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.fixed(ROW_HEIGHT));
 		row.verticalAlignment(VerticalAlignment.CENTER);
-		row.gap(4);
+		row.gap(BAR_ROW_GAP);
 		LabelComponent nameLabel = label("§f" + name);
-		nameLabel.horizontalSizing(Sizing.fixed(62));
+		boolean withTrack = sizes.room() - sizes.name() - sizes.value() - 2 * BAR_ROW_GAP >= BAR_MIN;
+		nameLabel.horizontalSizing(withTrack ? Sizing.fixed(sizes.name()) : Sizing.expand());
 		row.child(nameLabel);
+		if (withTrack) row.child(barTrack(fraction, argb));
+		LabelComponent valueLabel = label(value);
+		valueLabel.horizontalSizing(Sizing.fixed(sizes.value()));
+		valueLabel.horizontalTextAlignment(HorizontalAlignment.RIGHT);
+		row.child(valueLabel);
+		return row;
+	}
+
+	private static FlowLayout barTrack(double fraction, int argb) {
 		FlowLayout track = UIContainers.horizontalFlow(Sizing.expand(), Sizing.fixed(5));
 		track.surface(Surface.flat(0x14FFFFFF));
 		BoxComponent fill = UIComponents.box(Sizing.fill((int) Math.round(Math.min(1, fraction) * 100)), Sizing.fill(100));
 		fill.fill(true);
 		fill.color(Color.ofArgb(argb));
 		track.child(fill);
-		row.child(track);
-		LabelComponent valueLabel = label(value);
-		valueLabel.horizontalSizing(Sizing.fixed(valueWidth));
-		valueLabel.horizontalTextAlignment(HorizontalAlignment.RIGHT);
-		row.child(valueLabel);
-		return row;
+		return track;
 	}
 
-	private static List<Column> fit(List<Column> columns, int available) {
-		List<Column> visible = new ArrayList<>(columns);
-		while (visible.stream().mapToInt(Column::width).sum() + COLUMN_GAP * (visible.size() - 1) > available) {
-			Column drop = visible.stream().filter(c -> c.dropOrder() > 0)
-					.max(Comparator.comparingInt(Column::dropOrder)).orElse(null);
-			if (drop == null) break;
-			visible.remove(drop);
-		}
-		// wide screens (gui scale 2) spread the spare room, up to 2x each
-		int base = visible.stream().mapToInt(Column::width).sum();
-		int spare = available - base - COLUMN_GAP * (visible.size() - 1);
-		if (spare <= 0) return visible;
-		List<Column> spread = new ArrayList<>();
-		for (Column c : visible) {
-			int extra = Math.min(c.width(), spare * c.width() / base);
-			spread.add(new Column(c.key(), c.title(), c.width(), c.right(), c.dropOrder(), extra));
-		}
-		return spread;
-	}
-
-	// sort null = headers not clickable
-	private FlowLayout table(List<Column> columns, FlowLayout rows, Consumer<String> sort) {
-		FlowLayout table = UIContainers.verticalFlow(Sizing.expand(), Sizing.fill(100));
-		table.surface(PANEL);
-		table.padding(Insets.of(5));
-		FlowLayout header = tableRow();
-		for (Column column : columns) header.child(sort == null ? cell(column, "§7" + column.title()) : sortHeader(column, sort));
-		table.child(header);
-		table.child(divider());
+	// sortable = the shaft table, its headers sort it
+	private FlowLayout table(List<Column> columns, FlowLayout rows, boolean sortable) {
 		KeptScroll scroll = scroll(Sizing.fill(100), Sizing.expand(), rows);
-		scroll.scrollbarThiccness(3);
-		scroll.margins(Insets.top(2));
-		table.child(scroll);
-		return table;
-	}
-
-	// active column: white + arrow, if the arrow fits
-	private FlowLayout sortHeader(Column column, Consumer<String> sort) {
-		FlowLayout cell = new HoverFlow(Sizing.fixed(column.total()), Sizing.fixed(ROW_HEIGHT), HoverFlow.ROW);
-		cell.verticalAlignment(VerticalAlignment.CENTER);
-		String text = "§7" + column.title();
-		if (column.key().equals(shaftSort)) {
-			String arrow = ascending(column.key()) ? "▲" : "▼";
-			text = "§f" + column.title();
-			for (String gap : List.of(" ", "")) {
-				String withArrow = column.right() ? "§f" + arrow + gap + column.title() : "§f" + column.title() + gap + arrow;
-				if (font.width(withArrow) <= column.total()) {
-					text = withArrow;
-					break;
-				}
-			}
-		}
-		cell.child(cell(column, text));
-		cell.mouseDown().subscribe((event, doubleClick) -> {
-			sort.accept(column.key());
-			return true;
-		});
-		return cell;
-	}
-
-	// 1st click best/biggest first, 2nd flips, 3rd back to played order
-	private void sortShafts(String key) {
-		if (!key.equals(shaftSort)) {
-			shaftSort = key;
-			shaftSortFlipped = false;
-		} else if (!shaftSortFlipped) {
-			shaftSortFlipped = true;
-		} else {
-			shaftSort = null;
-		}
-		rebuild(true);
-	}
-
-	// shaft names a to z + fastest spawn first, rest biggest first
-	private static boolean ascending(String key) {
-		boolean first = key.equals("shaft") || key.equals("spawn");
-		return first != shaftSortFlipped;
-	}
-
-	// nulls last both ways, ties in played order
-	private static int[] shaftOrder(List<JournalEntry> shafts, List<Double> coins) {
-		List<Integer> order = new ArrayList<>();
-		for (int i = 0; i < shafts.size(); i++) order.add(i);
-		String key = shaftSort;
-		if (key != null) {
-			boolean ascending = ascending(key);
-			order.sort((a, b) -> {
-				Comparable<?> ka = sortKey(key, a, shafts.get(a), coins.get(a));
-				Comparable<?> kb = sortKey(key, b, shafts.get(b), coins.get(b));
-				if (ka == null || kb == null) return ka == kb ? Integer.compare(a, b) : ka == null ? 1 : -1;
-				int compared = compare(ka, kb);
-				if (!ascending) compared = -compared;
-				return compared != 0 ? compared : Integer.compare(a, b);
-			});
-		}
-		return order.stream().mapToInt(Integer::intValue).toArray();
-	}
-
-	@SuppressWarnings("unchecked")
-	private static int compare(Comparable<?> a, Comparable<?> b) {
-		return ((Comparable<Object>) a).compareTo(b);
-	}
-
-	private static Comparable<?> sortKey(String key, int index, JournalEntry entry, Double coins) {
-		return switch (key) {
-			case "shaft" -> entry.shaftId();
-			case "spawn" -> entry.searchMillis();
-			case "inside" -> entry.durationMillis();
-			case "corpses" -> {
-				int looted = 0;
-				int total = 0;
-				for (CorpseCount count : JournalStats.corpses(entry).values()) {
-					looted += count.looted();
-					total += count.total();
-				}
-				yield looted * 1000L + total;
-			}
-			case "powder" -> JournalStats.powder(entry);
-			case "mined" -> entry.gems() != null ? (Comparable<?>) entry.gems().fineEquivalent()
-					: entry.metal() != null ? entry.metal().in(Surveyor.MONEY.settings().metalTierUsed().tier()) : null;
-			case "coins" -> coins;
-			case "campfire" -> campfires(entry);
-			default -> index;
-		};
+		tableScroll = scroll;
+		return tables.panel(columns, scroll, sortable);
 	}
 
 	private FlowLayout row(int position, int index) {
@@ -2204,58 +1745,40 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 
 	// gem shafts in fine, metal shafts in the metal tier setting
 	private static LabelComponent minedCell(Column column, JournalEntry entry) {
+		LabelComponent cell = cell(column, minedText(entry));
 		int tier = Surveyor.MONEY.settings().metalTierUsed().tier();
-		LabelComponent cell;
-		String full;
-		if (entry.gems() != null) {
-			String color = minedColor(entry.gems().gem());
-			cell = cell(column, color + Format.decimal(entry.gems().fineEquivalent()));
-			full = color + minedGems(entry);
-		} else if (entry.metal() != null) {
-			String color = minedColor(entry.metal().metal());
-			cell = cell(column, color + entry.metal().amount(tier));
-			full = color + entry.metal().text(tier);
-		} else {
-			return cell(column, "§8-");
-		}
-		cell.tooltip(List.of(Component.literal(full)));
+		if (entry.gems() != null) cell.tooltip(List.of(Component.literal(minedColor(entry.gems().gem()) + minedGems(entry))));
+		else if (entry.metal() != null) cell.tooltip(List.of(Component.literal(minedColor(entry.metal().metal()) + entry.metal().text(tier))));
 		return cell;
+	}
+
+	private static String minedText(JournalEntry entry) {
+		if (entry.gems() != null) return minedColor(entry.gems().gem()) + Format.decimal(entry.gems().fineEquivalent());
+		if (entry.metal() != null) return minedColor(entry.metal().metal()) + entry.metal().amount(Surveyor.MONEY.settings().metalTierUsed().tier());
+		return "§8-";
+	}
+
+	// outside rows mined cell
+	private static String outsideMined(SessionSummary session) {
+		Map<String, Double> fine = OutsideMining.fineGems(session.mining(), TextPatterns.defaults());
+		return fine.isEmpty() ? "§8-" : "§f" + Format.decimal(fine.values().stream().mapToDouble(Double::doubleValue).sum());
+	}
+
+	private static String shaftCell(JournalEntry entry) {
+		return "§b" + (entry.shaftId() == null ? "?" : entry.shaftId());
+	}
+
+	static String spawnCell(Long millis) {
+		return millis == null ? "§8-" : "§f" + Format.duration(millis);
 	}
 
 	// the gem or metals hud colour, white if none
 	private static String minedColor(String name) {
-		Character color = ShaftNames.defaults().hudColorByName(name);
-		return "§" + (color == null ? 'f' : color);
+		return "§" + ShaftNames.defaults().minedColor(name);
 	}
 
 	private static String minedGems(JournalEntry entry) {
 		return Format.decimal(entry.gems().fineEquivalent()) + " Fine " + entry.gems().gem();
-	}
-
-	private static LabelComponent cell(Column column, String text) {
-		LabelComponent label = label(text);
-		label.horizontalSizing(Sizing.fixed(column.total()));
-		if (column.right()) label.horizontalTextAlignment(HorizontalAlignment.RIGHT);
-		return label;
-	}
-
-	private static FlowLayout barCell(Column column, Long millis, long slowest) {
-		FlowLayout cell = UIContainers.horizontalFlow(Sizing.fixed(column.total()), Sizing.content());
-		cell.verticalAlignment(VerticalAlignment.CENTER);
-		cell.gap(3);
-		if (millis == null) {
-			cell.child(label("§8-"));
-			return cell;
-		}
-		LabelComponent text = label("§f" + Format.duration(millis));
-		text.horizontalSizing(Sizing.fixed(column.width() - SPAWN_BAR - 3));
-		cell.child(text);
-		int barMax = SPAWN_BAR + column.extra();
-		BoxComponent bar = UIComponents.box(Sizing.fixed(Math.max(1, (int) (barMax * millis / Math.max(1, slowest)))), Sizing.fixed(3));
-		bar.fill(true);
-		bar.color(GREEN);
-		cell.child(bar);
-		return cell;
 	}
 
 	private static FlowLayout tile(int width, String key, String value) {
@@ -2282,8 +1805,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 	private KeptScroll scrollColumn(Sizing width, FlowLayout column) {
 		KeptScroll scroll = scroll(width, Sizing.fill(100), column);
 		scroll.surface(PANEL);
-		scroll.padding(Insets.of(COLUMN_PADDING));
-		scroll.scrollbarThiccness(3);
+		scroll.paddedWithBar(COLUMN_PADDING);
 		return scroll;
 	}
 
@@ -2295,19 +1817,11 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		return panel;
 	}
 
-	// gaps over Breaks.BREAK_MILLIS w/o mining, minus their 1st minutes. none = no tooltip
-	private static BoxComponent divider() {
+	static BoxComponent divider() {
 		return UIComponents.box(Sizing.fill(100), Sizing.fixed(1)).color(Color.ofArgb(0x1FFFFFFF)).fill(true);
 	}
 
-	private static FlowLayout tableRow() {
-		FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.fixed(ROW_HEIGHT));
-		row.padding(Insets.horizontal(2));
-		row.gap(COLUMN_GAP);
-		row.verticalAlignment(VerticalAlignment.CENTER);
-		return row;
-	}
-
+	// gaps over Breaks.BREAK_MILLIS w/o mining, minus their 1st minutes. none = no tooltip
 	private static <T extends UIComponent> T breakTooltip(T component, long breakMillis) {
 		if (breakMillis <= 0) return component;
 		component.tooltip(List.of(Component.literal("§7Breaks left out: §f" + Format.duration(breakMillis)),
@@ -2331,12 +1845,13 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		return label;
 	}
 
+	// title null = caller adds its own heading
 	private static FlowLayout section(String title) {
 		FlowLayout section = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
 		section.margins(Insets.vertical(4));
 		section.gap(3);
 		section.child(divider());
-		section.child(wrapped("§7" + title));
+		if (title != null) section.child(wrapped("§7" + title));
 		return section;
 	}
 
@@ -2344,19 +1859,9 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		return UIComponents.box(Sizing.fixed(1), Sizing.fixed(height)).color(Color.ofArgb(0));
 	}
 
-	private static LabelComponent label(String text) {
-		return new SafeLabel(Component.literal(text));
-	}
-
-	private static LabelComponent wrapped(String text) {
-		LabelComponent label = label(text);
-		label.horizontalSizing(Sizing.fill(100));
-		return label;
-	}
-
 	private static String corpses(JournalEntry entry) {
 		List<String> parts = new ArrayList<>();
-		for (Map.Entry<String, CorpseCount> e : JournalStats.corpses(entry).entrySet()) {
+		for (Map.Entry<String, CorpseCount> e : CorpseCounts.of(entry).entrySet()) {
 			CorpseCount count = e.getValue();
 			String color = count.looted() > 0 ? CorpseType.color(e.getKey()) : "§8";
 			parts.add(color + count.looted() + "/" + count.total() + " " + e.getKey().charAt(0));
@@ -2372,7 +1877,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		return millis == null ? "§8-" : "§a" + Format.duration(millis);
 	}
 
-	private static String clock(long millis) {
+	static String clock(long millis) {
 		return CLOCK.format(Instant.ofEpochMilli(millis).atZone(ZONE));
 	}
 
@@ -2384,7 +1889,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		return Instant.ofEpochMilli(millis).atZone(ZONE).toLocalDate();
 	}
 
-	private static String day(long millis) {
+	static String day(long millis) {
 		LocalDate date = date(millis);
 		LocalDate today = LocalDate.now(ZONE);
 		if (date.equals(today)) return "Today";
@@ -2406,6 +1911,28 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> {
 		int used = 2 * PADDING + 2 * BAR_PADDING + BAR_GAP * items.size() + 2 * ARROW_WIDTH + 2 * BAR_GAP;
 		for (UIComponent item : items) used += fixedWidth(item);
 		return width - used;
+	}
+
+	// stats left column inside its padding
+	int statsLeftRoom() {
+		return (width - 2 * PADDING) * STATS_LEFT / 100 - 2 * COLUMN_PADDING;
+	}
+
+	// same rounding as owos fill
+	private int statsFill(int percent) {
+		return Math.round(percent / 100f * (width - 2 * PADDING));
+	}
+
+	private int statsMiddleRoom() {
+		return width - 2 * PADDING - statsFill(STATS_LEFT) - statsFill(STATS_RIGHT) - 2 * GAP - 2 * COLUMN_PADDING;
+	}
+
+	private int statsRightRoom() {
+		return statsFill(STATS_RIGHT) - 2 * COLUMN_PADDING;
+	}
+
+	private static int dotsWidth(int count) {
+		return count * DOT + (count - 1) * DOT_GAP + DOTS_MARGIN;
 	}
 
 	// fixed sizing only

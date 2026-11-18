@@ -6,11 +6,18 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import dev.skysurveyor.data.ItemNames;
+import dev.skysurveyor.data.ShaftNames;
 import dev.skysurveyor.hud.HudExpr.Node;
 import dev.skysurveyor.hud.HudExpr.Val;
 import dev.skysurveyor.hud.HudLayout.Box;
 import dev.skysurveyor.hud.HudLayout.Line;
+import dev.skysurveyor.hud.HudLayout.ShowAs;
 import dev.skysurveyor.hud.HudValue.Range;
+import dev.skysurveyor.journal.ToastText;
+import dev.skysurveyor.money.CoinBreakdown;
+import dev.skysurveyor.money.Coins;
+import dev.skysurveyor.money.DropList;
 
 public final class HudBoxText {
 	// anything in { }, HudExpr reads it
@@ -23,24 +30,178 @@ public final class HudBoxText {
 	static final String HIDE_START = "§";
 	static final String HIDE_END = "§";
 	private static final Pattern HIDDEN = Pattern.compile(Pattern.quote(HIDE_START) + ".*?" + Pattern.quote(HIDE_END));
+	// text before a rate says /h already. \b so w/helmet doesnt count
+	private static final Pattern SAYS_RATE = Pattern.compile("(?i)(/\\s*h(r|our)?\\b|per hour|hourly)");
+	private static final String PER_HOUR = "/h";
+	// drops both: items under each source, display choice
+	private static final int SUB_ITEMS = 2;
 
 	private HudBoxText() {
 	}
 
-	// for HudRenderer only, keeps the hidden dots
+	// text of the rows, keeps the hidden dots
 	public static List<String> lines(Box box, HudData data, boolean example) {
 		List<String> lines = new ArrayList<>();
+		for (HudRow row : rows(box, data, example)) {
+			if (row.text() != null) lines.add(row.text());
+		}
+		return lines;
+	}
+
+	// for HudRenderer, keeps the hidden dots
+	public static List<HudRow> rows(Box box, HudData data, boolean example) {
+		List<HudRow> rows = new ArrayList<>();
 		if (box.showTitle) {
 			String style = box.titleBoldOrDefault() ? "§l" : "";
-			String title = tags(box.title, data, example, box.titleColorOrDefault(), style).strip();
-			if (!title.isEmpty()) lines.add("§" + box.titleColorOrDefault() + style + title);
+			String color = titleColor(box, data, example);
+			String title = tags(box.title, data, example, color, style).strip();
+			if (!title.isEmpty()) rows.add(HudRow.text("§" + color + style + title));
 		}
 		for (Line line : box.lines) {
 			if (!line.shown) continue;
-			String text = rawLine(box, line, data, example);
-			if (text != null) lines.add(text);
+			if (line.hudValue() != null && line.hudValue().multiRow()) {
+				rows.addAll(dropRows(line, data, example, !rows.isEmpty()));
+				continue;
+			}
+			HudRow row = row(box, line, data, example);
+			if (row != null) rows.add(row);
 		}
-		return lines;
+		return rows;
+	}
+
+	// no data = the text line, so - still shows
+	static HudRow row(Box box, Line line, HudData data, boolean example) {
+		String text = rawLine(box, line, data, example);
+		if (text == null) return null;
+		ShowAs as = line.showAs();
+		HudGraph graph = as == ShowAs.TEXT ? null : graph(box, line, data, example);
+		if (graph == null) return HudRow.text(text);
+		if (as == ShowAs.BOTH) return new HudRow(text, graph);
+		String name = line.advancedMode() ? "" : graphLabel(line.range() == Range.SHAFT && !data.inShaft() ? lastShaft(line.prefix) : line.prefix);
+		String label = "§" + (line.labelColor != null ? line.labelColor : box.labelColor) + (box.labelBold ? "§l" : "");
+		return new HudRow(name.isEmpty() ? null : label + name, graph);
+	}
+
+	// rule above unless its the boxes 1st row
+	static List<HudRow> dropRows(Line line, HudData data, boolean example, boolean rule) {
+		List<HudRow> rows = dropRows(line, data, example);
+		if (rule) rows.set(0, rows.getFirst().withRule());
+		return rows;
+	}
+
+	private static List<HudRow> dropRows(Line line, HudData data, boolean example) {
+		Range range = line.range();
+		if (line.dash() && !data.inShaft() && HudValue.DROPS.followsShaft(range)) return note(HudFormat.MISSING);
+		DropList list = data.drops(range, example);
+		// worked out on the io thread
+		if (list == null && range == Range.ALL_TIME && !example) return note(waiting(data.now()));
+		if (list == null) list = DropList.NONE;
+		if (list.noPrices()) {
+			String none = ToastText.NO_PRICES;
+			return note(Character.toUpperCase(none.charAt(0)) + none.substring(1));
+		}
+		int most = line.rowsOrDefault();
+		List<HudRow> rows = new ArrayList<>();
+		boolean amounts = !Boolean.TRUE.equals(line.hideAmounts);
+		HudLayout.DropsView view = line.dropsView();
+		if (view == HudLayout.DropsView.ITEMS) {
+			for (DropList.Row row : list.shown(most)) {
+				rows.add(HudRow.columns(dropText(row, amounts), CoinBreakdown.coins(row.coins()), false));
+			}
+		} else {
+			for (DropList.Source source : list.shownSources(most)) {
+				DropList.Row row = source.row();
+				rows.add(HudRow.columns(dropText(row, amounts), CoinBreakdown.coins(row.coins()), false));
+				// a single item says nothing new
+				if (view != HudLayout.DropsView.BOTH || source.items().size() < 2) continue;
+				for (DropList.Row item : source.items().subList(0, Math.min(SUB_ITEMS, source.items().size()))) {
+					rows.add(HudRow.sub(dropText(item, amounts), "§7" + Coins.signed(item.coins())));
+				}
+			}
+		}
+		// only w/ all rows, or when its all there is
+		if (list.unpriced() > 0 && (most == 0 || list.items().isEmpty())) {
+			rows.add(HudRow.columns("§7" + CoinBreakdown.unpricedText(list.unpriced(), list.ironman()), "", false));
+		}
+		if (!Boolean.TRUE.equals(line.hideSpent)) {
+			for (DropList.Row row : list.spent()) {
+				rows.add(HudRow.columns(dropText(row, amounts), CoinBreakdown.coins(row.coins()), false));
+			}
+		}
+		return rows.isEmpty() ? note("No drops yet") : rows;
+	}
+
+	private static List<HudRow> note(String text) {
+		return new ArrayList<>(List.of(HudRow.columns("§7" + text, "", false)));
+	}
+
+	// items like hypixel: rarity colour, gem icon, name, §8x amount
+	static String dropText(DropList.Row row, boolean amounts) {
+		String amount = amounts ? DropList.amount(row) : "";
+		boolean item = row.kind() != DropList.Kind.SOURCE && row.kind() != DropList.Kind.MORE;
+		// rarity now, not when the list was made (item list may load later)
+		if (item) return ItemNames.current().styled(row.name(), amount);
+		return "§" + row.color() + row.name() + ItemNames.amount(amount);
+	}
+
+	// editor line list + preview
+	static String dropsName(Line line) {
+		int rows = line.rowsOrDefault();
+		return "Drops, " + (rows == 0 ? "all" : String.valueOf(rows)) + " rows";
+	}
+
+	// add line: how many items now
+	static String dropsText(DropList list) {
+		if (list == null || list.noPrices()) return HudFormat.MISSING;
+		int items = list.items().size();
+		return items + (items == 1 ? " item" : " items");
+	}
+
+	// "Pity: " -> "Pity"
+	static String graphLabel(String prefix) {
+		String name = prefix == null ? "" : prefix.strip();
+		return name.endsWith(":") ? name.substring(0, name.length() - 1).strip() : name;
+	}
+
+	// null = nothing to draw right now
+	static HudGraph graph(Box box, Line line, HudData data, boolean example) {
+		HudValue value = line.hudValue();
+		if (value == null || line.dash() && !data.inShaft() && value.followsShaft(line.range())) return null;
+		return switch (value.graph(line.range())) {
+			case BAR -> {
+				Object now = value(value, line.range(), line.target(), data, example);
+				Long max = data.max(value, example);
+				if (!(now instanceof Number n) || max == null || max <= 0) yield null;
+				yield new HudGraph.Bar(n.doubleValue() / max, HudLayout.argb(line.valueColor != null ? line.valueColor : box.valueColor));
+			}
+			case CHART -> {
+				Object avg = value(value, line.range(), line.target(), data, example);
+				yield spawnChart(data.recentSpawns(example), avg instanceof Number n ? n.doubleValue() : null, ShaftNames.defaults());
+			}
+			case NONE -> null;
+		};
+	}
+
+	// scale = longest shaft or the avg, whichever is bigger
+	static HudGraph.Chart spawnChart(List<HudData.Spawn> spawns, Double average, ShaftNames names) {
+		if (spawns.isEmpty()) return null;
+		double scale = average == null ? 0 : average;
+		for (HudData.Spawn spawn : spawns) scale = Math.max(scale, spawn.millis());
+		if (scale <= 0) scale = 1;
+		List<HudGraph.Column> columns = new ArrayList<>();
+		for (HudData.Spawn spawn : spawns) {
+			int rgb = spawn.type() == null ? 0xFFFFFF : names.rgb(spawn.type());
+			columns.add(new HudGraph.Column(spawn.millis() / scale, 0xFF000000 | rgb));
+		}
+		return new HudGraph.Chart(columns, average == null ? null : average / scale);
+	}
+
+	// SHAFT_COLOR = the shafts colour, yellow w/o one
+	public static String titleColor(Box box, HudData data, boolean example) {
+		String color = box.titleColorOrDefault();
+		if (!HudLayout.SHAFT_COLOR.equals(color)) return color;
+		Character shaft = data.shaftColor() != null ? data.shaftColor() : example ? HudData.EXAMPLE.shaftColor() : null;
+		return shaft != null ? String.valueOf(shaft) : "e";
 	}
 
 	// also hidden lines, for the editor. no hidden dots, labels would draw them
@@ -52,6 +213,7 @@ public final class HudBoxText {
 	private static String rawLine(Box box, Line line, HudData data, boolean example) {
 		HudValue hudValue = line.hudValue();
 		if (hudValue == null) return null;
+		if (hudValue.multiRow()) return "§7" + dropsName(line);
 		if (line.advancedMode()) {
 			HudExpr.Values values = values(data, example);
 			Map<String, String> colors = HudRules.colors(HudRules.parse(line.advancedRules()), values);
@@ -63,7 +225,7 @@ public final class HudBoxText {
 		Range range = line.range();
 		String prefix = range == Range.SHAFT && !data.inShaft() ? lastShaft(line.prefix) : line.prefix;
 		String text = line.dash() && !data.inShaft() && hudValue.followsShaft(range) ? HudFormat.MISSING
-				: text(hudValue, range, line.target(), line.format, data, example);
+				: oncePerHour(line.prefix, text(hudValue, range, line.target(), line.format, data, example));
 		return label + prefix + "§" + color + styles + paint(text, color, styles);
 	}
 
@@ -139,6 +301,7 @@ public final class HudBoxText {
 		StringBuilder out = new StringBuilder("§").append(color).append(codes(styles));
 		Matcher tags = TAG.matcher(text);
 		int i = 0;
+		int since = 0;
 		while (i < text.length()) {
 			char c = text.charAt(i);
 			if (c == '&' && i + 1 < text.length()) {
@@ -182,12 +345,14 @@ public final class HudBoxText {
 				boolean dash = parsed.error() == null && line.dash() && !data.inShaft() && followsShaft(parsed.node());
 				String shown = parsed.error() != null ? null : dash ? HudFormat.MISSING : tagText(parsed.node(), data, example);
 				if (shown != null) {
+					shown = oncePerHour(text.substring(since, i), shown);
 					// a - gets no rule colour
 					String rule = shown.equals(HudFormat.MISSING) ? null : colors.get(HudExpr.key(parsed.node()));
 					if (rule != null) out.append('§').append(rule).append(codes(styles));
 					out.append(paint(shown, rule != null ? rule : color, codes(styles)));
 					if (rule != null) out.append('§').append(color).append(codes(styles));
 					i = tags.end();
+					since = i;
 					continue;
 				}
 			}
@@ -331,8 +496,13 @@ public final class HudBoxText {
 	}
 
 	static String text(HudValue value, Range range, String target, int format, HudData data, boolean example) {
+		if (value.multiRow()) return dropsText(data.drops(range, example));
 		Object v = value(value, range, target, data, example);
-		return v == null && rate(value, range) ? waiting(data.now()) : formatted(value, range, format, v);
+		if (v == null && rate(value, range)) return waiting(data.now());
+		String shown = formatted(value, range, format, v);
+		Long max = v == null ? null : data.max(value, example);
+		// 1,498/2,000, rules + maths use the 1st
+		return max == null ? shown : shown + "/" + HudFormat.format(value.kind(), format, max);
 	}
 
 	// rates wait for 1 saved shaft + JournalStats.MIN_RATE_MILLIS
@@ -396,6 +566,21 @@ public final class HudBoxText {
 	}
 
 	public static String suffix(HudValue value, Range range) {
-		return range == Range.PER_HOUR ? "/h" : value.unit();
+		return range == Range.PER_HOUR ? PER_HOUR : value.unit();
+	}
+
+	// as drawn after this label, /h shows once
+	public static String suffix(HudValue value, Range range, String before) {
+		String suffix = suffix(value, range);
+		return suffix.equals(PER_HOUR) && saysRate(before) ? "" : suffix;
+	}
+
+	static boolean saysRate(String text) {
+		return text != null && SAYS_RATE.matcher(text).find();
+	}
+
+	// "Coins/h: 46.8M", not 46.8M/h
+	static String oncePerHour(String before, String shown) {
+		return shown.endsWith(PER_HOUR) && saysRate(before) ? shown.substring(0, shown.length() - PER_HOUR.length()) : shown;
 	}
 }

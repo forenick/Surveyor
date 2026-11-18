@@ -4,13 +4,17 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
+import dev.skysurveyor.data.Patches;
+import dev.skysurveyor.data.Patches.Patch;
 import dev.skysurveyor.journal.JournalStats.SessionSummary;
 
 // whole sessions only, so records and bars still open them
 public enum StatsRange {
-	ALL_TIME("All time"),
+	ALL_TIME("All-time"),
 	LAST_7_DAYS("Last 7 days"),
-	LAST_5_SESSIONS("Last 5 sessions");
+	LAST_5_SESSIONS("Last 5 sessions"),
+	// newest patch in patches.txt, name from there
+	SINCE_PATCH("Since");
 
 	// display choices, not game numbers
 	private static final long WEEK_MILLIS = 7 * 24 * 3_600_000L;
@@ -23,7 +27,12 @@ public enum StatsRange {
 	}
 
 	public String displayName() {
-		return displayName;
+		return displayName(Patches.defaults());
+	}
+
+	String displayName(Patches patches) {
+		Patch patch = this == SINCE_PATCH ? patches.newest() : null;
+		return patch == null ? displayName : displayName + " " + patch.name();
 	}
 
 	public StatsRange next(int step) {
@@ -32,10 +41,18 @@ public enum StatsRange {
 	}
 
 	public List<SessionSummary> sessions(List<SessionSummary> newestFirst, long now) {
+		return sessions(newestFirst, now, Patches.defaults());
+	}
+
+	List<SessionSummary> sessions(List<SessionSummary> newestFirst, long now, Patches patches) {
 		return switch (this) {
 			case ALL_TIME -> newestFirst;
 			case LAST_7_DAYS -> newestFirst.stream().filter(s -> s.start() >= now - WEEK_MILLIS).toList();
 			case LAST_5_SESSIONS -> newestFirst.stream().limit(RECENT_SESSIONS).toList();
+			case SINCE_PATCH -> {
+				Patch patch = patches.newest();
+				yield patch == null ? newestFirst : newestFirst.stream().filter(s -> s.start() >= patch.startMillis()).toList();
+			}
 		};
 	}
 

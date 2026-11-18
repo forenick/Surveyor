@@ -93,8 +93,8 @@ class JournalStatsTest {
 		assertEquals(Map.of(
 				"Lapis", new JournalStats.CorpseCount(2, 2),
 				"Umber", new JournalStats.CorpseCount(0, 1),
-				"Tungsten", new JournalStats.CorpseCount(0, 1)), JournalStats.corpses(titanium));
-		assertEquals(List.of("Lapis", "Umber", "Tungsten"), List.copyOf(JournalStats.corpses(titanium).keySet()));
+				"Tungsten", new JournalStats.CorpseCount(0, 1)), CorpseCounts.of(titanium));
+		assertEquals(List.of("Lapis", "Umber", "Tungsten"), List.copyOf(CorpseCounts.of(titanium).keySet()));
 	}
 
 	@Test

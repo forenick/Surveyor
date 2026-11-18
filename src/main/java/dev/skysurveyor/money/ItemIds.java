@@ -49,6 +49,16 @@ public final class ItemIds {
 		return ids;
 	}
 
+	// id -> rarity, items w/o one left out (= common)
+	public static Map<String, String> parseTiers(JsonObject json) {
+		Map<String, String> tiers = new HashMap<>();
+		for (JsonElement element : json.getAsJsonArray("items")) {
+			JsonObject item = element.getAsJsonObject();
+			if (item.has("id") && item.has("tier")) tiers.put(item.get("id").getAsString(), item.get("tier").getAsString());
+		}
+		return tiers;
+	}
+
 	public static Map<String, Double> parseNpcPrices(JsonObject json) {
 		Map<String, Double> prices = new HashMap<>();
 		for (JsonElement element : json.getAsJsonArray("items")) {

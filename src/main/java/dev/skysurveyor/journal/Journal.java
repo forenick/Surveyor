@@ -5,7 +5,6 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 import dev.skysurveyor.detection.ShaftEvent;
-import dev.skysurveyor.detection.ShaftEvent.PickaxeAbility;
 import dev.skysurveyor.detection.ShaftEvent.PortalSpawned;
 import dev.skysurveyor.detection.ShaftEvent.ShaftEntered;
 import dev.skysurveyor.detection.ShaftEvent.ShaftLeft;
@@ -33,7 +32,7 @@ public final class Journal {
 	}
 
 	private final TextPatterns patterns;
-	private final BooleanSupplier inMiningArea;
+	private final MiningClock clock;
 	private final Consumer<JournalEntry> listener;
 	private Session session;
 	private long lastActivity;
@@ -42,11 +41,10 @@ public final class Journal {
 	private long lastMiningAt;
 	private long portalFoundAt = -1;
 	private Long timedSearch;
-	private boolean inShaft;
 
 	public Journal(TextPatterns patterns, BooleanSupplier inMiningArea, Consumer<JournalEntry> listener) {
 		this.patterns = patterns;
-		this.inMiningArea = inMiningArea;
+		this.clock = new MiningClock(MiningClock.Scope.MINES_OR_SHAFT, inMiningArea);
 		this.listener = listener;
 	}
 
@@ -87,12 +85,12 @@ public final class Journal {
 	}
 
 	public void onBlockHit(long now) {
-		mining(now);
+		if (clock.onBlockHit(now)) mining(now);
 	}
 
 	public void onEvent(ShaftEvent event, long now) {
+		if (clock.onEvent(event, now)) mining(now);
 		switch (event) {
-			case PickaxeAbility ability -> mining(now);
 			case PortalSpawned spawned when spawned.foundByYou() -> {
 				touch(now);
 				timedSearch = searching ? searchMillis + Math.min(now - lastMiningAt, PAUSE_MILLIS) : null;
@@ -101,13 +99,11 @@ public final class Journal {
 			}
 			case ShaftEntered entered -> {
 				touch(now);
-				inShaft = true;
 				searching = false;
 				portalFoundAt = -1;
 			}
 			case ShaftLeft left -> {
 				touch(now);
-				inShaft = false;
 				JournalEntry entry = JournalEntry.of(left.shaft(), session.id(), timedSearch, patterns);
 				timedSearch = null;
 				session = session.add(entry);
@@ -126,12 +122,11 @@ public final class Journal {
 		timedSearch = null;
 	}
 
+	// hits on the garden, hub etc dont start or keep a session, clock skips them
 	private void mining(long now) {
-		boolean mines = inMiningArea.getAsBoolean();
-		// hits on the garden, hub etc dont start or keep a session
-		if (!mines && !inShaft) return;
 		touch(now);
-		if (!mines) return;
+		// spawn timer asks the tab list only
+		if (!clock.inMines()) return;
 		// mining between finding and entering belongs to neither search
 		if (portalFoundAt >= 0 && now - portalFoundAt <= PAUSE_MILLIS) return;
 		if (searching) {

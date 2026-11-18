@@ -19,6 +19,7 @@ import dev.skysurveyor.detection.ShaftEvent.MayhemBuff;
 import dev.skysurveyor.detection.ShaftEvent.PickaxeAbility;
 import dev.skysurveyor.detection.ShaftEvent.PortalSpawned;
 import dev.skysurveyor.detection.ShaftEvent.Pristine;
+import dev.skysurveyor.detection.ShaftEvent.RareDrop;
 import dev.skysurveyor.detection.ShaftEvent.SacksChanged;
 import dev.skysurveyor.detection.ShaftEvent.ScrapFound;
 import dev.skysurveyor.detection.ShaftEvent.Supercraft;
@@ -32,6 +33,12 @@ public final class ChatParser {
 
 	public ChatParser(TextPatterns patterns) {
 		this.patterns = patterns;
+	}
+
+	// world change, a block cut off by a warp or disconnect never finishes
+	void reset() {
+		loot = null;
+		crystalNext = false;
 	}
 
 	// chat only, not action bar. returns the event this msg finishes
@@ -98,6 +105,7 @@ public final class ChatParser {
 		if ((m = patterns.match("supercraft", text)) != null) {
 			return new Supercraft(new ItemCount(m.group("item"), TextPatterns.number(m.group("count"))));
 		}
+		if ((m = patterns.match("rare_drop", text)) != null) return new RareDrop(new ItemCount(m.group("item"), 1));
 		return null;
 	}
 

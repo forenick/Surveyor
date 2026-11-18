@@ -17,6 +17,7 @@ import dev.skysurveyor.detection.ShaftEvent.FrozeToDeath;
 import dev.skysurveyor.detection.ShaftEvent.MayhemBuff;
 import dev.skysurveyor.detection.ShaftEvent.PortalSpawned;
 import dev.skysurveyor.detection.ShaftEvent.Pristine;
+import dev.skysurveyor.detection.ShaftEvent.RareDrop;
 import dev.skysurveyor.detection.ShaftEvent.SacksChanged;
 import dev.skysurveyor.detection.ShaftEvent.ScrapFound;
 import dev.skysurveyor.detection.ShaftEvent.Supercraft;
@@ -86,6 +87,17 @@ class ChatParserTest {
 		assertEquals(new Supercraft(new ItemCount("Flawed Jasper Gemstone", 1944)),
 				parse("§eYou Supercrafted §a Flawed Jasper Gemstone §8x1,944§e!"));
 		assertNull(parse("§eMaxed the Supercraft to §b2,432x crafts§e!"));
+	}
+
+	// recording 6 at 0:55.9 (gem, icon) and 12:54.0 (no icon)
+	@Test
+	void rareDrops() {
+		assertEquals(new RareDrop(new ItemCount("Fine Citrine Gemstone", 1)),
+				parse("§6§lRARE DROP! §9 Fine Citrine Gemstone §b(§b+103 Magic Find§b)"));
+		assertEquals(new RareDrop(new ItemCount("Fine Aquamarine Gemstone", 1)),
+				parse("§6§lRARE DROP! §9 Fine Aquamarine Gemstone §b(§b+105 Magic Find§b)"));
+		assertEquals(new RareDrop(new ItemCount("Glacite Jewel", 1)),
+				parse("§6§lRARE DROP! §9Glacite Jewel §b(§b+103 Magic Find§b)"));
 	}
 
 	@Test
@@ -193,5 +205,39 @@ class ChatParserTest {
 			if (event != null) events.add(event);
 		}
 		return events;
+	}
+
+	// recording 6, AQUA_2 loot block cut off after its 1st item (review 2.12)
+	@Test
+	void lootBlockCutOffByAWorldChangeIsDropped() {
+		List<ShaftEvent> events = new ArrayList<>();
+		ShaftTracker tracker = new ShaftTracker(TextPatterns.defaults(), events::add);
+		tracker.onChat(0, BAR, List.of());
+		tracker.onChat(0, "§r  §9§lLAPIS §b§lCORPSE LOOT! ", List.of());
+		tracker.onChat(0, "§r  §a§lREWARDS", List.of());
+		tracker.onChat(0, "§r    §9Yellow Goblin Egg", List.of());
+		tracker.onWorldChange(1_000);
+		tracker.onChat(2_000, "§r    §a Flawed Onyx Gemstone §8x20", List.of());
+		tracker.onChat(2_000, BAR, List.of());
+		assertEquals(List.of(), events.stream().filter(e -> e instanceof CorpseLooted).toList());
+
+		// next block reads normally
+		tracker.onChat(3_000, "§r  §9§lLAPIS §b§lCORPSE LOOT! ", List.of());
+		tracker.onChat(3_000, "§r  §a§lREWARDS", List.of());
+		tracker.onChat(3_000, "§r    §9Yellow Goblin Egg", List.of());
+		tracker.onChat(3_000, BAR, List.of());
+		assertEquals(List.of(new CorpseLooted(new CorpseLoot("Lapis", false, List.of(new ItemCount("Yellow Goblin Egg", 1)), 0))),
+				events.stream().filter(e -> e instanceof CorpseLooted).toList());
+	}
+
+	// lines from crystalFound
+	@Test
+	void crystalNameAfterAWorldChangeIsntACrystal() {
+		ShaftTracker tracker = new ShaftTracker(TextPatterns.defaults(), e -> {
+			throw new AssertionError("no event: " + e);
+		});
+		tracker.onChat(0, "§f                           §5§l✦ CRYSTAL FOUND", List.of());
+		tracker.onWorldChange(1_000);
+		tracker.onChat(2_000, "§f                            §9Aquamarine Crystal", List.of());
 	}
 }

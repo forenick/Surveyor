@@ -11,6 +11,9 @@ import dev.skysurveyor.util.Format;
 
 // shaft toast, nicks short card (Docs/mockups/toast-v1.html)
 public record ToastText(String title, List<Row> rows) {
+	// hud drops line too
+	public static final String NO_PRICES = "no prices yet";
+
 	public record Row(String label, String value) {
 	}
 
@@ -19,9 +22,10 @@ public record ToastText(String title, List<Row> rows) {
 		String title = "§e" + (entry.shaftId() == null ? "Mineshaft" : entry.shaftId()) + "  §f"
 				+ Format.duration(entry.durationMillis()) + exit(entry.exitReason());
 		List<Row> rows = new ArrayList<>();
-		if (!entry.corpses().isEmpty()) rows.add(new Row("Corpses", SummaryText.corpses(entry.corpses())));
+		String corpses = SummaryText.corpses(entry);
+		if (corpses != null) rows.add(new Row("Corpses", corpses));
 		if (value == null) {
-			rows.add(new Row("Coins", "§8no prices yet"));
+			rows.add(new Row("Coins", "§8" + NO_PRICES));
 		} else if (value.lines().stream().allMatch(line -> line.coins() == null)) {
 			// a gold 0 would read as worth nothing
 			if (!value.lines().isEmpty()) rows.add(new Row("Coins", CoinBreakdown.noPrice(ironman)));

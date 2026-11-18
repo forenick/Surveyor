@@ -42,6 +42,7 @@ public final class ShaftTracker {
 			listener.accept(new ShaftLeft(shaft));
 		}
 		shaft = new Shaft(now);
+		chat.reset();
 		cold = null;
 		corpses = List.of();
 		inMiningArea = false;

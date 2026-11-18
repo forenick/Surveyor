@@ -2,6 +2,64 @@
 
 [SemVer](https://semver.org). Betas are `X.Y.Z-beta.N` (GitHub pre-releases).
 
+## 0.25.0 (2026-11-18)
+
+- Drops HUD line: what your coins are made of, by item or by source, for this shaft, the session or all-time.
+- Shaft pity HUD line from the tab list's Pity widget, as text or a bar.
+- Average spawn can show your last 12 shafts as bars in each shaft's colour.
+- Session profit box in the default HUD: coins this session, per hour, per shaft, session time and drops.
+- Default HUD boxes sit in a column on the left, away from the scoreboard.
+- Default Spawn box hides in shafts, the default shaft box shows the shaft's coins instead of Cold, and the default Session box no longer shows Corpse Fine.
+- Shaft box title in the shaft's colour, with a Shaft colour choice for box titles.
+- Session and per hour coins count the shaft you're in.
+- Item names look like Hypixel's: rarity colour, gem icon with Hypixel's pack, and the amount after the name (Fine Jasper Gemstone x931).
+- RARE DROP! drops in a shaft count under other drops, also when you leave before your Sacks report them.
+- "Since 0.27.3" range on the Stats tab.
+- Journal updates while it's open.
+- Esc in the journal steps back one step before it closes it.
+- Opening a session scrolls its table to the selected shaft.
+- Arrow keys in an open session: left and right switch sessions, up and down move through the shafts.
+- Empty journal: no footer hints, and the Session tab says when your session has started.
+- Hover the Corpses, Mined, Spawn or Lapis column title in the journal to see what it counts.
+- Shaft details: the powder split sits on its own line, corpse counts on the right of "Corpse loot".
+- A chat line points to /sv the first time you're in the Dwarven Mines, until your first shaft is saved.
+- Mod Menu's config button opens Surveyor's Settings.
+- Shaft toast hides while the journal, Edit HUD or Settings is open, and shows its remaining time after.
+- Settings that don't apply are dimmed and say why: Selling, Gems and Metal with Ironman on, the toast settings with the toast off.
+- Reset all in Settings asks twice.
+- Edit HUD line page: Period row instead of Range, and the line's full name on top.
+- Shafts lines switch between session, today, per hour and all-time on the Period row.
+- Add line shows each value once with its periods under it, in the groups Spawn, Shafts and loot, Current shaft, Coins, Other and Game.
+- Add line tooltips show the line's full name, its number now and the label it adds.
+- Line list shows each line's period in grey, or in its tooltip on narrow screens.
+- Typed labels get a button to go back to the automatic label.
+- A line's colour button says "Same as box" when there's room.
+- Frame boxes and the Frame toast snap and keep their margin by the frame's edge.
+- Edit HUD help card explains periods and scrolls when it doesn't fit.
+- New default HUD labels, period after the name: "Coins/h: ", "Coins all-time: ", "Outside coins: ", "Lapis corpses: ", "Jasper drystreak: " and more.
+- Renamed: Shaft powder, Coins per shaft, Shafts / h, Shafts with a corpse, Entered (shaft table), the All-time preset and Stats range, and the Vanilla, Frame and Dark toast styles.
+- Journal columns grow for wider fonts and longer dates instead of wrapping.
+- Journal scrollbars are lighter and stay visible while there's more to scroll.
+- Edit, Done, + Add PB and Reset under Personal bests look like buttons.
+- Better small screens: the session table keeps the Mined column, Stats range names fit, narrow Stats bars are left out, Settings descriptions get more room.
+- The HUD, Edit HUD, Stats tab and Settings search do less work and respond faster.
+- Errors in Surveyor no longer disconnect you or crash the game.
+- Ping, TPS and title recording turn off instead of crashing if a Minecraft hotfix breaks them.
+- Needs Fabric API 0.161.0 or newer and owo-lib 0.13.
+- Fixed Glacite and Hard Stone counted twice when your compactor compacts them, also when mined before a shaft.
+- Fixed selling or withdrawing gems while mining lowering your mined gems.
+- Fixed a corpse you looted right before leaving showing as not looted, also in older shafts.
+- Fixed corpse loot cut off by a warp or disconnect counting in the next shaft.
+- Fixed a HUD file Surveyor can't read being replaced by the default HUD without a backup.
+- Fixed a very long or deeply nested HUD tag crashing the game. It shows as a mistake instead.
+- Fixed one unreadable line in the journal hiding every shaft for that run.
+- Fixed a per hour value showing "/h" twice when its label says per hour.
+- Fixed the session table staying sorted by a column that isn't shown.
+- Fixed new boxes in Edit HUD landing on the right middle.
+- Resizing the window keeps the journal's scroll positions.
+- Small fixes to the estimated gems from just before you leave.
+- Small wording and look fixes.
+
 ## 0.24.0 (2026-11-15)
 - Coins outside shafts: what you mine in the Dwarven Mines between shafts counts in session, day, Stats and HUD coins and Coins / h.
 - Coins outside shafts HUD line with Session, Per hour and All-time ranges.

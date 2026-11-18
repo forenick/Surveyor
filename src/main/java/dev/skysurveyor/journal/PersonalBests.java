@@ -6,7 +6,6 @@ import java.util.function.Function;
 
 import dev.skysurveyor.data.CorpseType;
 import dev.skysurveyor.data.ShaftNames;
-import dev.skysurveyor.detection.Corpse;
 import dev.skysurveyor.journal.JournalStats.SessionSummary;
 import dev.skysurveyor.money.MoneyStats;
 
@@ -256,8 +255,8 @@ public final class PersonalBests {
 			case SHAFT_METAL -> entry.metal() == null ? null : entry.metal().in(MetalYield.RAW);
 			case SHAFT_SPAWN -> entry.searchMillis() == null ? null : (double) entry.searchMillis();
 			case SHAFT_INSIDE -> (double) entry.durationMillis();
-			case SHAFT_CORPSES -> (double) entry.corpses().stream().filter(Corpse::looted).count();
-			case SHAFT_LAPIS -> (double) SessionSummary.looted(entry, CorpseType.LAPIS.label());
+			case SHAFT_CORPSES -> (double) CorpseCounts.looted(CorpseCounts.of(entry));
+			case SHAFT_LAPIS -> (double) CorpseCounts.looted(entry, CorpseType.LAPIS.label());
 			case SHAFT_COLD -> entry.coldAtExit() == null ? null : (double) entry.coldAtExit();
 			default -> null;
 		};

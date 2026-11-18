@@ -11,6 +11,12 @@ import dev.skysurveyor.util.Resources;
 public record Ladder(String key, List<String> names, List<Long> base) {
 	public static final String GEM = "gem";
 	private static final String MATERIAL = "{gem}";
+	// compaction only, never a shafts own
+	private static final String COMPACT = "compact.";
+
+	// one tier up: what into, how many of the tier below make one
+	public record Step(String into, long per) {
+	}
 
 	private static Map<String, Ladder> defaults;
 
@@ -62,9 +68,49 @@ public record Ladder(String key, List<String> names, List<Long> base) {
 	// by the lowest tiers name, f.e. "Tungsten"
 	public static Ladder metal(String metal) {
 		for (Ladder ladder : defaults().values()) {
-			if (!ladder.key.equals(GEM) && ladder.names.getFirst().equals(metal)) return ladder;
+			if (ladder.isMetal() && ladder.names.getFirst().equals(metal)) return ladder;
 		}
 		return null;
+	}
+
+	// metal ladder w/ this item at any tier, f.e. "Enchanted Umber". null = none
+	public static Ladder metalOfItem(String item) {
+		for (Ladder ladder : defaults().values()) {
+			if (ladder.isMetal() && ladder.tier(item, null) != null) return ladder;
+		}
+		return null;
+	}
+
+	// tier above item on any ladder, null = top tier or on none
+	public static Step compactsInto(String item) {
+		for (Ladder ladder : defaults().values()) {
+			Step step = ladder.stepUp(item);
+			if (step != null) return step;
+		}
+		return null;
+	}
+
+	private Step stepUp(String item) {
+		for (int i = 0; i + 1 < names.size(); i++) {
+			String material = material(i, item);
+			if (material != null) return new Step(name(i + 1, material), base(i + 1) / base(i));
+		}
+		return null;
+	}
+
+	// what {gem} stands for if item is this tier, the item itself for plain names. null = not this tier
+	private String material(int tier, String item) {
+		String name = names.get(tier);
+		int at = name.indexOf(MATERIAL);
+		if (at < 0) return name.equals(item) ? item : null;
+		String prefix = name.substring(0, at);
+		String suffix = name.substring(at + MATERIAL.length());
+		if (item.length() <= prefix.length() + suffix.length() || !item.startsWith(prefix) || !item.endsWith(suffix)) return null;
+		return item.substring(prefix.length(), item.length() - suffix.length());
+	}
+
+	private boolean isMetal() {
+		return !key.equals(GEM) && !key.startsWith(COMPACT);
 	}
 
 	public int tiers() {

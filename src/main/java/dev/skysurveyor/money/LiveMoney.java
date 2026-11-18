@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
+import dev.skysurveyor.data.ItemNames;
 import dev.skysurveyor.detection.Shaft;
 import dev.skysurveyor.detection.ShaftEvent;
 import dev.skysurveyor.detection.TextPatterns;
@@ -36,7 +37,8 @@ public final class LiveMoney {
 	private final AtomicBoolean refreshing = new AtomicBoolean();
 	private final AtomicInteger changes = new AtomicInteger();
 	private final LiveSettings config;
-	private PriceFeed feed;
+	// read by 3 threads
+	private volatile PriceFeed feed;
 	// client thread only, saved entries only (live ones would pile up). cleared when changes() moves
 	private final Map<JournalEntry, ShaftValue> values = new IdentityHashMap<>();
 	private final Map<MiningEntry, List<ShaftValue.Line>> miningValues = new IdentityHashMap<>();
@@ -63,6 +65,7 @@ public final class LiveMoney {
 		run(() -> {
 			config.reloadIfChanged();
 			feed.loadCache();
+			ItemNames.use(itemNames());
 			changes.incrementAndGet();
 		});
 	}
@@ -75,8 +78,10 @@ public final class LiveMoney {
 				PriceBook book = feed.book();
 				config.reloadIfChanged();
 				long now = System.currentTimeMillis();
+				Map<String, String> tiers = feed.tiers();
 				if (feed.stale(now)) feed.fetchStale(now);
-				if (!settings().equals(settings) || feed.book() != book) changes.incrementAndGet();
+				if (feed.tiers() != tiers) ItemNames.use(itemNames());
+				if (!settings().equals(settings) || feed.book() != book || feed.tiers() != tiers) changes.incrementAndGet();
 			} finally {
 				refreshing.set(false);
 			}
@@ -106,6 +111,15 @@ public final class LiveMoney {
 
 	public ItemIds ids() {
 		return ItemIds.bundled(feed == null ? Map.of() : feed.names());
+	}
+
+	private ItemNames itemNames() {
+		ItemIds ids = ids();
+		Map<String, String> tiers = feed.tiers();
+		return new ItemNames(name -> {
+			String id = ids.id(name);
+			return id == null ? null : tiers.get(id);
+		});
 	}
 
 	public JournalEntry withPrices(JournalEntry entry) {
@@ -184,6 +198,11 @@ public final class LiveMoney {
 	// uncached, any thread
 	public Double compute(MiningEntry entry) {
 		return total(computeLines(entry, settings()));
+	}
+
+	// per item, uncached, any thread
+	public List<ShaftValue.Line> computeLines(MiningEntry entry) {
+		return computeLines(entry, settings());
 	}
 
 	private static Double total(List<ShaftValue.Line> lines) {

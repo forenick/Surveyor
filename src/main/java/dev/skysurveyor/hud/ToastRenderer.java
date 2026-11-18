@@ -37,7 +37,8 @@ public final class ToastRenderer {
 		int textWidth = Math.max(font.width(title(text, style)), labelWidth + LABEL_GAP + valueWidth(font, text));
 		int rows = text.rows().size();
 		if (style == Style.VANILLA) return new Size(Math.max(VANILLA_MIN_WIDTH, 2 * VANILLA_X + textWidth), 20 + rows * 12, labelWidth);
-		return new Size(textWidth + 2 * PADDING, 2 * PADDING + HUD_LINE + rows * HUD_LINE - 1, labelWidth);
+		int rim = rim(style);
+		return new Size(textWidth + 2 * PADDING + 2 * rim, 2 * PADDING + HUD_LINE + rows * HUD_LINE - 1 + 2 * rim, labelWidth);
 	}
 
 	public static HudRenderer.Bounds bounds(Font font, ToastText text, Style style, Box box, int screenWidth, int screenHeight) {
@@ -64,18 +65,24 @@ public final class ToastRenderer {
 	// at 0,0 of the current pose, unscaled. alpha 0..1 for the hud fade
 	public static void draw(GuiGraphicsExtractor graphics, Font font, ToastText text, Style style, Size size, float alpha) {
 		int white = ARGB.white(alpha);
+		int rim = rim(style);
 		switch (style) {
 			case VANILLA -> sliced(graphics, size.width(), size.height(), white);
-			case FRAME -> HudRenderer.drawFrame(graphics, size.width(), size.height(), white);
+			case FRAME -> {
+				graphics.pose().pushMatrix();
+				graphics.pose().translate(rim, rim);
+				HudRenderer.drawFrame(graphics, size.width() - 2 * rim, size.height() - 2 * rim, white);
+				graphics.pose().popMatrix();
+			}
 			case DARK -> graphics.fill(0, 0, size.width(), size.height(), ARGB.multiplyAlpha(DARK, alpha));
 		}
 		boolean vanilla = style == Style.VANILLA;
-		int x = vanilla ? VANILLA_X : PADDING;
-		int y = vanilla ? 7 : PADDING;
+		int x = vanilla ? VANILLA_X : PADDING + rim;
+		int y = vanilla ? 7 : PADDING + rim;
 		// vanilla toasts draw text w/o shadow
 		graphics.text(font, title(text, style), x, y, white, !vanilla);
 		int valueX = x + size.labelWidth() + LABEL_GAP;
-		int rowY = vanilla ? 18 : PADDING + HUD_LINE;
+		int rowY = vanilla ? 18 : PADDING + rim + HUD_LINE;
 		for (ToastText.Row row : text.rows()) {
 			graphics.text(font, "§7" + row.label(), x, rowY, white, !vanilla);
 			graphics.text(font, row.value(), valueX, rowY, white, !vanilla);
@@ -83,9 +90,18 @@ public final class ToastRenderer {
 		}
 	}
 
-	private static String title(ToastText text, Style style) {
+	private static int rim(Style style) {
+		return style == Style.FRAME ? HudRenderer.FRAME_RIM : 0;
+	}
+
+	// per frame, so no regex
+	static String title(ToastText text, Style style) {
+		String title = text.title();
+		if (style == Style.VANILLA) return title;
 		// hud box titles are bold
-		return style == Style.VANILLA ? text.title() : text.title().replaceFirst("^§e", "§e§l").replaceFirst("  ", "§r  ");
+		if (title.startsWith("§e")) title = "§e§l" + title.substring(2);
+		int gap = title.indexOf("  ");
+		return gap < 0 ? title : title.substring(0, gap) + "§r" + title.substring(gap);
 	}
 
 	private static int labelWidth(Font font, ToastText text) {

@@ -10,15 +10,17 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import dev.skysurveyor.Surveyor;
+import dev.skysurveyor.util.Guard;
 
 // read only, times vanillas own block break/use packet for ping. we send nothing
 // client thread. sequence = the only int local, the one the packet got
 @Mixin(MultiPlayerGameMode.class)
 public abstract class MultiPlayerGameModeMixin {
-	@Inject(method = "startPrediction", at = @At(value = "INVOKE",
+	// require 0, no ping beats a crash
+	@Inject(method = "startPrediction", require = 0, at = @At(value = "INVOKE",
 			target = "Lnet/minecraft/client/multiplayer/ClientPacketListener;send(Lnet/minecraft/network/protocol/Packet;)V",
 			shift = At.Shift.AFTER))
 	private void skysurveyor$onPredict(ClientLevel level, PredictiveAction action, CallbackInfo ci, @Local int sequence) {
-		Surveyor.HUD.onBlockSent(sequence);
+		Guard.run("block sent", () -> Surveyor.HUD.onBlockSent(sequence));
 	}
 }

@@ -71,6 +71,11 @@ public final class HudExpr {
 	private static final Pattern GROUPED = Pattern.compile("\\d{1,3}(,\\d{3})+(\\.\\d+)?");
 	private static final Pattern NAME = Pattern.compile("([a-z_]+)((?::[a-z_]+)*)", Pattern.CASE_INSENSITIVE);
 	private static final Pattern OPTIONS = Pattern.compile("(?::[a-z_]+)+", Pattern.CASE_INSENSITIVE);
+	// display choice, not a game number. real tags are ~25 chars
+	// parse + eval recurse, these keep a hand edit or share code far from a stack overflow
+	static final int MAX_CHARS = 500;
+	static final int MAX_TOKENS = 200;
+	static final int MAX_DEPTH = 30;
 	// guesses for ranges, f.e. {coins:hourly}
 	private static final Map<String, String> RANGE_GUESS = Map.ofEntries(Map.entry("hourly", "per_hour"),
 			Map.entry("hour", "per_hour"), Map.entry("h", "per_hour"), Map.entry("perhour", "per_hour"),
@@ -118,6 +123,7 @@ public final class HudExpr {
 		private final String src;
 		private final List<Token> tokens = new ArrayList<>();
 		private int p;
+		private int depth;
 		// format + where it was, only the last token may have one
 		private record Format(String name, int at, Node site) {
 		}
@@ -125,6 +131,7 @@ public final class HudExpr {
 		private final List<Format> formats = new ArrayList<>();
 
 		Parser(String src) {
+			if (src.length() > MAX_CHARS) throw new Error("too long");
 			this.src = src;
 			tokenize();
 		}
@@ -132,6 +139,7 @@ public final class HudExpr {
 		private void tokenize() {
 			int i = 0;
 			while (i < src.length()) {
+				if (tokens.size() > MAX_TOKENS) throw new Error("too long");
 				char c = src.charAt(i);
 				if (Character.isWhitespace(c)) {
 					i++;
@@ -185,6 +193,7 @@ public final class HudExpr {
 				}
 				throw new Error("can't read \"" + c + "\"");
 			}
+			if (tokens.size() > MAX_TOKENS) throw new Error("too long");
 		}
 
 		private Matcher at(Pattern pattern, int i) {
@@ -270,7 +279,9 @@ public final class HudExpr {
 					return value(t, index);
 				}
 				case '(' -> {
+					if (++depth > MAX_DEPTH) throw new Error("too many ( inside each other");
 					Node inner = sum();
+					depth--;
 					if (p >= tokens.size() || tokens.get(p).kind() != ')') throw new Error("a ( has no )");
 					Token close = tokens.get(p++);
 					Group group = new Group(inner, null);
@@ -332,7 +343,9 @@ public final class HudExpr {
 
 	private static List<String> tags() {
 		List<String> tags = new ArrayList<>();
-		for (HudValue v : HudValue.values()) tags.add(v.tag());
+		for (HudValue v : HudValue.values()) {
+			if (v.isTag()) tags.add(v.tag());
+		}
 		return tags;
 	}
 

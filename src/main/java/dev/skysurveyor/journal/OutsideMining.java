@@ -11,9 +11,9 @@ import java.util.function.LongFunction;
 import java.util.regex.Matcher;
 
 import dev.skysurveyor.data.Ladder;
+import dev.skysurveyor.detection.Compaction;
 import dev.skysurveyor.detection.ItemCount;
 import dev.skysurveyor.detection.ShaftEvent;
-import dev.skysurveyor.detection.ShaftEvent.PickaxeAbility;
 import dev.skysurveyor.detection.ShaftEvent.Pristine;
 import dev.skysurveyor.detection.ShaftEvent.SacksChanged;
 import dev.skysurveyor.detection.ShaftEvent.ShaftEntered;
@@ -23,51 +23,52 @@ import dev.skysurveyor.detection.TextPatterns;
 
 // sacks gains while mining in the dwarven mines, not in a shaft (research/09)
 // only msgs w/ mining in their window, so stash pickups, crafts etc when idle dont count
-// removed ignored, sell sacks or withdrawing isnt income lost
+// removed ignored, sell sacks or withdrawing isnt income lost. only compaction comes off (Compaction)
 public final class OutsideMining {
 	// msg comes a moment after its window, display choice
 	private static final long SLACK_MILLIS = 2_000L;
 
 	private final TextPatterns patterns;
-	private final BooleanSupplier inMiningArea;
+	private final MiningClock clock;
 	private final LongFunction<Journal.Session> session;
 	private final Consumer<MiningEntry> listener;
-	private boolean inShaft;
-	private long lastMiningAt = -1;
 	private final Map<String, Long> pristineSinceSacks = new LinkedHashMap<>();
 	private final Map<String, Long> crafted = new HashMap<>();
+	// owed carries on for the whole game, a leftover compacted later was counted here too
+	private final Compaction compaction = new Compaction();
 	// per gem, rough + flawed reported outside, for the tails rough
 	private final Map<String, long[]> reported = new HashMap<>();
 
 	public OutsideMining(TextPatterns patterns, BooleanSupplier inMiningArea, LongFunction<Journal.Session> session,
 			Consumer<MiningEntry> listener) {
 		this.patterns = patterns;
-		this.inMiningArea = inMiningArea;
+		this.clock = new MiningClock(MiningClock.Scope.MINES_OUTSIDE_SHAFT, inMiningArea);
 		this.session = session;
 		this.listener = listener;
 	}
 
 	public void onBlockHit(long now) {
-		mining(now);
+		clock.onBlockHit(now);
 	}
 
 	public void onEvent(ShaftEvent event, long now) {
+		clock.onEvent(event, now);
 		switch (event) {
-			case PickaxeAbility ability -> mining(now);
 			case ShaftEntered entered -> {
-				inShaft = true;
 				pristineSinceSacks.clear();
 				crafted.clear();
 			}
 			case ShaftLeft left -> {
-				inShaft = false;
-				lastMiningAt = -1;
+				// mining from before the shaft doesnt count for later msgs
+				clock.reset();
+				// leftovers from before the shaft compacted in it, counted out here first
+				compaction.owe(left.shaft().compactionOwed());
 			}
 			case Pristine pristine -> {
-				if (outside()) add(pristineSinceSacks, pristine.gems());
+				if (clock.inScope()) add(pristineSinceSacks, pristine.gems());
 			}
 			case Supercraft craft -> {
-				if (!inShaft) add(crafted, craft.result());
+				if (!clock.inShaft()) add(crafted, craft.result());
 			}
 			case SacksChanged sacks -> onSacks(sacks, now);
 			default -> {
@@ -87,7 +88,7 @@ public final class OutsideMining {
 
 	// last secs before it never show in sacks (research/06, 07)
 	public void onWorldChange(long now) {
-		if (!inShaft && !pristineSinceSacks.isEmpty() && minedSince(now - Journal.PAUSE_MILLIS)) {
+		if (!clock.inShaft() && !pristineSinceSacks.isEmpty() && clock.minedSince(now - Journal.PAUSE_MILLIS)) {
 			Map<String, Long> tail = tail();
 			if (!tail.isEmpty()) emit(now, tail, true);
 		}
@@ -96,7 +97,8 @@ public final class OutsideMining {
 	}
 
 	private void onSacks(SacksChanged sacks, long now) {
-		if (!outside()) return;
+		if (!clock.inScope()) return;
+		Map<String, Long> compacted = Compaction.of(sacks, crafted);
 		Map<String, Long> items = new LinkedHashMap<>();
 		for (ItemCount item : sacks.added()) {
 			long count = item.count() - crafted.getOrDefault(item.item(), 0L);
@@ -104,9 +106,11 @@ public final class OutsideMining {
 		}
 		crafted.clear();
 		pristineSinceSacks.clear();
-		if (items.isEmpty() || !minedSince(windowStart(sacks, now))) return;
-		items.forEach(this::remember);
-		emit(now, items, false);
+		if (items.isEmpty() || !clock.minedSince(windowStart(sacks, now))) return;
+		// tail ratio from the mix as mined, like GemYield
+		Compaction.beforeCompacting(items, compacted).forEach(this::remember);
+		items = compaction.net(items, compacted);
+		if (!items.isEmpty()) emit(now, items, false);
 	}
 
 	// mining since then = the msgs items came from mining
@@ -141,18 +145,6 @@ public final class OutsideMining {
 		if (m == null) return;
 		Integer tier = Ladder.gem().tier(item, m.group("gem"));
 		if (tier != null && tier <= 1) reported.computeIfAbsent(m.group("gem"), gem -> new long[2])[tier] += count;
-	}
-
-	private void mining(long now) {
-		if (outside()) lastMiningAt = now;
-	}
-
-	private boolean outside() {
-		return !inShaft && inMiningArea.getAsBoolean();
-	}
-
-	private boolean minedSince(long from) {
-		return lastMiningAt >= 0 && lastMiningAt >= from;
 	}
 
 	private static void add(Map<String, Long> totals, ItemCount item) {

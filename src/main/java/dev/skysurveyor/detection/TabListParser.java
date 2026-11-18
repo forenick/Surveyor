@@ -20,6 +20,18 @@ public final class TabListParser {
 		return lines.stream().anyMatch(line -> patterns.matches("tab.mining_area", TextPatterns.clean(line)));
 	}
 
+	// null = widget not in the tab list
+	public Pity pity(List<String> lines) {
+		for (String line : lines) {
+			Matcher m = patterns.match("tab.pity_mineshafts", TextPatterns.clean(line));
+			if (m != null) return new Pity(TextPatterns.number(m.group("now")), TextPatterns.number(m.group("max")));
+		}
+		return null;
+	}
+
+	public record Pity(long now, long max) {
+	}
+
 	public List<Corpse> corpses(List<String> lines) {
 		List<Corpse> corpses = new ArrayList<>();
 		boolean inWidget = false;

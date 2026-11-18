@@ -22,6 +22,8 @@ import dev.skysurveyor.money.ItemPrice;
 // campfireColds = cold before each campfire use, null in entries before 0.22.0, null items = no cold line
 // metal = shafts own metal, null = none or before 0.23.0 (those keep it in otherDrops)
 // keysSaved = loots indexes whose key resourceful saved, null = none or before 0.24.0
+// sacksAdded, sacksRemoved = raw sacks msgs. gems, otherDrops, metal have compaction taken off since 0.25.0
+// otherDrops has rare drops from chat since 0.25.0, also ones that never reached sacks
 public record JournalEntry(
 		int version,
 		long sessionId,
@@ -87,13 +89,16 @@ public record JournalEntry(
 		return saved;
 	}
 
-	// sacks minus corpse loot, supercrafts and the shafts own gem + metal (GemYield, MetalYield)
+	// sacks minus compaction, corpse loot, rare drops, supercrafts and the shafts own gem + metal (GemYield, MetalYield)
+	// plus rare drops from chat (since 0.25.0), own gem too bc its a mob drop
 	static Map<String, Long> otherDrops(Shaft shaft, TextPatterns patterns) {
-		Map<String, Long> drops = new LinkedHashMap<>(shaft.sacksAdded());
+		Map<String, Long> drops = new LinkedHashMap<>(shaft.sacksNet());
 		shaft.notMinedInSacks().forEach((item, count) -> drops.merge(item, -count, Long::sum));
 		String type = shaft.id() == null ? null : shaft.id().type();
-		drops.entrySet().removeIf(e -> e.getValue() <= 0 || GemYield.isShaftGem(e.getKey(), type, patterns)
-				|| MetalYield.isShaftMetal(e.getKey(), type));
+		drops.replaceAll((item, count) -> GemYield.isShaftGem(item, type, patterns) || MetalYield.isShaftMetal(item, type) ? 0
+				: Math.max(0, count));
+		shaft.rareDrops().forEach((item, count) -> drops.merge(item, count, Long::sum));
+		drops.values().removeIf(count -> count <= 0);
 		return drops;
 	}
 

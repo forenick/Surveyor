@@ -14,7 +14,6 @@ import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.DiscreteSliderComponent;
 import io.wispforest.owo.ui.component.LabelComponent;
 import io.wispforest.owo.ui.component.SmallCheckboxComponent;
-import io.wispforest.owo.ui.component.TextAreaComponent;
 import io.wispforest.owo.ui.component.TextBoxComponent;
 import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
@@ -25,7 +24,6 @@ import io.wispforest.owo.ui.core.CursorStyle;
 import io.wispforest.owo.ui.core.HorizontalAlignment;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
-import io.wispforest.owo.ui.core.OwoUIGraphics;
 import io.wispforest.owo.ui.core.Positioning;
 import io.wispforest.owo.ui.core.Size;
 import io.wispforest.owo.ui.core.Sizing;
@@ -33,233 +31,151 @@ import io.wispforest.owo.ui.core.Surface;
 import io.wispforest.owo.ui.core.UIComponent;
 import io.wispforest.owo.ui.core.VerticalAlignment;
 import io.wispforest.owo.ui.inject.GreedyInputUIComponent;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.Whence;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipPositioner;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.resources.Identifier;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Util;
-import org.joml.Vector2i;
 import org.lwjgl.glfw.GLFW;
 
 import dev.skysurveyor.Surveyor;
+import dev.skysurveyor.hud.EditorParts.HoverRow;
 import dev.skysurveyor.hud.HudLayout.Align;
 import dev.skysurveyor.hud.HudLayout.Anchor;
 import dev.skysurveyor.hud.HudLayout.Background;
 import dev.skysurveyor.hud.HudLayout.Box;
 import dev.skysurveyor.hud.HudLayout.Line;
+import dev.skysurveyor.hud.HudLayout.ShowAs;
 import dev.skysurveyor.journal.ToastText;
+import dev.skysurveyor.screen.ModScreen;
 import dev.skysurveyor.screen.PackButton;
-import dev.skysurveyor.screen.SafeLabel;
+import dev.skysurveyor.screen.ScreenParts;
 import dev.skysurveyor.settings.SummarySettings;
 
-public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
-	// opaque, boxes behind it bled through the text
-	private static final int PANEL_FILL = 0xFF141414;
-	private static final int PANEL_OUTLINE = 0x30FFFFFF;
-	private static final Surface PANEL = Surface.flat(PANEL_FILL).and(Surface.outline(PANEL_OUTLINE));
-	private static final Surface MENU = Surface.flat(0xF0101010).and(Surface.outline(0xFFA0A0A0));
+import static dev.skysurveyor.hud.EditorParts.BUTTON;
+import static dev.skysurveyor.hud.EditorParts.CHOICE;
+import static dev.skysurveyor.hud.EditorParts.COLOR_NAMES;
+import static dev.skysurveyor.hud.EditorParts.OUTLINE_SELECTED;
+import static dev.skysurveyor.hud.EditorParts.PANEL;
+import static dev.skysurveyor.hud.EditorParts.PANEL_FILL;
+import static dev.skysurveyor.hud.EditorParts.PANEL_OUTLINE;
+import static dev.skysurveyor.hud.EditorParts.PENCIL_ICON;
+import static dev.skysurveyor.hud.EditorParts.REMOVE;
+import static dev.skysurveyor.hud.EditorParts.RESET_ICON;
+import static dev.skysurveyor.hud.EditorParts.button;
+import static dev.skysurveyor.hud.EditorParts.check;
+import static dev.skysurveyor.hud.EditorParts.crumb;
+import static dev.skysurveyor.hud.EditorParts.drawIcon;
+import static dev.skysurveyor.hud.EditorParts.drawnButton;
+import static dev.skysurveyor.hud.EditorParts.heading;
+import static dev.skysurveyor.hud.EditorParts.iconTextButton;
+import static dev.skysurveyor.hud.EditorParts.menuEntry;
+import static dev.skysurveyor.hud.EditorParts.menuTitle;
+import static dev.skysurveyor.hud.EditorParts.name;
+import static dev.skysurveyor.hud.EditorParts.pixels;
+import static dev.skysurveyor.hud.EditorParts.spacer;
+import static dev.skysurveyor.hud.EditorParts.undoButton;
+import static dev.skysurveyor.screen.ScreenParts.label;
+import static dev.skysurveyor.screen.ScreenParts.strip;
+
+public final class EditHudScreen extends BaseOwoScreen<FlowLayout> implements ModScreen {
 	// no outline, so it doesnt look like a field
 	private static final Surface PREVIEW = Surface.flat(0x8C000000)
 			.and((graphics, c) -> graphics.fill(c.x(), c.y(), c.x() + 2, c.y() + c.height(), 0x40FFFFFF));
-	private static final Surface DIVIDER = (graphics, c) -> graphics.fill(c.x(), c.y(), c.x() + c.width(), c.y() + 1,
-			0x1CFFFFFF);
 	// fits 480x270, grows on wide screens (gui scale 2)
 	private static final int PANEL_MIN = 204;
 	private static final int PANEL_MAX = 280;
-	private static final int ROW_LABEL = 62;
-	private static final int KEY = 38;
-	// action buttons / choices + line rows. fits 480x270
-	private static final int BUTTON = 16;
-	private static final int CHOICE = 14;
-	private static final int MENU_SWATCH = 10;
-	private static final int TIP_WIDTH = 240;
-	// tooltip frame sticks out ~3px
-	private static final int TIP_MARGIN = 5;
-	private static final Identifier REMOVE_ICON = Identifier.withDefaultNamespace("player_list/remove_player");
+	// text columns, measured in build(). these are the vanilla font minimums
+	private static final int ROW_LABEL_MIN = 62;
+	private static final int KEY_MIN = 38;
+	// every row() and keyRow() name, caxton fonts are wider
+	private static final String[] ROW_NAMES = {"Size", "Background", "Align", "Show in", "Labels", "Values"};
+	private static final String[] KEY_NAMES = {"Mode", "Shaft", "Corpse", "PB", "Period", "Format", "Colour", "Show", "Rows",
+			"Amount", "Spent", "Outside"};
 	private static final int OUTLINE = 0x70FFFFFF;
-	private static final int OUTLINE_SELECTED = 0xFFFFFF55;
 	// light, so the preview stays readable
 	private static final int HIDDEN_SHADE = 0x60000000;
 	private static final int GUIDE = 0xFFFF55FF;
 	private static final int DROP_LINE = 0xFFFFFF55;
 	private static final int DRAGGED_LINE = 0x30FFFFFF;
-	private static final int HOVER = 0x20FFFFFF;
 	// box name keeps at least this much before the page name gets cut
 	private static final int CRUMB_MIN = 40;
-	public static final Surface GRIP = (graphics, c) -> {
-		int x = c.x() + (c.width() - 3) / 2;
-		int y = c.y() + (c.height() - 5) / 2;
-		for (int dx = 0; dx <= 2; dx += 2) {
-			for (int dy = 0; dy <= 4; dy += 2) graphics.fill(x + dx, y + dy, x + dx + 1, y + dy + 1, 0xFFA0A0A0);
-		}
-	};
 	// batches scroll/nudge spam into 1 undo step
 	private static final long SETTLE_MILLIS = 400;
-	// 8 wide pixel icons, same in every font
-	private static final String[] RESET_ICON = {
-			"..XXXX.X",
-			".X....XX",
-			"X....XXX",
-			"X.......",
-			"X.......",
-			"X......X",
-			".X....X.",
-			"..XXXX.."};
-	private static final String[] PENCIL_ICON = {
-			"......X.",
-			".....XXX",
-			"....XXX.",
-			"...XXX..",
-			"..XXX...",
-			".XXX....",
-			".XX.....",
-			"X......."};
-	private static final String[] UNDO_ICON = {
-			"...X....",
-			"..XX....",
-			".XXXXXX.",
-			"..XX...X",
-			"...X...X",
-			".......X",
-			"....XXX."};
 	// also the size slider step
 	private static final float SCALE_STEP = 0.1f;
-	private static final int PADDING = 4;
+	static final int PADDING = 4;
 	private static final int[][] TOOLBAR_SPOTS = {{50, 0}, {50, 100}, {0, 0}, {100, 0}, {0, 100}, {100, 100}};
-	private static final Anchor[][] NEW_BOX_SPOTS = {{Anchor.START, Anchor.MIDDLE}, {Anchor.END, Anchor.MIDDLE},
+	// no right middle, hypixels scoreboard sits there
+	private static final Anchor[][] NEW_BOX_SPOTS = {{Anchor.START, Anchor.MIDDLE}, {Anchor.START, Anchor.START},
 			{Anchor.START, Anchor.END}, {Anchor.END, Anchor.END}, {Anchor.MIDDLE, Anchor.END}, {Anchor.MIDDLE, Anchor.MIDDLE}};
 
-	private static final int[] COLORS = {0x000000, 0x0000AA, 0x00AA00, 0x00AAAA, 0xAA0000, 0xAA00AA, 0xFFAA00, 0xAAAAAA,
-			0x555555, 0x5555FF, 0x55FF55, 0x55FFFF, 0xFF5555, 0xFF55FF, 0xFFFF55, 0xFFFFFF};
-	private static final String[] COLOR_NAMES = {"Black", "Dark Blue", "Dark Green", "Dark Aqua", "Dark Red",
-			"Dark Purple", "Gold", "Gray", "Dark Gray", "Blue", "Green", "Aqua", "Red", "Light Purple", "Yellow", "White"};
 	private static final String HIDDEN_NOTE = "hidden";
-	// display choice, fits beside the panel at 960x540
-	private static final int HELP_CARD_WIDTH = 330;
-	private static final String HELP_CARD = "§eHow the HUD editor works\n"
-			+ "§fBoxes §7Drag a box to move it. It snaps to the screen edges and other boxes, hold Ctrl to place it "
-			+ "freely. Arrow keys nudge the selected box, scrolling on it resizes it. Click a box to edit it.\n"
-			+ "§fLines §7Add line shows every value, hover one to see what it counts. Click a line to change its "
-			+ "label, range, format and colours. Drag the grip to move it, untick to hide it.\n"
-			+ "§fRanges §7Shaft is the shaft you're in, or the last one while you're outside. A session ends after 15 "
-			+ "min without mining in the Dwarven Mines or shafting. Per hour is per hour of this session. "
-			+ "All-time is your whole journal.\n"
-			+ "§fColours §7A box has a title, label and value colour, a line can have its own. A small square in the "
-			+ "line list means the line has its own.\n"
-			+ "§fShow in §7Picks where a box shows: in shafts, in the Mines, elsewhere. A box that wouldn't show "
-			+ "where you are now says \"hidden here\".\n"
-			+ "§fAdvanced §7On a line's page, Mode Advanced: type the whole line with &e colours, {values} and maths like "
-			+ "{coins / shafts}, plus colour rules like {cold} <= -80 &c. The list beside it types them for you.\n"
-			+ "§fPresets §7+ Preset adds a ready-made box, Reset brings back the three default boxes.\n"
-			+ "§fSaving §7Changes save by themselves. Ctrl+Z undo, Ctrl+Shift+Z redo, Esc steps back.";
-	private static final String TEXT_HINT = "§8&e colours, {values}, maths like {coins / shafts}. Click the list to type them.";
-	private static final String RULES_HELP = "One rule a line: a {value}, a compare, a number or {value}, a colour. F.e. "
-			+ "{cold} <= -80 &c. A rule colours that value in the text, the first match wins. Maths works on both sides: "
-			+ "{coins / shafts} >= 2M &a. Numbers: 1:30, 90s, 2m next to a time, 2.5M, 1,5M, 150k.";
-	private static final int TEXT_LIMIT = 256;
-	private static final int RULES_LIMIT = 512;
+	// short, fits 480 wide (1080p auto scale)
+	private static final String[] HINTS = {"§7Drag a box to move it, hold Ctrl to place it freely, click it to edit",
+			"§7Scroll on the selected box to resize it, arrow keys nudge it",
+			"§7Changes save by themselves. Click ? in the toolbar for help"};
+	// from the bottom
+	private static final int HINT_UP = 64;
+	// hint lines backdrop, panel colour but see-through
+	private static final int HINT_FILL = 0xC0000000 | (PANEL_FILL & 0xFFFFFF);
 	// value list beside the panel, display choice
 	private static final int LIST_MIN = 170;
 	private static final int LIST_MAX = 190;
-	private static final int RANGE_TEXT = 0xAAAAAA;
-	private static final int FORMAT_TEXT = 0x6A6A6A;
-	private static final int FORMAT_OFF = 0x333333;
-	// right of the mouse if it fits, else left, always on screen
-	private static final ClientTooltipPositioner FIT = (screenW, screenH, x, y, w, h) -> new Vector2i(
-			clamp(x + 12 + w <= screenW - TIP_MARGIN ? x + 12 : x - 12 - w, w, screenW),
-			clamp(y - 12, h, screenH));
+	// line row period tag from here, display choice
+	private static final int TAG_MIN_PANEL = 240;
 
 	private final Screen parent;
 	private final LiveHud hud;
 	private final Map<Box, HudRenderer.Bounds> drawn = new IdentityHashMap<>();
+	// measured boxes, dropped on any edit or new hud data
+	private final Map<Box, HudRenderer.Measured> measured = new IdentityHashMap<>();
+	private HudData measuredData;
 	// one instance till its moved, drawn is by identity
 	private Box defaultToast;
 	private FlowLayout root;
 	private FlowLayout toolbar;
 	private LabelComponent toolbarTitle;
-	private FlowLayout panel;
-	private PanelScroll panelScroll;
+	private final EditorMenu menu = new EditorMenu(this);
+	private final AddLinePage addLinePage = new AddLinePage(this);
+	// the built panel, new one on every rebuild
+	private Page page = new Page();
 	// last frame, so a rebuild doesnt flicker
 	private int panelHeight = 200;
 	// box id + page, so each page keeps its scroll
 	private final Map<String, Double> scrollMemory = new HashMap<>();
-	private String panelKey;
 	private int scrollToRow = -1;
-	private DiscreteSliderComponent scaleSlider;
 	private ButtonComponent resetButton;
 	private ButtonComponent undoButton;
 	private ButtonComponent redoButton;
-	private final List<Field> fields = new ArrayList<>();
-	private final List<TextBoxComponent> homeFields = new ArrayList<>();
-	private Box panelBox;
-	private final List<FlowLayout> lineRows = new ArrayList<>();
-	private final List<UIComponent> lineHandles = new ArrayList<>();
 	private int lineDrag = -1;
 	private int lineGap;
 	private boolean mouseHeld;
 	private HudHistory history;
 	private String unsettled;
 	private long unsettledSince;
+	// any input or polled text since the last json check. idle = no json each frame
+	private boolean dirty;
 	// tooltips drawn by us, owo's dont wrap or stay on screen -> might have to look into this later tho
 	private final Map<UIComponent, List<FormattedCharSequence>> toolbarTips = new IdentityHashMap<>();
-	private final Map<UIComponent, List<FormattedCharSequence>> panelTips = new IdentityHashMap<>();
-	private final Map<UIComponent, List<FormattedCharSequence>> menuTips = new IdentityHashMap<>();
-	private Map<UIComponent, List<FormattedCharSequence>> tipTarget = panelTips;
-	private boolean guideOpen;
+	private int rowLabel = ROW_LABEL_MIN;
+	private int keyWidth = KEY_MIN;
+	// colour buttons on this line page
+	private String boxWord = "Box";
+	private final EditorGuide help = new EditorGuide(this);
 	private ButtonComponent guideButton;
-	private List<FormattedCharSequence> guideLines;
-	// screen + panel the lines were made for
-	private int guideWrap;
-	private boolean guideBeside;
 	private boolean resetArmed;
-	private boolean deleteArmed;
-	private ButtonComponent deleteButton;
-	private FlowLayout deleteRow;
 	// page state, reset when another box is picked
 	private String pageBox;
 	private boolean picking;
 	// by index bc undo makes new line objects
 	private int editedIndex = -1;
-	private LabelComponent preview;
-	private Line previewLine;
-	// unclipped, so clip only runs on change
-	private String previewRaw;
-	// Advanced line page
-	private FreeTextArea textArea;
-	private FreeTextArea rulesArea;
 	// value list clicks type here
 	private boolean typingRules;
-	private LabelComponent textHint;
-	private String textHintText;
-	private FlowLayout ruleHints;
-	private List<String> ruleHintLines = List.of();
 	private boolean listOpen = true;
-	private FlowLayout listPanel;
-	private FlowLayout listContent;
-	private FlowLayout mineGroup;
-	private String mineSource;
 	private String listSearch = "";
-	private final List<Chip> formatChips = new ArrayList<>();
-	private boolean formatsOff;
-	private String hintSource;
-	private boolean hintNoRoom;
-	// rule hints + placeholder redo only when text, rules or data change
-	private String hintRules;
-	private HudData hintData;
-	private String placeholderSource;
-	private HudData placeholderData;
-	private String placeholderText;
-	private String noRoomFor;
-	private FlowLayout menu;
-	private UIComponent menuAnchor;
 	// menu picks happen on press, rest of that press isnt a text drag
 	private boolean swallowDrag;
 	// 2nd press of a double click would hit the new page
@@ -272,6 +188,29 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 	private List<HudSnap.Guide> guides = List.of();
 	private double scrollLeft;
 	private HudLayout shownLayout;
+
+	// everything one built panel owns, dropped whole on rebuild
+	private static final class Page {
+		PanelScroll scroll;
+		FlowLayout panel;
+		Box box;
+		String key;
+		int builtWidth;
+		final Map<UIComponent, List<FormattedCharSequence>> tips = new IdentityHashMap<>();
+		final List<Field> fields = new ArrayList<>();
+		final List<TextBoxComponent> homeFields = new ArrayList<>();
+		final List<FlowLayout> lineRows = new ArrayList<>();
+		final List<UIComponent> lineHandles = new ArrayList<>();
+		DiscreteSliderComponent scaleSlider;
+		FlowLayout deleteRow;
+		ButtonComponent deleteButton;
+		boolean deleteArmed;
+		LabelComponent preview;
+		Line previewLine;
+		// unclipped, so clip only runs on change
+		String previewRaw;
+		AdvancedPage advanced;
+	}
 
 	public EditHudScreen(Screen parent, LiveHud hud) {
 		super(Component.literal("Edit HUD"));
@@ -295,6 +234,8 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 	@Override
 	protected void build(FlowLayout root) {
 		this.root = root;
+		rowLabel = EditorFit.widest(ROW_LABEL_MIN, widths(ROW_NAMES));
+		keyWidth = EditorFit.widest(KEY_MIN, widths(KEY_NAMES));
 		root.padding(Insets.of(PADDING));
 		root.horizontalAlignment(HorizontalAlignment.CENTER);
 		toolbar = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
@@ -306,10 +247,10 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		toolbarTitle = label("§fEdit §bHUD");
 		toolbarTitle.margins(Insets.of(0, 0, 2, 6));
 		toolbar.child(toolbarTitle);
-		undoButton = iconButton(false, b -> undo(false));
+		undoButton = undoButton(false, b -> undo(false));
 		tip(toolbarTips, undoButton, "Undo (Ctrl+Z)");
 		toolbar.child(undoButton);
-		redoButton = iconButton(true, b -> undo(true));
+		redoButton = undoButton(true, b -> undo(true));
 		tip(toolbarTips, redoButton, "Redo (Ctrl+Shift+Z)");
 		toolbar.child(redoButton);
 		ButtonComponent newBox = button("+ New box", b -> newBox());
@@ -318,7 +259,7 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		ButtonComponent preset = button("+ Preset", this::presetMenu);
 		tip(toolbarTips, preset, "Add a ready-made box");
 		toolbar.child(preset);
-		guideButton = button("?", b -> openGuide(!guideOpen));
+		guideButton = button("?", b -> openGuide(!help.isOpen()));
 		guideButton.horizontalSizing(Sizing.fixed(BUTTON));
 		tip(toolbarTips, guideButton, "How the editor works");
 		toolbar.child(guideButton);
@@ -344,23 +285,23 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 				rebuildPanel();
 			}
 			shownLayout = hud.layout();
+			edited();
 		}
-		for (TextBoxComponent field : homeFields) {
-			field.moveCursorToEnd(false);
-			field.moveCursorToStart(false);
-		}
-		homeFields.clear();
+		page.homeFields.forEach(ScreenParts::rehome);
+		page.homeFields.clear();
 		syncFields();
 		refreshLinePage();
 		recordChanges(false);
 		undoButton.active(history.canUndo());
 		redoButton.active(history.canRedo());
 		drawn.clear();
+		// before the boxes, so it never covers one more than the text does
+		if (selected == null) drawHintBackdrop(graphics);
 		for (Box box : hud.layout().boxes) {
-			List<String> lines = lines(box);
-			HudRenderer.Bounds bounds = HudRenderer.bounds(font, box, lines, width, height);
+			HudRenderer.Measured size = measured(box);
+			HudRenderer.Bounds bounds = HudRenderer.bounds(size, box, width, height);
 			drawn.put(box, bounds);
-			HudRenderer.draw(graphics, font, box, lines, bounds);
+			HudRenderer.draw(graphics, font, box, size, bounds);
 			if (!hud.visible(box)) drawHidden(graphics, bounds);
 			graphics.outline(bounds.x() - 1, bounds.y() - 1, bounds.width() + 2, bounds.height() + 2,
 					box == selected ? OUTLINE_SELECTED : OUTLINE);
@@ -380,12 +321,8 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 			if (guide.label() != null) graphics.text(font, guide.label(), guide.labelX(), guide.labelY(), GUIDE, true);
 		}
 		if (selected == null) {
-			// short, fits 480 wide (1080p auto scale)
-			String[] hint = {"§7Drag a box to move it, hold Ctrl to place it freely, click it to edit",
-					"§7Scroll on the selected box to resize it, arrow keys nudge it",
-					"§7Changes save by themselves. Click ? in the toolbar for help"};
-			for (int i = 0; i < hint.length; i++) {
-				graphics.text(font, hint[i], (width - font.width(hint[i])) / 2, height - 64 + i * 11, 0xFFFFFFFF, true);
+			for (int i = 0; i < HINTS.length; i++) {
+				graphics.text(font, HINTS[i], (width - font.width(HINTS[i])) / 2, height - HINT_UP + i * 11, 0xFFFFFFFF, true);
 			}
 		}
 		placeToolbar();
@@ -394,8 +331,10 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		super.extractRenderState(graphics, mouseX, mouseY, delta);
 		fitPanel();
 		fitList();
-		fitMenu();
-		drawRulesPlaceholder(graphics);
+		menu.fit();
+		if (page.advanced != null && !menu.isOpen() && page.scroll != null) {
+			page.advanced.drawPlaceholder(graphics, page.scroll.y(), panelBottom());
+		}
 		if (lineDrag >= 0) {
 			scrollWhileDragging(mouseY);
 			graphics.nextStratum();
@@ -404,78 +343,62 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		drawTip(graphics, mouseX, mouseY);
 	}
 
-	private static int clamp(int pos, int size, int screen) {
-		return Math.max(TIP_MARGIN, Math.min(pos, screen - TIP_MARGIN - size));
+	// same data + no edit = same rows, so not every frame
+	private HudRenderer.Measured measured(Box box) {
+		HudData data = hud.data();
+		if (data != measuredData) {
+			measured.clear();
+			measuredData = data;
+		}
+		return measured.computeIfAbsent(box, b -> HudRenderer.measure(font, b, rows(b)));
 	}
 
 	// replaces owo's tooltip, smallest hovered component wins
 	private void drawTip(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+		boolean onGuide = help.isOpen() && help.over(mouseX, mouseY);
 		if (dragging != null || lineDrag >= 0) return;
-		Map<UIComponent, List<FormattedCharSequence>> tips = menu != null && menu.isInBoundingBox(mouseX, mouseY) ? menuTips
-				: inPanel(mouseX, mouseY) || inList(mouseX, mouseY) ? panelTips
+		// card wins over panel tips under it, else it cant be scrolled
+		Map<UIComponent, List<FormattedCharSequence>> tips = menu.contains(mouseX, mouseY) ? menu.tips()
+				: onGuide ? Map.of()
+				: inPanel(mouseX, mouseY) || inList(mouseX, mouseY) ? page.tips
 				: toolbar.isInBoundingBox(mouseX, mouseY) ? toolbarTips : Map.of();
-		List<FormattedCharSequence> lines = null;
-		long smallest = Long.MAX_VALUE;
-		for (Map.Entry<UIComponent, List<FormattedCharSequence>> tip : tips.entrySet()) {
-			UIComponent c = tip.getKey();
-			long area = (long) c.width() * c.height();
-			if (area < smallest && c.isInBoundingBox(mouseX, mouseY)) {
-				smallest = area;
-				lines = tip.getValue();
-			}
-		}
+		List<FormattedCharSequence> lines = ScreenParts.pick(tips, mouseX, mouseY, c -> true);
 		if (lines != null) {
-			graphics.setTooltipForNextFrame(font, lines, FIT, mouseX, mouseY, true);
-		} else if (guideOpen) {
-			drawGuide(graphics, mouseX, mouseY);
+			graphics.setTooltipForNextFrame(font, lines, ScreenParts.FIT, mouseX, mouseY, true);
+		} else if (help.isOpen()) {
+			help.draw(graphics, toolbar, page.scroll);
 		}
 	}
 
-	// beside the panel if it fits there, else over it. never over the toolbar
-	private void drawGuide(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
-		boolean toolbarTop = toolbar.y() < height / 2;
-		int top = (toolbarTop ? toolbar.y() + toolbar.height() + 2 : 0) + TIP_MARGIN;
-		int bottom = (toolbarTop ? height : toolbar.y() - 2) - TIP_MARGIN;
-		boolean panelRight = panelScroll != null && panelScroll.x() > width / 2;
-		int px = panelScroll == null ? 0 : panelRight ? panelScroll.x() : panelScroll.x() + panelScroll.width();
-		int beside = panelScroll == null ? 0 : (panelRight ? px : width - px) - 8 - 2 * TIP_MARGIN - 6;
-		int full = width - 2 * TIP_MARGIN - 8;
-		int key = java.util.Objects.hash(width, height, px, panelRight);
-		if (guideLines == null || guideWrap != key) {
-			guideWrap = key;
-			guideBeside = false;
-			Component text = Component.literal(HELP_CARD);
-			List<Integer> wraps = new ArrayList<>();
-			for (int w : new int[] {HELP_CARD_WIDTH, 400}) {
-				if (w <= beside) wraps.add(-w);
-			}
-			if (beside > 0 && beside < 400) wraps.add(-beside);
-			wraps.add(Math.min(HELP_CARD_WIDTH, full));
-			wraps.add(Math.min(400, full));
-			wraps.add(full);
-			for (int w : wraps) {
-				guideLines = font.split(text, Math.abs(w));
-				guideBeside = w < 0;
-				// 10px a line + frame
-				if (guideLines.size() * 10 + 8 <= bottom - top) break;
-			}
-		}
-		boolean side = guideBeside;
-		graphics.setTooltipForNextFrame(font, guideLines, (screenW, screenH, x, y, w, h) -> new Vector2i(
-				clamp(!side ? (screenW - w) / 2 : panelRight ? px - 8 - w : px + 8, w, screenW),
-				clamp(toolbarTop ? top : Math.max(top, bottom - h), h, screenH)), mouseX, mouseY, true);
+	private void drawHintBackdrop(GuiGraphicsExtractor graphics) {
+		int widest = 0;
+		for (String hint : HINTS) widest = Math.max(widest, font.width(hint));
+		int x = (width - widest) / 2 - 4;
+		int y = height - HINT_UP - 3;
+		// 3 lines 11 apart, text + shadow 9 tall
+		int h = 2 * 11 + 9 + 5;
+		graphics.fill(x, y, x + widest + 8, y + h, HINT_FILL);
+		graphics.outline(x, y, widest + 8, h, PANEL_OUTLINE);
 	}
 
-	private void tip(UIComponent c, String text) {
-		tip(tipTarget, c, text);
+	private int[] widths(String[] texts) {
+		int[] widths = new int[texts.length];
+		for (int i = 0; i < texts.length; i++) widths[i] = font.width(texts[i]);
+		return widths;
+	}
+
+	void tip(UIComponent c, String text) {
+		tip(page.tips, c, text);
 	}
 
 	private void tip(Map<UIComponent, List<FormattedCharSequence>> target, UIComponent c, String text) {
-		target.put(c, font.split(Component.literal(text), TIP_WIDTH));
+		target.put(c, EditorParts.tipLines(font, text));
 	}
 
 	// panel doesnt scroll by itself during a line drag
 	private void scrollWhileDragging(int mouseY) {
+		List<FlowLayout> lineRows = page.lineRows;
+		PanelScroll panelScroll = page.scroll;
 		if (panelScroll == null || lineRows.isEmpty()) return;
 		int top = panelScroll.y();
 		int bottom = top + panelScroll.height();
@@ -491,7 +414,7 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 
 	private void updateLineGap(double mouseY) {
 		lineGap = 0;
-		for (FlowLayout row : lineRows) {
+		for (FlowLayout row : page.lineRows) {
 			if (mouseY > row.y() + row.height() / 2.0) lineGap++;
 		}
 	}
@@ -508,6 +431,7 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 	}
 
 	private void drawLineDrag(GuiGraphicsExtractor graphics) {
+		List<FlowLayout> lineRows = page.lineRows;
 		if (lineDrag >= lineRows.size()) return;
 		FlowLayout from = lineRows.get(lineDrag);
 		graphics.fill(from.x(), from.y(), from.x() + from.width(), from.y() + from.height(), DRAGGED_LINE);
@@ -518,8 +442,22 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		graphics.fill(from.x(), y - 1, from.x() + from.width(), y + 1, DROP_LINE);
 	}
 
+	// input may have changed the layout, json + rows again
+	private void edited() {
+		dirty = true;
+		measured.clear();
+	}
+
 	@Override
 	public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
+		try {
+			return clicked(click, doubled);
+		} finally {
+			edited();
+		}
+	}
+
+	private boolean clicked(MouseButtonEvent click, boolean doubled) {
 		// prior typing/scrolling = own undo step
 		syncFields();
 		recordChanges(true);
@@ -529,15 +467,15 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		boolean rebuilt = rebuiltByClick;
 		rebuiltByClick = false;
 		if (doubled && rebuilt && overPanel(click.x(), click.y())) return true;
-		if (menu != null) {
+		if (menu.isOpen()) {
 			// rows + checkboxes act on any button, panel is left click only
-			if (menu.isInBoundingBox(click.x(), click.y())) return !left || super.mouseClicked(click, doubled);
+			if (menu.contains(click.x(), click.y())) return !left || super.mouseClicked(click, doubled);
 			// 1st click outside only closes it
 			closeMenu();
 			return true;
 		}
 		if (resetArmed && !resetButton.isInBoundingBox(click.x(), click.y())) armReset(false);
-		if (deleteArmed && !deleteButton.isInBoundingBox(click.x(), click.y())) armDelete(false);
+		if (page.deleteArmed && !page.deleteButton.isInBoundingBox(click.x(), click.y())) armDelete(false);
 		int handle = left ? lineHandleAt(click.x(), click.y()) : -1;
 		if (handle >= 0) {
 			root.focusHandler().focus(null, null);
@@ -580,6 +518,14 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 
 	@Override
 	public boolean mouseDragged(MouseButtonEvent drag, double dx, double dy) {
+		try {
+			return dragged(drag, dx, dy);
+		} finally {
+			edited();
+		}
+	}
+
+	private boolean dragged(MouseButtonEvent drag, double dx, double dy) {
 		if (swallowDrag) return true;
 		if (lineDrag >= 0) {
 			updateLineGap(drag.y());
@@ -617,8 +563,20 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 
 	@Override
 	public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {
+		try {
+			return scrolled(mouseX, mouseY, horizontal, vertical);
+		} finally {
+			edited();
+		}
+	}
+
+	private boolean scrolled(double mouseX, double mouseY, double horizontal, double vertical) {
 		// panel would scroll away from it
-		if (menu != null && !menu.isInBoundingBox(mouseX, mouseY)) closeMenu();
+		if (menu.isOpen() && !menu.contains(mouseX, mouseY)) closeMenu();
+		if (vertical != 0 && help.isOpen() && help.over(mouseX, mouseY)) {
+			help.scroll(vertical);
+			return true;
+		}
 		HudRenderer.Bounds bounds = selected == null ? null : drawn.get(selected);
 		if (vertical == 0 || bounds == null || overPanel(mouseX, mouseY) || !bounds.contains(mouseX, mouseY)) {
 			return super.mouseScrolled(mouseX, mouseY, horizontal, vertical);
@@ -633,19 +591,27 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		if (Math.abs(scrollLeft) < 1e-6) scrollLeft = 0;
 		float scale = Math.round((selected.scale + steps * SCALE_STEP) * 10) / 10f;
 		selected.scale = Math.max(HudLayout.MIN_SCALE, Math.min(HudLayout.MAX_SCALE, scale));
-		if (scaleSlider != null) scaleSlider.setFromDiscreteValue(selected.scale);
+		if (page.scaleSlider != null) page.scaleSlider.setFromDiscreteValue(selected.scale);
 		return true;
 	}
 
 	@Override
 	public boolean keyPressed(KeyEvent key) {
+		try {
+			return pressed(key);
+		} finally {
+			edited();
+		}
+	}
+
+	private boolean pressed(KeyEvent key) {
 		// esc goes back one step before it closes the editor
 		if (key.key() == GLFW.GLFW_KEY_ESCAPE) {
-			if (menu != null) {
+			if (menu.isOpen()) {
 				closeMenu();
 				return true;
 			}
-			if (guideOpen) {
+			if (help.isOpen()) {
 				openGuide(false);
 				return true;
 			}
@@ -678,12 +644,20 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 
 	@Override
 	public boolean mouseReleased(MouseButtonEvent release) {
+		try {
+			return released(release);
+		} finally {
+			edited();
+		}
+	}
+
+	private boolean released(MouseButtonEvent release) {
 		mouseHeld = false;
 		swallowDrag = false;
 		if (lineDrag >= 0) {
 			int from = lineDrag;
 			lineDrag = -1;
-			if (panelBox != null) panelBox.moveLine(from, lineGap);
+			if (page.box != null) page.box.moveLine(from, lineGap);
 			rebuildPanel();
 			return true;
 		}
@@ -729,8 +703,8 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 			selected = null;
 			rebuildPanel();
 		});
-		tip(toolbarTips, resetButton, armed ? "Click again to replace all boxes with the three default ones. Ctrl+Z brings yours back."
-				: "Replace all boxes with the three default ones");
+		tip(toolbarTips, resetButton, armed ? "Click again to replace all boxes with the default ones. Ctrl+Z brings yours back."
+				: "Replace all boxes with the default ones");
 		resetButton.margins(Insets.left(6));
 		toolbar.child(resetButton);
 	}
@@ -756,14 +730,15 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 	}
 
 	private void presetMenu(ButtonComponent anchor) {
-		openMenu(anchor, m -> {
+		menu.open(anchor, m -> {
 			m.child(menuTitle("Add a ready-made box"));
 			for (HudLayout.Preset preset : HudLayout.presets()) {
 				FlowLayout entry = menuEntry("§f" + preset.name(), () -> addPreset(preset));
-				tip(entry, preset.description());
+				m.tip(entry, preset.description());
 				m.child(entry);
 			}
 		});
+		rebuiltByClick = true;
 	}
 
 	private void addPreset(HudLayout.Preset preset) {
@@ -789,7 +764,7 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 	}
 
 	private boolean free(Box box) {
-		HudRenderer.Bounds bounds = HudRenderer.bounds(font, box, lines(box), width, height).grown(HudLayout.MARGIN);
+		HudRenderer.Bounds bounds = HudRenderer.bounds(font, box, rows(box), width, height).grown(HudLayout.MARGIN);
 		return drawn.values().stream().noneMatch(b -> bounds.overlapArea(b) > 0);
 	}
 
@@ -801,42 +776,65 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 	}
 
 	private void armDelete(boolean armed) {
-		deleteArmed = armed;
-		if (deleteRow == null) return;
-		if (deleteButton != null) {
-			dropFocusIn(deleteButton);
-			panelTips.remove(deleteButton);
-			deleteRow.removeChild(deleteButton);
+		Page page = this.page;
+		page.deleteArmed = armed;
+		if (page.deleteRow == null) return;
+		if (page.deleteButton != null) {
+			dropFocusIn(page.deleteButton);
+			page.tips.remove(page.deleteButton);
+			page.deleteRow.removeChild(page.deleteButton);
 		}
-		Box box = panelBox;
-		deleteButton = iconTextButton(REMOVE, armed ? "§cReally delete?" : "§cDelete box", null, b -> {
-			if (!deleteArmed) {
+		Box box = page.box;
+		page.deleteButton = iconTextButton(font, REMOVE, armed ? "§cReally delete?" : "§cDelete box", null, b -> {
+			if (!page.deleteArmed) {
 				armDelete(true);
 				return;
 			}
-			deleteArmed = false;
+			page.deleteArmed = false;
 			hud.layout().boxes.remove(box);
 			selected = null;
 			rebuildPanel();
 		});
-		tip(deleteButton, armed ? "Click again to delete this box. Ctrl+Z brings it back."
+		tip(page.deleteButton, armed ? "Click again to delete this box. Ctrl+Z brings it back."
 				: "Delete this box. Ctrl+Z brings it back.");
-		deleteRow.child(deleteButton);
+		page.deleteRow.child(page.deleteButton);
 	}
 
-	private record Field(Supplier<String> value, Consumer<String> apply) {
+	// polled bc caxton cancels onValueChange. polled = last seen value, a change counts as an edit
+	private static final class Field {
+		private final Supplier<String> value;
+		private final Consumer<String> apply;
+		private String polled;
+
+		Field(Supplier<String> value, Consumer<String> apply) {
+			this.value = value;
+			this.apply = apply;
+		}
 	}
 
-	// polled bc caxton cancels onValueChange
+	void field(Supplier<String> value, Consumer<String> apply) {
+		page.fields.add(new Field(value, apply));
+	}
+
 	private void syncFields() {
-		for (Field field : fields) field.apply().accept(field.value().get());
+		for (Field field : page.fields) {
+			String value = field.value.get();
+			if (!value.equals(field.polled)) {
+				field.polled = value;
+				edited();
+			}
+			field.apply.accept(value);
+		}
 	}
 
 	// waits out drags, mouse down, title typing. now = record right away
 	private void recordChanges(boolean now) {
+		// nothing touched since the layout matched the history
+		if (!dirty) return;
 		String json = hud.layout().toJson();
 		if (json.equals(history.current())) {
 			unsettled = null;
+			dirty = false;
 			return;
 		}
 		if (!now) {
@@ -850,6 +848,7 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 			if (time - unsettledSince < SETTLE_MILLIS) return;
 		}
 		unsettled = null;
+		dirty = false;
 		history.record(json);
 		hud.save();
 	}
@@ -860,13 +859,17 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 	}
 
 	// owo keeps a removed component focused, enter/space would still press it
-	private void dropFocusIn(UIComponent removed) {
+	void dropFocusIn(UIComponent removed) {
 		for (UIComponent c = root.focusHandler().focused(); c != null; c = c.parent()) {
 			if (c == removed) {
 				root.focusHandler().focus(null, null);
 				return;
 			}
 		}
+	}
+
+	void focus(UIComponent c) {
+		root.focusHandler().focus(c, UIComponent.FocusSource.MOUSE_CLICK);
 	}
 
 	private static List<String> lineValues(Box box) {
@@ -896,6 +899,7 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		if (resetArmed) armReset(false);
 		rebuildPanel();
 		hud.save();
+		edited();
 	}
 
 	// null = toast isnt movable, nothing to place
@@ -912,10 +916,10 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 
 	private HudRenderer.Bounds boundsOf(Box box) {
 		if (HudLayout.TOAST_ID.equals(box.id)) return ToastRenderer.bounds(font, ToastText.example(), toastStyle(), box, width, height);
-		return HudRenderer.bounds(font, box, lines(box), width, height);
+		return HudRenderer.bounds(font, box, rows(box), width, height);
 	}
 
-	private void buildToastPage() {
+	private void buildToastPage(FlowLayout panel) {
 		panel.child(label("§fShaft toast"));
 		LabelComponent what = label("§7Shows for a few seconds when you leave a shaft. Drag it to move it, scroll on it to resize it.");
 		what.horizontalSizing(Sizing.fixed(inner()));
@@ -926,9 +930,9 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		panel.child(where);
 	}
 
-	private List<String> lines(Box box) {
-		List<String> lines = HudBoxText.lines(box, hud.data(), true);
-		return lines.isEmpty() ? List.of("§8(empty)") : lines;
+	private List<HudRow> rows(Box box) {
+		List<HudRow> rows = HudBoxText.rows(box, hud.data(), true);
+		return rows.isEmpty() ? List.of(HudRow.text("§8(empty)")) : rows;
 	}
 
 	// not while dragging or reset armed, so nothing jumps under the mouse
@@ -965,10 +969,12 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 			// never over the box being edited if theres another spot
 			if (covered > 0 && drawnBox.getKey() == selected) cost += 10_000_000;
 		}
+		PanelScroll panelScroll = page.scroll;
 		if (panelScroll != null && area.overlapArea(
 				new HudRenderer.Bounds(panelScroll.x(), panelScroll.y(), panelScroll.width(), panelScroll.height())) > 0) {
 			cost += 100_000_000;
 		}
+		FlowLayout listPanel = valueList() == null ? null : valueList().panel();
 		if (listPanel != null && area.overlapArea(new HudRenderer.Bounds(listPanel.x(), listPanel.y(), listPanel.width(), listPanel.height())) > 0) {
 			cost += 100_000_000;
 		}
@@ -976,28 +982,29 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 	}
 
 	private boolean overPanel(double x, double y) {
-		return toolbar.isInBoundingBox(x, y) || inPanel(x, y) || inList(x, y) || (menu != null && menu.isInBoundingBox(x, y));
+		return toolbar.isInBoundingBox(x, y) || inPanel(x, y) || inList(x, y) || menu.contains(x, y);
 	}
 
 	// empty part under the content lets boxes show + get clicked
 	private boolean inPanel(double x, double y) {
-		return panelScroll != null && panelScroll.isInBoundingBox(x, y) && y < panelBottom();
+		return page.scroll != null && page.scroll.isInBoundingBox(x, y) && y < panelBottom();
 	}
 
 	private int panelBottom() {
-		return Math.min(panelScroll.y() + panelScroll.height(), panel.y() + panel.height());
+		return Math.min(page.scroll.y() + page.scroll.height(), page.panel.y() + page.panel.height());
 	}
 
 	// sizes known after layout
 	private void fitPanel() {
+		PanelScroll panelScroll = page.scroll;
 		if (panelScroll == null || panelScroll.width() == 0) return;
 		// gui scale changed w/ the panel open
-		if (builtPanelWidth != panelWidth()) {
+		if (page.builtWidth != panelWidth()) {
 			rebuildPanel();
 			return;
 		}
 		// no room beside it = leave the top for the toolbar
-		int beside = listPanel == null ? 0 : listWidth() + 2;
+		int beside = valueList() == null ? 0 : listWidth() + 2;
 		boolean narrow = toolbar.width() + panelScroll.width() + beside + 3 * PADDING > width;
 		// title goes first, so the panel keeps the full height at 480 wide
 		if (narrow && toolbarTitle.parent() != null) {
@@ -1013,12 +1020,13 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 			return;
 		}
 		if (scrollToRow >= 0) {
-			if (scrollToRow < lineRows.size()) showRow(lineRows.get(scrollToRow));
+			if (scrollToRow < page.lineRows.size()) showRow(page.lineRows.get(scrollToRow));
 			scrollToRow = -1;
 		}
 	}
 
 	private void showRow(UIComponent row) {
+		PanelScroll panelScroll = page.scroll;
 		double offset = panelScroll.offset();
 		int top = row.y() - panelScroll.y();
 		int bottom = top + row.height();
@@ -1050,22 +1058,6 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		}
 	}
 
-	private static final class HoverRow extends FlowLayout {
-		HoverRow() {
-			super(Sizing.fill(100), Sizing.content(), Algorithm.HORIZONTAL);
-			gap(2);
-			verticalAlignment(VerticalAlignment.CENTER);
-			padding(Insets.vertical(1));
-			cursorStyle(CursorStyle.HAND);
-		}
-
-		@Override
-		public void draw(OwoUIGraphics graphics, int mouseX, int mouseY, float partialTicks, float delta) {
-			if (isInBoundingBox(mouseX, mouseY)) graphics.fill(x, y, x + width, y + height, HOVER);
-			super.draw(graphics, mouseX, mouseY, partialTicks, delta);
-		}
-	}
-
 	// equal cells, so options never wrap one by one
 	private final class Grid extends FlowLayout {
 		private final int cell;
@@ -1083,117 +1075,80 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		}
 	}
 
-	private static final class FreeTextArea extends TextAreaComponent {
-		// rules = 1 rule a line, text = 1 HUD line
-		private final boolean multiline;
-
-		FreeTextArea(Sizing horizontal, Sizing vertical, boolean multiline) {
-			super(horizontal, vertical);
-			this.multiline = multiline;
-		}
-
-		int cursor() {
-			return editBox.cursor();
-		}
-
-		int limit() {
-			return editBox.characterLimit();
-		}
-
-		void set(String text, int cursor) {
-			text(text);
-			editBox.setSelecting(false);
-			editBox.seekCursor(Whence.ABSOLUTE, cursor);
-		}
-
-		void select(int from, int to) {
-			editBox.setSelecting(false);
-			editBox.seekCursor(Whence.ABSOLUTE, from);
-			editBox.setSelecting(true);
-			editBox.seekCursor(Whence.ABSOLUTE, to);
-			editBox.setSelecting(false);
-		}
-
-		@Override
-		public boolean keyPressed(KeyEvent input) {
-			if (!multiline && (input.key() == GLFW.GLFW_KEY_ENTER || input.key() == GLFW.GLFW_KEY_KP_ENTER)) return true;
-			if (input.isCycleFocus()) return false;
-			// vanilla paste keeps newlines + \r
-			if (input.isPaste()) {
-				String paste = Minecraft.getInstance().keyboardHandler.getClipboard().replace("\r", "");
-				editBox.insertText(multiline ? paste : paste.replace('\n', ' '));
-				return true;
-			}
-			return super.keyPressed(input);
-		}
-
-		// vanilla eats the wheel even w/ nothing to scroll, panel should scroll
-		@Override
-		public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {
-			return maxScrollAmount() > 0 && super.mouseScrolled(mouseX, mouseY, horizontal, vertical);
-		}
-	}
-
-	private int builtPanelWidth;
-
 	private int panelWidth() {
 		return Math.clamp(width * 30 / 100, PANEL_MIN, PANEL_MAX);
 	}
 
 	// panel minus its padding
-	private int inner() {
+	int inner() {
 		return panelWidth() - 10;
+	}
+
+	FlowLayout root() {
+		return root;
+	}
+
+	HudData data() {
+		return hud.data();
+	}
+
+	int panelHeight() {
+		return panelHeight;
+	}
+
+	String clip(String text, int max) {
+		return ScreenParts.clip(font, text, max);
+	}
+
+	void swallowDrag() {
+		swallowDrag = true;
+	}
+
+	boolean listOpen() {
+		return listOpen;
+	}
+
+	void listOpen(boolean open) {
+		listOpen = open;
+	}
+
+	String listSearch() {
+		return listSearch;
+	}
+
+	void listSearch(String search) {
+		listSearch = search;
+	}
+
+	boolean typingRules() {
+		return typingRules;
+	}
+
+	void typingRules(boolean rules) {
+		typingRules = rules;
+	}
+
+	AdvancedPage advancedPage() {
+		return page.advanced;
+	}
+
+	private ValueList valueList() {
+		return page.advanced == null ? null : page.advanced.list();
 	}
 
 	private void removePanel() {
 		syncFields();
-		if (panelScroll != null) {
-			dropFocusIn(panelScroll);
-			scrollMemory.put(panelKey, panelScroll.offset());
-			root.removeChild(panelScroll);
+		if (page.scroll != null) {
+			dropFocusIn(page.scroll);
+			scrollMemory.put(page.key, page.scroll.offset());
+			root.removeChild(page.scroll);
 		}
-		if (listPanel != null) {
-			dropFocusIn(listPanel);
-			root.removeChild(listPanel);
-		}
+		if (valueList() != null) valueList().remove();
 		closeMenu();
-		panelScroll = null;
-		panel = null;
-		panelBox = null;
-		panelTips.clear();
-		listPanel = null;
-		listContent = null;
-		mineGroup = null;
-		mineSource = null;
-		formatChips.clear();
-		textArea = null;
-		rulesArea = null;
-		textHint = null;
-		textHintText = null;
-		ruleHints = null;
-		ruleHintLines = List.of();
-		scaleSlider = null;
-		fields.clear();
-		homeFields.clear();
-		lineRows.clear();
-		lineHandles.clear();
-		deleteButton = null;
-		deleteRow = null;
-		deleteArmed = false;
-		preview = null;
-		previewLine = null;
-		previewRaw = null;
-		hintSource = null;
-		hintNoRoom = false;
-		hintRules = null;
-		hintData = null;
-		placeholderSource = null;
-		placeholderData = null;
-		placeholderText = null;
-		noRoomFor = null;
+		page = new Page();
 	}
 
-	private void rebuildPanel() {
+	void rebuildPanel() {
 		if (selected == null || !selected.id.equals(pageBox)) {
 			picking = false;
 			editedIndex = -1;
@@ -1206,13 +1161,15 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		}
 		Box box = selected;
 		pageBox = box.id;
-		panelBox = box;
-		panelKey = box.id + "/" + (picking ? "picker" : editedIndex >= 0 ? "line" + editedIndex : "box");
-		builtPanelWidth = panelWidth();
-		panel = UIContainers.verticalFlow(Sizing.fixed(builtPanelWidth), Sizing.content());
+		page.box = box;
+		page.key = box.id + "/" + (picking ? "picker" : editedIndex >= 0 ? "line" + editedIndex : "box");
+		page.builtWidth = panelWidth();
+		FlowLayout panel = UIContainers.verticalFlow(Sizing.fixed(page.builtWidth), Sizing.content());
 		panel.padding(Insets.of(5));
 		panel.gap(1);
-		panelScroll = new PanelScroll(panelHeight, panel);
+		page.panel = panel;
+		PanelScroll panelScroll = new PanelScroll(panelHeight, panel);
+		page.scroll = panelScroll;
 		panelScroll.surface((graphics, c) -> {
 			int h = panelBottom() - c.y();
 			graphics.fill(c.x(), c.y(), c.x() + c.width(), c.y() + h, PANEL_FILL);
@@ -1220,15 +1177,15 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		});
 		panelScroll.scrollbar(ScrollContainer.Scrollbar.flat(Color.ofArgb(0x80FFFFFF)));
 		panelScroll.scrollbarThiccness(2);
-		panelScroll.offset(scrollMemory.getOrDefault(panelKey, 0.0));
+		panelScroll.offset(scrollMemory.getOrDefault(page.key, 0.0));
 		// measured now, after undo the box wasnt drawn yet
 		HudRenderer.Bounds bounds = boundsOf(box);
 		boolean boxOnRight = bounds.x() + bounds.width() / 2 > width / 2;
 		panelScroll.positioning(Positioning.relative(boxOnRight ? 0 : 100, 100));
-		if (box == hud.layout().toast) buildToastPage();
-		else if (picking) buildPicker(box);
-		else if (editedIndex >= 0) buildLinePage(box, editedIndex);
-		else buildBoxPage(box);
+		if (box == hud.layout().toast) buildToastPage(panel);
+		else if (picking) addLinePage.build(panel, box);
+		else if (editedIndex >= 0) buildLinePage(panel, box, editedIndex);
+		else buildBoxPage(panel, box);
 		// after the content, owo lays out right away and would clamp the offset to 0
 		root.child(panelScroll);
 		rebuiltByClick = true;
@@ -1241,14 +1198,14 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		rebuildPanel();
 	}
 
-	private void backToLines() {
+	void backToLines() {
 		scrollToRow = editedIndex;
 		editedIndex = -1;
 		picking = false;
 		rebuildPanel();
 	}
 
-	private void buildBoxPage(Box box) {
+	private void buildBoxPage(FlowLayout panel, Box box) {
 		panel.child(crumbs(box, null));
 		FlowLayout linesHead = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
 		linesHead.verticalAlignment(VerticalAlignment.CENTER);
@@ -1285,16 +1242,16 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		scale.message(text -> Component.literal(text + "×"));
 		scale.onChanged().subscribe(value -> box.scale = (float) scale.discreteValue());
 		tip(scale, "Box size. You can also scroll on the box.");
-		scaleSlider = scale;
+		page.scaleSlider = scale;
 		panel.child(row("Size", scale));
 
-		Grid background = new Grid(Background.values().length, ROW_LABEL);
+		Grid background = new Grid(Background.values().length, rowLabel);
 		for (Background option : Background.values()) {
 			background.add(choice(name(option), box.background == option, () -> box.background = option));
 		}
 		panel.child(row("Background", background));
 
-		Grid align = new Grid(Align.values().length, ROW_LABEL);
+		Grid align = new Grid(Align.values().length, rowLabel);
 		for (Align option : Align.values()) {
 			align.add(choice(name(option), box.align == option, () -> box.align = option));
 		}
@@ -1315,16 +1272,19 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		panel.child(boxColor(box, true, box.labelColor, code -> box.labelColor = code, box.labelBold, b -> box.labelBold = b));
 		panel.child(boxColor(box, false, box.valueColor, code -> box.valueColor = code, box.valueBold, b -> box.valueBold = b));
 
-		deleteRow = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-		deleteRow.margins(Insets.top(5));
-		panel.child(deleteRow);
+		page.deleteRow = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+		page.deleteRow.margins(Insets.top(5));
+		panel.child(page.deleteRow);
 		armDelete(false);
 	}
 
 	// right of the title field
 	private void titleColor(Box box, FlowLayout row) {
-		ButtonComponent color = colorButton(box.titleColorOrDefault(), null, code -> box.titleColor = "e".equals(code) ? null : code);
-		tip(color, "Title colour of this box: " + COLOR_NAMES[colorIndex(box.titleColorOrDefault())]);
+		boolean shaft = HudLayout.SHAFT_COLOR.equals(box.titleColor);
+		String shown = HudBoxText.titleColor(box, hud.data(), true);
+		ButtonComponent color = colorButton(shown, null, null, shaft,
+				code -> box.titleColor = "e".equals(code) ? null : code);
+		tip(color, "Title colour of this box: " + (shaft ? "the shaft's colour" : COLOR_NAMES[HudLayout.colorIndex(shown)]));
 		row.child(color);
 		boolean bold = box.titleBoldOrDefault();
 		ButtonComponent boldButton = button((bold ? "§e" : "§f") + "§lB", b -> {
@@ -1342,7 +1302,7 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		FlowLayout row = row(name);
 		row.margins(Insets.top(1));
 		ButtonComponent color = colorButton(current, null, setColor);
-		tip(color, name + " colour of this box: " + COLOR_NAMES[colorIndex(current)]
+		tip(color, name + " colour of this box: " + COLOR_NAMES[HudLayout.colorIndex(current)]
 				+ ". Lines with their own colour keep it.");
 		row.child(color);
 		ButtonComponent boldButton = button((bold ? "§e" : "§f") + "§lB", b -> {
@@ -1371,59 +1331,11 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		return row;
 	}
 
-	private void buildPicker(Box box) {
-		FlowLayout header = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-		header.gap(4);
-		header.verticalAlignment(VerticalAlignment.CENTER);
-		ButtonComponent back = button("‹ Back", b -> backToLines());
-		tip(back, "Back without adding (Esc)");
-		header.child(back);
-		header.child(label("§7Pick a value to add"));
-		panel.child(crumbs(box, "Add a line"));
-		panel.child(header);
-		for (HudValue.Group group : HudValue.Group.values()) {
-			panel.child(section(group.displayName()));
-			for (HudValue value : HudValue.values()) {
-				if (value.group() != group) continue;
-				HoverRow row = new HoverRow();
-				int nameWidth = 88 + (inner() - (PANEL_MIN - 10)) / 2;
-				LabelComponent name = label(clip("§f" + value.displayName(), nameWidth - 2));
-				name.horizontalSizing(Sizing.fixed(nameWidth));
-				row.child(name);
-				LabelComponent shows = label(clip(HudBoxText.line(box, new Line(value), hud.data(), true), inner() - nameWidth - 20));
-				shows.horizontalSizing(Sizing.expand());
-				row.child(shows);
-				if (box.lines.stream().anyMatch(line -> line.hudValue() == value)) {
-					LabelComponent have = label("§a✔");
-					tip(have, "Already in this box. You can add it again, f.e. with another range.");
-					row.child(have);
-				}
-				tip(row, valueTip(value));
-				row.mouseDown().subscribe((click, doubled) -> {
-					box.lines.add(new Line(value));
-					picking = false;
-					openLine(box.lines.size() - 1);
-					return true;
-				});
-				panel.child(row);
-			}
-		}
-	}
-
-	private static String valueTip(HudValue value) {
-		StringBuilder tip = new StringBuilder("§f").append(value.displayName()).append("\n§7").append(value.description());
-		if (value.ranges().size() > 1) {
-			tip.append("\n§8Ranges: ");
-			tip.append(String.join(", ", value.ranges().stream().map(HudValue.Range::displayName).toList()));
-		}
-		switch (value.target()) {
-			case SHAFT_TYPE -> tip.append("\n§8Pick the shaft type on its line");
-			case CORPSE_TYPE -> tip.append("\n§8Pick the corpse type on its line");
-			case PERSONAL_BEST -> tip.append("\n§8Pick which personal best on its line. Make your own on the Stats tab");
-			case NONE -> {
-			}
-		}
-		return tip.append("\n§eClick to add").toString();
+	boolean addLine(Box box, Line line) {
+		box.lines.add(line);
+		picking = false;
+		openLine(box.lines.size() - 1);
+		return true;
 	}
 
 	private FlowLayout lineRow(Box box, int index) {
@@ -1432,7 +1344,7 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		row.verticalSizing(Sizing.fixed(CHOICE));
 		row.gap(4);
 		FlowLayout grip = UIContainers.horizontalFlow(Sizing.fixed(7), Sizing.fixed(CHOICE - 2));
-		grip.surface(GRIP);
+		grip.surface(ScreenParts.GRIP);
 		grip.cursorStyle(CursorStyle.MOVE);
 		tip(grip, "Drag to move this line");
 		row.child(grip);
@@ -1446,12 +1358,23 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		row.child(shown);
 		String text = HudBoxText.line(box, line, hud.data(), true);
 		if (!line.shown) text = "§8" + strip(text);
+		HudValue.Period period = line.advancedMode() ? null : line.period();
+		boolean ownColor = !line.advancedMode() && (line.labelColor != null || line.valueColor != null);
+		// cramped at 204 px, tooltip only there
+		String tag = period == null || panelWidth() < TAG_MIN_PANEL ? null : "§8" + period.name().toLowerCase(Locale.ROOT);
 		// grip, checkbox, marker, gaps + slack so it never wraps
-		LabelComponent look = label(clip(text, inner() - 40));
+		int room = inner() - 40 - (tag == null ? 0 : font.width(tag) + 4 + (ownColor ? 12 : 0));
+		LabelComponent look = label(clip(text, room));
 		look.horizontalSizing(Sizing.expand());
-		tip(look, "Click to change the label, range, format and colours");
+		tip(look, "Click to change the label, period, format and colours"
+				+ (period != null && tag == null ? "\n§7Period: " + period.name() : ""));
 		row.child(look);
-		if (!line.advancedMode() && (line.labelColor != null || line.valueColor != null)) {
+		if (tag != null) {
+			LabelComponent periodTag = label(tag);
+			tip(periodTag, period.name() + ": " + period.description() + ".");
+			row.child(periodTag);
+		}
+		if (ownColor) {
 			FlowLayout own = UIContainers.horizontalFlow(Sizing.fixed(8), Sizing.fixed(8));
 			String label = line.labelColor;
 			String value = line.valueColor;
@@ -1460,14 +1383,14 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 				int y = c.y();
 				graphics.fill(x, y, x + 8, y + 8, 0xFF000000);
 				// label left, value right, one colour fills it
-				int left = COLORS[colorIndex(label != null ? label : value)];
-				int right = COLORS[colorIndex(value != null ? value : label)];
+				int left = HudLayout.COLOR_RGB[HudLayout.colorIndex(label != null ? label : value)];
+				int right = HudLayout.COLOR_RGB[HudLayout.colorIndex(value != null ? value : label)];
 				graphics.fill(x + 1, y + 1, x + 4, y + 7, 0xFF000000 | left);
 				graphics.fill(x + 4, y + 1, x + 7, y + 7, 0xFF000000 | right);
 			});
 			List<String> parts = new ArrayList<>();
-			if (label != null) parts.add("labels " + COLOR_NAMES[colorIndex(label)]);
-			if (value != null) parts.add("values " + COLOR_NAMES[colorIndex(value)]);
+			if (label != null) parts.add("labels " + COLOR_NAMES[HudLayout.colorIndex(label)]);
+			if (value != null) parts.add("values " + COLOR_NAMES[HudLayout.colorIndex(value)]);
 			tip(own, "Own colour: " + String.join(", ", parts) + ". The box's colours don't change this line. "
 					+ "Click the line to change it.");
 			row.child(own);
@@ -1487,12 +1410,12 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 			openLine(index);
 			return true;
 		});
-		lineRows.add(row);
-		lineHandles.add(grip);
+		page.lineRows.add(row);
+		page.lineHandles.add(grip);
 		return row;
 	}
 
-	private void buildLinePage(Box box, int index) {
+	private void buildLinePage(FlowLayout panel, Box box, int index) {
 		Line line = box.lines.get(index);
 		HudValue value = line.hudValue();
 		FlowLayout header = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
@@ -1501,7 +1424,7 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		ButtonComponent back = button("‹ Back", b -> backToLines());
 		tip(back, "Back to the box (Esc)");
 		header.child(back);
-		ButtonComponent remove = iconTextButton(REMOVE, "§cRemove", null, b -> {
+		ButtonComponent remove = iconTextButton(font, REMOVE, "§cRemove", null, b -> {
 			box.lines.remove(line);
 			editedIndex = -1;
 			scrollToRow = Math.min(index, box.lines.size() - 1);
@@ -1510,32 +1433,37 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		tip(remove, "Remove this line. Ctrl+Z brings it back.");
 		header.child(spacer());
 		header.child(remove);
-		panel.child(crumbs(box, value.displayName()));
+		String lineName = value.lineName(line.range(), line.target());
+		panel.child(crumbs(box, lineName));
 		panel.child(header);
 
 		FlowLayout look = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
 		look.surface(PREVIEW);
 		look.padding(Insets.of(3, 3, 5, 3));
 		look.margins(Insets.vertical(3));
-		preview = label("");
-		previewLine = line;
-		look.child(preview);
+		page.preview = label("");
+		page.previewLine = line;
+		look.child(page.preview);
 		if (!line.shown) {
 			look.child(spacer());
 			LabelComponent hidden = label("§7" + HIDDEN_NOTE);
 			tip(hidden, "This line is hidden. Tick it in the box's line list to show it.");
 			look.child(hidden);
 		}
-		tip(look, "§f" + value.displayName() + "\n§7" + value.description());
+		tip(look, "§f" + lineName + "\n§7" + value.description());
 		panel.child(look);
+		if (value.multiRow()) {
+			buildDrops(panel, line);
+			return;
+		}
 
 		boolean advanced = line.advancedMode();
-		Grid modes = new Grid(2, KEY);
+		Grid modes = new Grid(2, keyWidth);
 		tip(modes.add(choice("Easy", !advanced, () -> {
 			if (!line.advancedMode()) return;
 			line.settle(box);
 			line.advanced = false;
-		})), "Pick a label, range, format and colour");
+		})), "Pick a label, period, format and colour");
 		tip(modes.add(choice("Advanced", advanced, () -> {
 			if (line.advancedMode()) return;
 			line.settle(box);
@@ -1543,12 +1471,18 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		})), "Type the whole line yourself: colours, {values}, maths and colour rules. Starts from this line plus its "
 				+ "ready-made rules.");
 		panel.child(keyRow("Mode", modes));
-		if (advanced) buildAdvanced(box, line);
-		else buildEasy(box, line);
+		if (advanced) {
+			page.advanced = new AdvancedPage(this, box, line);
+			page.advanced.build(panel);
+		} else {
+			buildEasy(panel, box, line);
+		}
 	}
 
-	private void buildEasy(Box box, Line line) {
+	private void buildEasy(FlowLayout panel, Box box, Line line) {
 		HudValue value = line.hudValue();
+		// both colour buttons say the same, the label row is the tight one
+		boxWord = boxWord();
 		if (line.text != null || line.colorRules != null) {
 			LabelComponent kept = label("§8Your Advanced text and rules are kept. Reset there starts again from this.");
 			kept.maxWidth(inner());
@@ -1558,11 +1492,25 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		FlowLayout labelRow = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
 		labelRow.gap(3);
 		labelRow.verticalAlignment(VerticalAlignment.CENTER);
-		TextBoxComponent prefix = textField(line.prefix, 64, typed -> line.prefix = typed);
+		String auto = value.defaultPrefix(line.range(), line.target());
+		ButtonComponent reset = iconTextButton(font, pixels(RESET_ICON), "", "Automatic label", b -> {
+			syncFields();
+			line.prefix = auto;
+			rebuildPanel();
+		});
+		tip(reset, "Use the automatic label: " + auto.strip());
+		// field is polled, so the button comes + goes as u type
+		TextBoxComponent prefix = textField(line.prefix, 64, typed -> {
+			line.prefix = typed;
+			boolean typedOwn = !value.isDefaultPrefix(typed);
+			if (typedOwn && reset.parent() == null) labelRow.child(1, reset);
+			else if (!typedOwn && reset.parent() != null) labelRow.removeChild(reset);
+		});
 		tip(prefix, "The text before the value. Spaces count.");
 		labelRow.child(prefix);
+		if (!value.isDefaultPrefix(line.prefix)) labelRow.child(reset);
 		ButtonComponent labelColor = colorButton(line.labelColor, box.labelColor, code -> line.labelColor = code);
-		tip(labelColor, "Label colour. \"Box\" follows the box's label colour.");
+		tip(labelColor, line.labelColor == null ? sameAsBoxTip(box.labelColor) : "Label colour. \"Box\" follows the box's label colour.");
 		labelRow.child(labelColor);
 		panel.child(labelRow);
 		if (line.range() == HudValue.Range.SHAFT) {
@@ -1580,9 +1528,9 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 			// as many a row as the longest name fits, f.e. 2 at scale 4
 			int columns = 1;
 			for (int c = kind == HudValue.Target.SHAFT_TYPE ? 3 : 2; c > 1 && columns == 1; c--) {
-				if (widest + 8 <= (inner() - KEY - 2 - 2 * (c - 1)) / c) columns = c;
+				if (widest + 8 <= (inner() - keyWidth - 2 - 2 * (c - 1)) / c) columns = c;
 			}
-			Grid options = new Grid(columns, KEY);
+			Grid options = new Grid(columns, keyWidth);
 			for (String t : targets) {
 				String name = value.targetName(t);
 				tip(options.add(choice(name, line.target().equals(t), () -> line.setTarget(t))), switch (kind) {
@@ -1602,563 +1550,148 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 				panel.child(gone);
 			}
 		}
-		List<HudValue.Range> ranges = value.ranges();
-		if (ranges.size() > 1) {
-			Grid options = new Grid(2, KEY);
-			for (HudValue.Range r : ranges) {
-				tip(options.add(choice(r.displayName(), line.range() == r, () -> line.setRange(r))), r.description() + ".");
-			}
-			panel.child(keyRow("Range", options));
-		}
+		if (!value.periods().isEmpty()) panel.child(periodRow(line));
 		List<String> formats = HudFormat.options(value.kind());
 		if (formats.size() > 1 && value.hasFormatChoice()) {
-			Grid options = new Grid(formats.size(), KEY);
+			Grid options = new Grid(formats.size(), keyWidth);
 			for (int i = 0; i < formats.size(); i++) {
 				int format = i;
 				tip(options.add(choice(formats.get(i), line.format == i, () -> line.format = format)),
-						"Shows as " + HudFormat.example(value.kind(), i, HudBoxText.suffix(value, line.range())));
+						"Shows as " + HudFormat.example(value.kind(), i, HudBoxText.suffix(value, line.range(), line.prefix)));
 			}
 			panel.child(keyRow("Format", options));
 		}
 		ButtonComponent valueColor = colorButton(line.valueColor, box.valueColor, value.defaultColor(),
 				code -> line.valueColor = code);
-		tip(valueColor, "Value colour. \"Box\" follows the box's value colour.");
+		tip(valueColor, line.valueColor == null ? sameAsBoxTip(box.valueColor) : "Value colour. \"Box\" follows the box's value colour.");
 		panel.child(keyRow("Colour", valueColor));
+		if (value.graph(line.range()) != HudValue.Graph.NONE) panel.child(showRow(line));
 		if (value.followsShaft(line.range())) panel.child(outsideRow(line, false));
 	}
 
-	private FlowLayout outsideRow(Line line, boolean advanced) {
+	// no mode, label, format or colour
+	private void buildDrops(FlowLayout panel, Line line) {
+		panel.child(periodRow(line));
+		if (line.hudValue().followsShaft(line.range())) panel.child(outsideRow(line, false));
+		HudLayout.DropsView view = line.dropsView();
+		Grid show = new Grid(3, keyWidth);
+		tip(show.add(choice("Items", view == HudLayout.DropsView.ITEMS, () -> line.dropsView(HudLayout.DropsView.ITEMS))), "One row per item");
+		tip(show.add(choice("Sources", view == HudLayout.DropsView.SOURCES, () -> line.dropsView(HudLayout.DropsView.SOURCES))),
+				"One row per source: mined gems, corpse loot, outside shafts and so on");
+		tip(show.add(choice("Both", view == HudLayout.DropsView.BOTH, () -> line.dropsView(HudLayout.DropsView.BOTH))),
+				"Sources with their biggest items under them");
+		panel.child(keyRow("Show", show));
+		Grid rows = new Grid(4, keyWidth);
+		String rowsTip = "How many items before the rest folds into one row";
+		for (int n : new int[] {3, 5, 8, 0}) {
+			tip(rows.add(choice(n == 0 ? "All" : String.valueOf(n), line.rowsOrDefault() == n, () -> line.rows = n)), rowsTip);
+		}
+		panel.child(keyRow("Rows", rows));
+		// "Amounts" wraps in the key column
+		panel.child(showHide("Amount", "The amount after each name", line.hideAmounts, hide -> line.hideAmounts = hide));
+		panel.child(showHide("Spent", "Keys and campfires, with their cost in red", line.hideSpent, hide -> line.hideSpent = hide));
+	}
+
+	// null = shown, never writes false
+	private FlowLayout showHide(String name, String tip, Boolean hidden, Consumer<Boolean> set) {
+		boolean hide = Boolean.TRUE.equals(hidden);
+		Grid options = new Grid(2, keyWidth);
+		tip(options.add(choice("Show", !hide, () -> set.accept(null))), tip);
+		tip(options.add(choice("Hide", hide, () -> set.accept(true))), tip);
+		return keyRow(name, options);
+	}
+
+	// "Show as" doesnt fit the key column
+	FlowLayout showRow(Line line) {
+		ShowAs now = line.showAs();
+		boolean chart = line.hudValue().graph(line.range()) == HudValue.Graph.CHART;
+		String graph = chart ? "your last 12 shafts' spawn times, dashes = this average" : "a bar";
+		Grid options = new Grid(3, keyWidth);
+		tip(options.add(choice("Text", now == ShowAs.TEXT, () -> line.showAs(ShowAs.TEXT))), "The number only");
+		tip(options.add(choice("Both", now == ShowAs.BOTH, () -> line.showAs(ShowAs.BOTH))), "The number with " + graph + " under it");
+		tip(options.add(choice(chart ? "Chart" : "Bar", now == ShowAs.GRAPH, () -> line.showAs(ShowAs.GRAPH))),
+				chart ? "Your last 12 shafts' spawn times without the number" : "A bar without the number");
+		return keyRow("Show", options);
+	}
+
+	private FlowLayout periodRow(Line line) {
+		Grid options = new Grid(2, keyWidth);
+		HudValue.Period now = line.period();
+		for (HudValue.Period period : line.hudValue().periods()) {
+			tip(options.add(choice(period.name(), period.equals(now), () -> line.setPeriod(period))), period.description() + ".");
+		}
+		return keyRow("Period", options);
+	}
+
+	FlowLayout outsideRow(Line line, boolean advanced) {
 		String which = advanced ? "shaft values in this line show " : "show ";
-		Grid outside = new Grid(2, KEY);
+		Grid outside = new Grid(2, keyWidth);
 		tip(outside.add(choice("Last shaft", !line.dash(), () -> line.dashOutside = null)),
 				"Outside a shaft, " + which + "the last shaft's number");
 		tip(outside.add(choice("-", line.dash(), () -> line.dashOutside = true)), "Outside a shaft, " + which + "-");
 		return keyRow("Outside", outside);
 	}
 
-	private void buildAdvanced(Box box, Line line) {
-		FlowLayout textHead = heading("Text");
-		textHead.child(spacer());
-		ButtonComponent values = button(listOpen ? "§eValues" : "Values", b -> {
-			listOpen = !listOpen;
-			rebuildPanel();
-		});
-		values.verticalSizing(Sizing.fixed(CHOICE));
-		tip(values, listOpen ? "Hide the value list" : "Show the value list beside this panel: values, maths and colours to click");
-		textHead.child(values);
-		ButtonComponent reset = iconTextButton(pixels(RESET_ICON), "Reset", null, b -> {
-			line.resetAdvanced(box);
-			line.advanced = true;
-			rebuildPanel();
-		});
-		reset.verticalSizing(Sizing.fixed(CHOICE));
-		reset.margins(Insets.left(2));
-		tip(reset, "Back to the Easy look plus the ready-made rules. Ctrl+Z undoes it.");
-		textHead.child(reset);
-		panel.child(textHead);
-
-		String start = line.advancedText(box);
-		textArea = new FreeTextArea(Sizing.fill(100), Sizing.fixed(3 * font.lineHeight + 8), false);
-		textArea.setCharacterLimit(TEXT_LIMIT);
-		textArea.text(start);
-		textArea.margins(Insets.top(2));
-		String[] last = {start};
-		fields.add(new Field(textArea::getValue, typed -> {
-			// pasted newlines, 1 HUD line
-			if (typed.indexOf('\n') >= 0 || typed.indexOf('\r') >= 0) {
-				typed = typed.replace("\r", "").replace('\n', ' ');
-				textArea.text(typed);
-			}
-			if (typed.equals(last[0])) return;
-			last[0] = typed;
-			line.settle(box);
-			line.text = typed;
-		}));
-		panel.child(textArea);
-		textHint = label(TEXT_HINT);
-		textHint.maxWidth(inner());
-		textHintText = TEXT_HINT;
-		panel.child(textHint);
-		panel.child(outsideRow(line, true));
-
-		FlowLayout rulesHead = heading("Colour rules");
-		tip(rulesHead, RULES_HELP);
-		panel.child(rulesHead);
-		String rules = String.join("\n", line.advancedRules());
-		rulesArea = new FreeTextArea(Sizing.fill(100), Sizing.fixed(4 * font.lineHeight + 8), true);
-		rulesArea.setCharacterLimit(RULES_LIMIT);
-		rulesArea.text(rules);
-		rulesArea.margins(Insets.top(2));
-		tip(rulesArea, RULES_HELP);
-		String[] lastRules = {rules};
-		fields.add(new Field(rulesArea::getValue, typed -> {
-			typed = typed.replace("\r", "");
-			if (typed.equals(lastRules[0])) return;
-			lastRules[0] = typed;
-			line.settle(box);
-			line.colorRules = ruleLines(typed);
-		}));
-		panel.child(rulesArea);
-		ButtonComponent addRule = button("+ Rule", b -> addRule(box, line));
-		tip(addRule, "Type a rule for the first number in the text, with its number now");
-		addRule.margins(Insets.top(2));
-		panel.child(addRule);
-		ruleHints = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
-		ruleHints.margins(Insets.top(2));
-		panel.child(ruleHints);
-		if (listOpen) buildValueList();
-	}
-
-	// field lines, trailing empty ones left out
-	private static List<String> ruleLines(String typed) {
-		List<String> lines = new ArrayList<>(List.of(typed.split("\n", -1)));
-		while (!lines.isEmpty() && lines.getLast().isBlank()) lines.removeLast();
-		return lines;
-	}
-
-	private void addRule(Box box, Line line) {
-		List<String> tags = HudBoxText.numberTags(textArea.getValue());
-		if (tags.isEmpty()) return;
-		String now = typedNumber(tags.getFirst());
-		String rules = rulesArea.getValue();
-		String lead = (rules.isEmpty() || rules.endsWith("\n") ? rules : rules + "\n") + "{" + tags.getFirst() + "} > ";
-		line.settle(box);
-		line.colorRules = ruleLines(lead + now + " &c");
-		typingRules = true;
-		rebuildPanel();
-		if (rulesArea == null) return;
-		rulesArea.select(lead.length(), lead.length() + now.length());
-		root.focusHandler().focus(rulesArea, UIComponent.FocusSource.MOUSE_CLICK);
-		swallowDrag = true;
-	}
-
-	// the number now, as a player would type it
-	private String typedNumber(String tag) {
-		HudExpr.Parsed parsed = HudExpr.parse(tag);
-		HudExpr.Result r;
-		try {
-			r = parsed.error() == null ? HudExpr.eval(parsed.node(), HudBoxText.values(hud.data(), true)) : null;
-		} catch (HudExpr.Error e) {
-			r = null;
-		}
-		if (r == null || r.value() == null) return "0";
-		double v = r.value();
-		return switch (r.type()) {
-			case TIME -> HudFormat.thresholdText(HudValue.Kind.TIME, (long) v);
-			case COINS -> HudFormat.format(HudValue.Kind.COINS, 0, v);
-			case COLD -> Long.toString(Math.round(v));
-			case INTEGER -> Math.abs(v) >= 10_000 ? HudFormat.format(HudValue.Kind.INTEGER, 1, Math.round(v)) : Long.toString(Math.round(v));
-			default -> Math.abs(v - Math.rint(v)) < 1e-9 ? Long.toString(Math.round(v)) : HudFormat.format(HudValue.Kind.DECIMAL, 0, v);
-		};
-	}
-
-	private int listWidth() {
+	int listWidth() {
 		return Math.clamp(width * 20 / 100, LIST_MIN, LIST_MAX);
-	}
-
-	// beside the panel, own scroll. keys on top, values below
-	private void buildValueList() {
-		int w = listWidth();
-		int inner = w - 8;
-		listPanel = UIContainers.verticalFlow(Sizing.fixed(w), Sizing.fixed(panelHeight));
-		listPanel.surface(PANEL);
-		listPanel.padding(Insets.of(4));
-		listPanel.gap(2);
-		// headings + gaps would pass clicks to boxes below
-		listPanel.mouseDown().subscribe((click, doubled) -> true);
-		FlowLayout head = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-		head.child(label("§fValues"));
-		head.child(spacer());
-		head.child(label("§8click to type"));
-		listPanel.child(head);
-
-		FlowLayout keys = UIContainers.ltrTextFlow(Sizing.fill(100), Sizing.content());
-		keys.gap(1);
-		for (String k : new String[] {">", ">=", "<", "<=", "=", "!="}) keys.child(key(k, " " + k + " ", "Compare, for colour rules"));
-		for (String k : new String[] {"+", "-", "*", "/"}) keys.child(key(k, " " + k + " ", "Maths, inside { }"));
-		keys.child(key("(", "(", "Maths, inside { }"));
-		keys.child(key(")", ")", "Maths, inside { }"));
-		listPanel.child(keys);
-
-		FlowLayout swatches = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-		swatches.gap(1);
-		int size = Math.min(MENU_SWATCH, (inner - 15) / 16);
-		for (int i = 0; i < 16; i++) {
-			String code = String.valueOf(HudLayout.COLOR_CODES.charAt(i));
-			FlowLayout swatch = UIContainers.horizontalFlow(Sizing.fixed(size), Sizing.fixed(size));
-			swatch.surface(Surface.flat(0xFF000000 | COLORS[i]).and(Surface.outline(0xFF000000)));
-			swatch.cursorStyle(CursorStyle.HAND);
-			tip(swatch, COLOR_NAMES[i] + " (&" + code + ")");
-			swatch.mouseDown().subscribe((click, doubled) -> {
-				typeRaw("&" + code);
-				return true;
-			});
-			swatches.child(swatch);
-		}
-		listPanel.child(swatches);
-
-		FlowLayout styles = UIContainers.ltrTextFlow(Sizing.fill(100), Sizing.content());
-		styles.gap(1);
-		String[][] codes = {{"&l", "Bold"}, {"&o", "Italic"}, {"&n", "Underline"}, {"&m", "Strikethrough"},
-				{"&r", "Box label colour"}, {"&v", "Box value colour"}};
-		for (String[] code : codes) styles.child(key(code[0], code[0], code[1] + ", until the next colour"));
-		listPanel.child(styles);
-
-		TextBoxComponent search = textField(listSearch, 32, typed -> {
-			listSearch = typed;
-			fillValues();
-		});
-		search.verticalSizing(Sizing.fixed(CHOICE));
-		search.setHint(Component.literal("Search"));
-		tip(search, "Search values by name");
-		listPanel.child(search);
-
-		listContent = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
-		listContent.padding(Insets.right(3));
-		ScrollContainer<FlowLayout> scroll = UIContainers.verticalScroll(Sizing.fill(100), Sizing.expand(), listContent);
-		scroll.scrollbar(ScrollContainer.Scrollbar.flat(Color.ofArgb(0x80FFFFFF)));
-		scroll.scrollbarThiccness(2);
-		listPanel.child(scroll);
-		fillValues();
-		root.child(listPanel);
-	}
-
-	private Chip key(String text, String typed, String tooltip) {
-		Chip key = new Chip(text, 0xFFFFFF, () -> typeRaw(typed));
-		key.surface(Surface.flat(0xFF3A3A3A).and(Surface.outline(0xFF000000)));
-		key.padding(Insets.of(1, 1, 3, 3));
-		tip(key, tooltip);
-		return key;
-	}
-
-	private void fillValues() {
-		if (listContent == null) return;
-		listContent.clearChildren();
-		formatChips.clear();
-		mineGroup = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
-		mineSource = null;
-		listContent.child(mineGroup);
-		String query = listSearch.strip().toLowerCase(Locale.ROOT);
-		int inner = listWidth() - 8 - 3;
-		for (HudValue.Group group : HudValue.Group.values()) {
-			List<HudValue> shown = new ArrayList<>();
-			for (HudValue value : HudValue.values()) {
-				if (value.group() == group && matches(value, query)) shown.add(value);
-			}
-			if (shown.isEmpty()) continue;
-			listContent.child(section(group.displayName()));
-			for (HudValue value : shown) {
-				HoverRow row = new HoverRow();
-				String now = strip(HudBoxText.paint(HudBoxText.text(value, value.defaultRange(), 0, hud.data(), true), "7", ""));
-				String nowText = clip("§8" + now, inner / 3);
-				row.child(label(clip("§f{" + value.tag() + "}", inner - font.width(nowText) - 4)));
-				row.child(spacer());
-				row.child(label(nowText));
-				tip(row, "§f" + value.displayName() + "\n§7" + value.description() + "\n§eClick to type {" + value.tag() + "}");
-				row.mouseDown().subscribe((click, doubled) -> {
-					typeValue(value.tag());
-					return true;
-				});
-				listContent.child(row);
-				if (!value.targets().isEmpty()) {
-					FlowLayout options = optionRow();
-					for (String target : value.targets()) {
-						Chip chip = new Chip(":" + target, RANGE_TEXT, () -> typeOption(value, target));
-						tip(chip, "{" + value.tag() + ":" + target + "}: " + value.targetName(target) + ". Now "
-								+ strip(HudBoxText.paint(HudBoxText.text(value, value.defaultRange(), target, 0, hud.data(), true), "7", "")));
-						options.child(chip);
-					}
-					listContent.child(options);
-				}
-				if (value.ranges().size() > 1) {
-					FlowLayout options = optionRow();
-					for (HudValue.Range range : value.ranges()) {
-						Chip chip = new Chip(":" + range.tagName(), RANGE_TEXT, () -> typeOption(value, range.tagName()));
-						tip(chip, "{" + value.tag() + ":" + range.tagName() + "}: " + range.description()
-								+ ". Now " + strip(HudBoxText.paint(HudBoxText.text(value, range, 0, hud.data(), true), "7", "")));
-						options.child(chip);
-					}
-					listContent.child(options);
-				}
-				List<String> formats = HudFormat.names(value.kind());
-				if (value.hasFormatChoice() && !formats.isEmpty()) {
-					FlowLayout options = optionRow();
-					for (int i = 0; i < formats.size(); i++) {
-						String format = formats.get(i);
-						Chip chip = new Chip(":" + format, FORMAT_TEXT, () -> {
-							if (!typingRules) typeOption(value, format);
-						});
-						tip(chip, "{" + value.tag() + ":" + format + "} shows as "
-								+ HudFormat.example(value.kind(), i, HudBoxText.suffix(value, value.defaultRange()))
-								+ ". Formats don't matter in rules.");
-						formatChips.add(chip);
-						options.child(chip);
-					}
-					listContent.child(options);
-				}
-			}
-		}
-		formatsOff = false;
-	}
-
-	private FlowLayout optionRow() {
-		FlowLayout row = UIContainers.ltrTextFlow(Sizing.fill(100), Sizing.content());
-		row.margins(Insets.of(0, 1, 6, 0));
-		row.gap(3);
-		return row;
-	}
-
-	private static boolean matches(HudValue value, String query) {
-		return query.isEmpty() || value.tag().contains(query) || value.id().contains(query)
-				|| value.displayName().toLowerCase(Locale.ROOT).contains(query);
-	}
-
-	// tags in the text as written, a rule typed from these always matches
-	private void fillMine(String text) {
-		mineSource = text;
-		mineGroup.clearChildren();
-		List<String> tags = HudBoxText.numberTags(text);
-		if (tags.isEmpty()) return;
-		mineGroup.child(section("In this line"));
-		int inner = listWidth() - 8 - 3;
-		for (String tag : tags) {
-			HoverRow row = new HoverRow();
-			row.child(label(clip("§f{" + tag + "}", inner)));
-			tip(row, "Click to type it, f.e. to start a rule for it");
-			row.mouseDown().subscribe((click, doubled) -> {
-				typeValue(tag);
-				return true;
-			});
-			mineGroup.child(row);
-		}
-	}
-
-	private FreeTextArea typingArea() {
-		return typingRules && rulesArea != null ? rulesArea : textArea;
-	}
-
-	private void typeValue(String tag) {
-		typeEdit(area -> HudTyping.type(area.getValue(), area.cursor(), tag));
-	}
-
-	private void typeOption(HudValue value, String option) {
-		typeEdit(area -> HudTyping.option(area.getValue(), area.cursor(), value, option));
-	}
-
-	private void typeRaw(String text) {
-		typeEdit(area -> HudTyping.insert(area.getValue(), area.cursor(), text));
-	}
-
-	private void typeEdit(java.util.function.Function<FreeTextArea, HudTyping.Edit> edit) {
-		closeMenu();
-		FreeTextArea area = typingArea();
-		if (area == null) return;
-		HudTyping.Edit typed = edit.apply(area);
-		if (typed.text().length() > area.limit()) noRoomFor = area.getValue();
-		else area.set(typed.text(), typed.cursor());
-		root.focusHandler().focus(area, UIComponent.FocusSource.MOUSE_CLICK);
-		swallowDrag = true;
 	}
 
 	// click keeps the help open beside the panel while typing
 	private void openGuide(boolean open) {
-		guideOpen = open;
+		help.open(open);
 		guideButton.setMessage(Component.literal(open ? "§e?" : "?"));
 	}
 
 	// live, the text fields are polled
 	private void refreshLinePage() {
-		if (preview != null) {
-			String text = HudBoxText.line(panelBox, previewLine, hud.data(), true);
+		if (page.preview != null) {
+			Line previewLine = page.previewLine;
+			String text = HudBoxText.line(page.box, previewLine, hud.data(), true);
 			if (!previewLine.shown) text = "§8" + strip(text);
-			if (!text.equals(previewRaw)) {
-				previewRaw = text;
+			if (!text.equals(page.previewRaw)) {
+				page.previewRaw = text;
 				// padding, + note and gap if hidden
 				int room = inner() - 8 - (previewLine.shown ? 0 : font.width(HIDDEN_NOTE) + 4);
-				preview.text(Component.literal(clip(text, room)));
+				page.preview.text(Component.literal(clip(text, room)));
 			}
 		}
-		if (textArea == null) return;
-		UIComponent focused = root.focusHandler().focused();
-		if (focused == textArea) typingRules = false;
-		else if (focused == rulesArea) typingRules = true;
-		if (formatsOff != typingRules) {
-			formatsOff = typingRules;
-			for (Chip chip : formatChips) chip.color(typingRules ? FORMAT_OFF : FORMAT_TEXT);
-		}
-		String source = textArea.getValue();
-		if (mineGroup != null && !source.equals(mineSource)) fillMine(source);
-		if (noRoomFor != null && !noRoomFor.equals(source) && !noRoomFor.equals(rulesArea.getValue())) noRoomFor = null;
-		boolean noRoom = noRoomFor != null;
-		// same object = same text, the poll only swaps it on change
-		boolean textChanged = source != hintSource;
-		if (textChanged || noRoom != hintNoRoom) {
-			hintSource = source;
-			hintNoRoom = noRoom;
-			List<String> problems = HudBoxText.problems(source);
-			String problem = problems.isEmpty() ? "" : problems.getFirst().replace("§", "")
-					+ (problems.size() > 1 ? " (and " + (problems.size() - 1) + " more)" : "");
-			String hint = noRoom ? "§cNo room for that, the text is " + TEXT_LIMIT + " and the rules " + RULES_LIMIT + " characters max."
-					: problems.isEmpty() ? TEXT_HINT
-					: "§c" + problem + (problem.endsWith("?") ? " " : ". ") + "It shows as typed.";
-			if (!hint.equals(textHintText)) {
-				textHintText = hint;
-				textHint.text(Component.literal(hint));
-			}
-		}
-		String rulesText = rulesArea.getValue();
-		HudData data = hud.data();
-		if (!textChanged && rulesText == hintRules && data == hintData) return;
-		hintRules = rulesText;
-		hintData = data;
-		List<String> hints = HudRules.hints(ruleLines(rulesText), source, HudBoxText.values(data, true));
-		if (!hints.equals(ruleHintLines)) {
-			ruleHintLines = hints;
-			ruleHints.clearChildren();
-			for (String hint : hints) {
-				LabelComponent label = label(hint);
-				label.maxWidth(inner());
-				ruleHints.child(label);
-			}
-		}
-	}
-
-	// grey example in the empty rules field
-	private void drawRulesPlaceholder(GuiGraphicsExtractor graphics) {
-		if (rulesArea == null || menu != null || !rulesArea.getValue().isEmpty() || panelScroll == null) return;
-		int y = rulesArea.y() + 4;
-		if (y < panelScroll.y() || y + font.lineHeight > panelBottom()) return;
-		String source = textArea.getValue();
-		HudData data = hud.data();
-		if (source != placeholderSource || data != placeholderData) {
-			placeholderSource = source;
-			placeholderData = data;
-			List<String> tags = HudBoxText.numberTags(source);
-			String example = tags.isEmpty() ? "{coins} > 2M &a" : "{" + tags.getFirst() + "} > " + typedNumber(tags.getFirst()) + " &c";
-			placeholderText = clip("§8f.e. " + example, rulesArea.width() - 8);
-		}
-		graphics.text(font, placeholderText, rulesArea.x() + 4, y, 0xFFFFFFFF, false);
-	}
-
-	private void openMenu(UIComponent anchor, Consumer<FlowLayout> fill) {
-		closeMenu();
-		tipTarget = menuTips;
-		menu = UIContainers.verticalFlow(Sizing.content(), Sizing.content());
-		menu.surface(MENU);
-		menu.padding(Insets.of(2));
-		// headings + gaps would pass clicks to the panel below
-		menu.mouseDown().subscribe((click, doubled) -> true);
-		menu.mouseScroll().subscribe((x, y, amount) -> true);
-		menuAnchor = anchor;
-		try {
-			fill.accept(menu);
-		} finally {
-			tipTarget = panelTips;
-		}
-		menu.positioning(Positioning.absolute(anchor.x() - root.x() - PADDING,
-				anchor.y() + anchor.height() + 1 - root.y() - PADDING));
-		// owo lays it out right away, so no frame below the screen
-		root.child(menu);
-		fitMenu();
-		rebuiltByClick = true;
-	}
-
-	// kept on screen, sizes known after layout
-	private void fitMenu() {
-		if (menu == null || menu.width() == 0) return;
-		int x = Math.max(PADDING, Math.min(menu.x(), width - PADDING - menu.width()));
-		int y = menu.y();
-		if (y + menu.height() > height - PADDING) y = Math.max(PADDING, menuAnchor.y() - 1 - menu.height());
-		if (x != menu.x() || y != menu.y()) menu.positioning(Positioning.absolute(x - root.x() - PADDING, y - root.y() - PADDING));
+		if (page.advanced != null) page.advanced.refresh(root.focusHandler().focused());
 	}
 
 	// beside the panel, same height. sizes known after layout
 	private void fitList() {
-		if (listPanel == null || panelScroll == null || panelScroll.width() == 0) return;
-		boolean panelRight = panelScroll.x() > width / 2;
-		int x = panelRight ? panelScroll.x() - 2 - listPanel.width() : panelScroll.x() + panelScroll.width() + 2;
-		int y = panelScroll.y();
-		if (x != listPanel.x() || y != listPanel.y()) listPanel.positioning(Positioning.absolute(x - root.x() - PADDING, y - root.y() - PADDING));
-		if (listPanel.height() != panelScroll.height()) listPanel.verticalSizing(Sizing.fixed(panelScroll.height()));
+		if (valueList() == null || page.scroll == null || page.scroll.width() == 0) return;
+		valueList().fit(page.scroll);
 	}
 
 	private boolean inList(double x, double y) {
-		return listPanel != null && listPanel.isInBoundingBox(x, y);
+		return valueList() != null && valueList().contains(x, y);
 	}
 
-	private void closeMenu() {
-		if (menu == null) return;
-		menuTips.clear();
-		root.removeChild(menu);
-		menu = null;
-		menuAnchor = null;
+	void closeMenu() {
+		menu.close();
 	}
 
-	private static LabelComponent menuTitle(String text) {
-		LabelComponent title = label("§7" + text);
-		title.margins(Insets.of(2, 1, 2, 2));
-		return title;
-	}
-
-	private static FlowLayout menuEntry(String text, Runnable action) {
-		HoverRow row = new HoverRow();
-		row.horizontalSizing(Sizing.content());
-		row.padding(Insets.of(1, 1, 3, 6));
-		row.child(label(text));
-		row.mouseDown().subscribe((click, doubled) -> {
-			action.run();
-			return true;
-		});
-		return row;
-	}
-
-	// small clickable text w/ a hover, keys + options in the value list
-	private final class Chip extends FlowLayout {
-		private final LabelComponent label;
-
-		Chip(String text, int color, Runnable action) {
-			super(Sizing.content(), Sizing.content(), Algorithm.HORIZONTAL);
-			cursorStyle(CursorStyle.HAND);
-			label = label(text);
-			color(color);
-			child(label);
-			mouseDown().subscribe((click, doubled) -> {
-				if (click.button() != 0) return false;
-				action.run();
-				return true;
-			});
-		}
-
-		void color(int color) {
-			label.color(Color.ofRgb(color));
-		}
-
-		@Override
-		public void draw(OwoUIGraphics graphics, int mouseX, int mouseY, float partialTicks, float delta) {
-			super.draw(graphics, mouseX, mouseY, partialTicks, delta);
-			if (isInBoundingBox(mouseX, mouseY)) graphics.fill(x, y, x + width, y + height, HOVER);
-		}
-	}
-
-	private TextBoxComponent textField(String text, int maxLength, Consumer<String> apply) {
+	TextBoxComponent textField(String text, int maxLength, Consumer<String> apply) {
 		TextBoxComponent field = UIComponents.textBox(Sizing.expand());
 		field.verticalSizing(Sizing.fixed(BUTTON));
 		field.setMaxLength(maxLength);
 		field.text(text);
 		String[] last = {text};
-		fields.add(new Field(field::getValue, typed -> {
+		field(field::getValue, typed -> {
 			if (typed.equals(last[0])) return;
 			last[0] = typed;
 			apply.accept(typed);
-		}));
+		});
 		// caxton: text set at 0 width can scroll 1st letter out, rehome next frame
-		homeFields.add(field);
+		page.homeFields.add(field);
 		return field;
 	}
 
 	private int lineHandleAt(double x, double y) {
 		// rows scrolled out of view keep their bounds, under the toolbar on narrow screens
 		if (!inPanel(x, y)) return -1;
+		List<UIComponent> lineHandles = page.lineHandles;
 		for (int i = 0; i < lineHandles.size(); i++) {
 			if (lineHandles.get(i).isInBoundingBox(x, y)) return i;
 		}
@@ -2170,80 +1703,65 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		return colorButton(current, boxColor, null, setColor);
 	}
 
-	// valueDefault = the values own colour, offered back in the menu
 	private ButtonComponent colorButton(String current, String boxColor, String valueDefault, Consumer<String> setColor) {
-		String text = current == null ? "§fBox §7▾" : "§7▾";
-		int shown = colorIndex(current != null ? current : boxColor);
-		ButtonComponent button = drawnButton("Colour: " + COLOR_NAMES[shown], b -> colorMenu(b, current, boxColor, valueDefault, setColor));
+		return colorButton(current, boxColor, valueDefault, null, setColor);
+	}
+
+	// valueDefault = the values own colour, offered back in the menu. shaft null = no Shaft colour choice, else picked or not
+	private ButtonComponent colorButton(String current, String boxColor, String valueDefault, Boolean shaft,
+			Consumer<String> setColor) {
+		String text = current == null ? boxText(boxWord) : "§7▾";
+		int shown = HudLayout.colorIndex(current != null ? current : boxColor);
+		Consumer<String> pick = code -> {
+			closeMenu();
+			setColor.accept(code);
+			rebuildPanel();
+		};
+		ButtonComponent button = drawnButton("Colour: " + (Boolean.TRUE.equals(shaft) ? "Shaft colour" : COLOR_NAMES[shown]), b -> {
+			menu.colors(b, Boolean.TRUE.equals(shaft) ? HudLayout.SHAFT_COLOR : current, boxColor, valueDefault, shaft != null, pick);
+			rebuiltByClick = true;
+		});
 		button.verticalSizing(Sizing.fixed(CHOICE));
-		button.horizontalSizing(Sizing.fixed(4 + 8 + 3 + font.width(text) + 4));
+		button.horizontalSizing(Sizing.fixed(colorButtonWidth(text)));
 		button.renderer((graphics, b, delta) -> {
 			PackButton.RENDERER.draw(graphics, b, delta);
 			int x = b.getX() + 4;
 			int y = b.getY() + (b.getHeight() - 8) / 2;
 			graphics.fill(x - 1, y - 1, x + 9, y + 9, 0xFF000000);
-			graphics.fill(x, y, x + 8, y + 8, 0xFF000000 | COLORS[shown]);
+			graphics.fill(x, y, x + 8, y + 8, HudLayout.argb(current != null ? current : boxColor));
 			graphics.text(font, text, x + 11, y, 0xFFFFFFFF, true);
 		});
 		return button;
 	}
 
-	private void colorMenu(UIComponent anchor, String current, String boxColor, String valueDefault,
-			Consumer<String> setColor) {
-		openMenu(anchor, m -> {
-			Consumer<String> pick = code -> {
-				closeMenu();
-				setColor.accept(code);
-				rebuildPanel();
-			};
-			if (boxColor != null) {
-				m.child(menuEntry((current == null ? "§e" : "§f") + "Box colour §7(" + COLOR_NAMES[colorIndex(boxColor)] + ")",
-						() -> pick.accept(null)));
-			}
-			if (valueDefault != null) {
-				m.child(menuEntry((valueDefault.equals(current) ? "§e" : "§f") + "Default colour §7("
-						+ COLOR_NAMES[colorIndex(valueDefault)] + ")", () -> pick.accept(valueDefault)));
-			}
-			swatchGrid(m, current, pick);
-		});
+	private static String boxText(String word) {
+		return "§f" + word + " §7▾";
 	}
 
-	// dark row + light row, like the code order
-	private void swatchGrid(FlowLayout menu, String selected, Consumer<String> pick) {
-		for (int half = 0; half < 2; half++) {
-			FlowLayout swatches = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
-			swatches.gap(2);
-			swatches.margins(Insets.of(2, 1, 3, 3));
-			for (int i = half * 8; i < half * 8 + 8; i++) {
-				String code = String.valueOf(HudLayout.COLOR_CODES.charAt(i));
-				FlowLayout swatch = UIContainers.horizontalFlow(Sizing.fixed(MENU_SWATCH), Sizing.fixed(MENU_SWATCH));
-				swatch.surface(Surface.flat(0xFF000000 | COLORS[i])
-						.and(Surface.outline(code.equals(selected) ? OUTLINE_SELECTED : 0xFF000000)));
-				tip(swatch, COLOR_NAMES[i]);
-				swatch.cursorStyle(CursorStyle.HAND);
-				swatch.mouseDown().subscribe((click, doubled) -> {
-					pick.accept(code);
-					return true;
-				});
-				swatches.child(swatch);
-			}
-			menu.child(swatches);
-		}
+	// swatch + gaps + padding, as colorButton sizes it
+	private int colorButtonWidth(String text) {
+		return 4 + 8 + 3 + font.width(text) + 4;
 	}
 
-	private static int colorIndex(String code) {
-		return Math.max(0, HudLayout.COLOR_CODES.indexOf(code == null || code.isEmpty() ? 'f' : code.charAt(0)));
+	// "Same as box" only if the label field keeps the room "Box" leaves it in the smallest panel
+	private String boxWord() {
+		return EditorFit.sameAsBoxFits(inner(), PANEL_MIN - 10, colorButtonWidth(boxText("Same as box")),
+				colorButtonWidth(boxText("Box"))) ? "Same as box" : "Box";
+	}
+
+	private static String sameAsBoxTip(String boxColor) {
+		return "Colour: same as the box (" + COLOR_NAMES[HudLayout.colorIndex(boxColor)] + ")";
 	}
 
 	private FlowLayout keyRow(String name, UIComponent child) {
 		FlowLayout row = row(name, child);
-		row.children().getFirst().horizontalSizing(Sizing.fixed(KEY));
+		row.children().getFirst().horizontalSizing(Sizing.fixed(keyWidth));
 		row.margins(Insets.vertical(1));
 		return row;
 	}
 
 	// HUD › box › page. here null = the box page
-	private FlowLayout crumbs(Box box, String here) {
+	FlowLayout crumbs(Box box, String here) {
 		FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
 		row.verticalAlignment(VerticalAlignment.CENTER);
 		row.margins(Insets.bottom(2));
@@ -2252,7 +1770,7 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		if (name.isEmpty()) name = "Box";
 		// crumb padding 2px each
 		int room = inner() - font.width("HUD") - font.width(gap) - 4;
-		Crumb home = new Crumb("HUD", () -> {
+		FlowLayout home = crumb("HUD", () -> {
 			selected = null;
 			rebuildPanel();
 		});
@@ -2265,64 +1783,11 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		}
 		room -= font.width(gap) + 2;
 		String last = clip("§f" + here, room - Math.min(font.width(name), CRUMB_MIN));
-		Crumb boxCrumb = new Crumb(clip(name, room - font.width(last)), this::backToLines);
+		FlowLayout boxCrumb = crumb(clip(name, room - font.width(last)), this::backToLines);
 		tip(boxCrumb, "Back to the box (Esc)");
 		row.child(boxCrumb);
 		row.child(label(gap));
 		row.child(label(last));
-		return row;
-	}
-
-	private final class Crumb extends FlowLayout {
-		Crumb(String text, Runnable action) {
-			super(Sizing.content(), Sizing.content(), Algorithm.HORIZONTAL);
-			padding(Insets.horizontal(1));
-			cursorStyle(CursorStyle.HAND);
-			child(label("§7" + text));
-			mouseDown().subscribe((click, doubled) -> {
-				if (click.button() != 0) return false;
-				action.run();
-				return true;
-			});
-		}
-
-		@Override
-		public void draw(OwoUIGraphics graphics, int mouseX, int mouseY, float partialTicks, float delta) {
-			if (isInBoundingBox(mouseX, mouseY)) graphics.fill(x, y, x + width, y + height, HOVER);
-			super.draw(graphics, mouseX, mouseY, partialTicks, delta);
-		}
-	}
-
-	private static FlowLayout heading(String text) {
-		FlowLayout heading = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-		heading.surface(DIVIDER);
-		heading.padding(Insets.top(4));
-		heading.margins(Insets.top(4));
-		heading.verticalAlignment(VerticalAlignment.CENTER);
-		heading.child(label("§f" + text));
-		return heading;
-	}
-
-	// own label w/ a gap, clicking it ticks the box too. text null = box only
-	private FlowLayout check(String text, boolean on, Consumer<Boolean> set) {
-		FlowLayout row = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
-		row.gap(4);
-		row.verticalAlignment(VerticalAlignment.CENTER);
-		row.margins(Insets.vertical(1));
-		SmallCheckboxComponent box = UIComponents.smallCheckbox(null);
-		box.checked(on);
-		box.onChanged().subscribe(set::accept);
-		row.child(box);
-		if (text != null) {
-			LabelComponent name = label(text);
-			name.cursorStyle(CursorStyle.HAND);
-			name.mouseDown().subscribe((click, doubled) -> {
-				if (click.button() != 0) return false;
-				box.checked(!box.checked());
-				return true;
-			});
-			row.child(name);
-		}
 		return row;
 	}
 
@@ -2331,7 +1796,7 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		row.gap(2);
 		row.verticalAlignment(VerticalAlignment.CENTER);
 		LabelComponent label = label("§7" + name);
-		label.horizontalSizing(Sizing.fixed(ROW_LABEL));
+		label.horizontalSizing(Sizing.fixed(rowLabel));
 		row.child(label);
 		for (var child : children) row.child(child);
 		return row;
@@ -2346,125 +1811,9 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> {
 		return choice;
 	}
 
-	// cut to width w/ "…", never mid § code. binary search, caxton shapes every width call
-	private String clip(String text, int max) {
-		if (font.width(text) <= max) return text;
-		int low = 0;
-		int high = text.length();
-		while (low < high) {
-			int mid = (low + high + 1) >>> 1;
-			if (font.width(text.substring(0, codeSafe(text, mid)) + "…") <= max) low = mid;
-			else high = mid - 1;
-		}
-		return text.substring(0, codeSafe(text, low)) + "…";
-	}
-
-	private static int codeSafe(String text, int cut) {
-		return cut > 0 && text.charAt(cut - 1) == '§' ? cut - 1 : cut;
-	}
-
-	private static String strip(String text) {
-		return text.replaceAll("§.", "");
-	}
-
 	private FlowLayout place(String name, boolean on, Consumer<Boolean> set, String tooltip) {
 		FlowLayout check = check(name, on, set);
 		tip(check, tooltip);
 		return check;
-	}
-
-	// pixels bc fonts ↶ is tiny
-	private static ButtonComponent iconButton(boolean redo, Consumer<ButtonComponent> action) {
-		ButtonComponent button = drawnButton(redo ? "Redo" : "Undo", action);
-		button.horizontalSizing(Sizing.fixed(BUTTON + 4));
-		button.renderer((graphics, b, delta) -> {
-			PackButton.RENDERER.draw(graphics, b, delta);
-			drawIcon(graphics, UNDO_ICON, b.getX() + (b.getWidth() - 8) / 2, b.getY() + (b.getHeight() - UNDO_ICON.length) / 2,
-					redo, b.isActive() ? 0xFFFFFFFF : 0xFF707070);
-		});
-		return button;
-	}
-
-	private interface Icon {
-		void draw(GuiGraphicsExtractor graphics, int x, int y, int height);
-	}
-
-	// no font glyph, caxton safe
-	private static final Icon REMOVE = (graphics, x, y, h) -> graphics.blitSprite(RenderPipelines.GUI_TEXTURED, REMOVE_ICON, x,
-			y + (h - 7) / 2, 8, 7);
-
-	private static Icon pixels(String[] icon) {
-		return (graphics, x, y, h) -> drawIcon(graphics, icon, x, y + (h - icon.length) / 2, false, 0xFFFFFFFF);
-	}
-
-	// 8 wide icon + text. text "" = icon only
-	private ButtonComponent iconTextButton(Icon icon, String text, String name, Consumer<ButtonComponent> action) {
-		ButtonComponent button = drawnButton(text.isEmpty() ? name : text, action);
-		button.horizontalSizing(Sizing.fixed(text.isEmpty() ? CHOICE + 2 : 5 + 8 + 4 + font.width(text) + 5));
-		button.renderer((graphics, b, delta) -> {
-			PackButton.RENDERER.draw(graphics, b, delta);
-			int x = text.isEmpty() ? b.getX() + (b.getWidth() - 8) / 2 : b.getX() + 5;
-			icon.draw(graphics, x, b.getY(), b.getHeight());
-			if (!text.isEmpty()) graphics.text(font, text, x + 12, b.getY() + (b.getHeight() - 8) / 2, 0xFFFFFFFF, true);
-		});
-		return button;
-	}
-
-	private static void drawIcon(GuiGraphicsExtractor graphics, String[] icon, int x0, int y0, boolean mirror, int color) {
-		for (int row = 0; row < icon.length; row++) {
-			for (int col = 0; col < 8; col++) {
-				if (icon[row].charAt(col) != 'X') continue;
-				int x = x0 + (mirror ? 7 - col : col);
-				graphics.fill(x, y0 + row, x + 1, y0 + row + 1, color);
-			}
-		}
-	}
-
-	private static ButtonComponent button(String text, Consumer<ButtonComponent> action) {
-		ButtonComponent button = PackButton.button(Component.literal(text), action);
-		button.horizontalSizing(Sizing.content(4));
-		button.verticalSizing(Sizing.fixed(BUTTON));
-		return button;
-	}
-
-	// owo draws the message too, so empty msg + narrator name
-	private static ButtonComponent drawnButton(String name, Consumer<ButtonComponent> action) {
-		ButtonComponent button = new DrawnButton(strip(name), action);
-		button.horizontalSizing(Sizing.content(4));
-		button.verticalSizing(Sizing.fixed(BUTTON));
-		return button;
-	}
-
-	private static final class DrawnButton extends PackButton {
-		private final String name;
-
-		DrawnButton(String name, Consumer<ButtonComponent> action) {
-			super(Component.empty(), action);
-			this.name = name;
-		}
-
-		@Override
-		protected MutableComponent createNarrationMessage() {
-			return wrapDefaultNarrationMessage(Component.literal(name));
-		}
-	}
-
-	private static FlowLayout spacer() {
-		return UIContainers.horizontalFlow(Sizing.expand(), Sizing.fixed(1));
-	}
-
-	private static LabelComponent section(String text) {
-		LabelComponent label = label("§7" + text);
-		label.margins(Insets.top(4));
-		return label;
-	}
-
-	private static LabelComponent label(String text) {
-		return new SafeLabel(Component.literal(text));
-	}
-
-	private static String name(Enum<?> option) {
-		String lower = option.name().toLowerCase(Locale.ROOT);
-		return option == Align.CENTER ? "Centre" : Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
 	}
 }
