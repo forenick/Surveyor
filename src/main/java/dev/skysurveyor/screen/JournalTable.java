@@ -18,6 +18,7 @@ import net.minecraft.network.chat.Component;
 
 import dev.skysurveyor.Surveyor;
 import dev.skysurveyor.journal.JournalEntry;
+import dev.skysurveyor.mining.Efficiency;
 import dev.skysurveyor.screen.TableColumns.Column;
 import dev.skysurveyor.settings.SettingsList;
 
@@ -112,6 +113,8 @@ final class JournalTable {
 			case "Lapis" -> List.of("Lapis corpses looted");
 			case "Mined" -> List.of("Gems in Fine, metal as " + SettingsList.label(Surveyor.MONEY.settings().metalTierUsed()));
 			case "Spawn" -> List.of("Mining time until the shaft spawned");
+			case "Eff." -> List.of("Blocks you broke against nonstop mining", "From your first gem block, no Gemstone Spread",
+					"Under " + Efficiency.MIN_BLOCKS + " blocks shows -");
 			default -> null;
 		};
 		if (lines == null) return null;

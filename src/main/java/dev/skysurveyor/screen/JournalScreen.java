@@ -68,6 +68,9 @@ import dev.skysurveyor.journal.MiningEntry;
 import dev.skysurveyor.journal.OutsideMining;
 import dev.skysurveyor.journal.StatsRange;
 import dev.skysurveyor.journal.SummaryText;
+import dev.skysurveyor.mining.Efficiency;
+import dev.skysurveyor.mining.EfficiencyStats;
+import dev.skysurveyor.mining.MiningText;
 import dev.skysurveyor.money.ChartTips;
 import dev.skysurveyor.money.CoinBreakdown;
 import dev.skysurveyor.money.Coins;
@@ -125,6 +128,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 	private static final int GAP = 5;
 	private static final int COLUMN_PADDING = 6;
 	private static final int SECTION_GAP = 6;
+	private static final int KEY_GAP = 6;
 	// table padding + row padding + scrollbar
 	private static final int TABLE_CHROME = 10 + 4 + 4;
 	// in %, middle gets the rest
@@ -721,6 +725,12 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		List<String> coinTexts = new ArrayList<>(shaftCoins.stream().map(JournalScreen::coinText).toList());
 		if (!session.mining().isEmpty()) coinTexts.add(coinText(sessionMoney.outside()));
 		measured = tables.measured(measured, "coins", coinTexts);
+		// most sessions have no mined shaft, an all - column only takes room
+		if (session.entries().stream().allMatch(e -> Efficiency.shown(e.mining()) == null)) {
+			measured = measured.stream().filter(c -> !c.key().equals("eff")).toList();
+		} else {
+			measured = tables.measured(measured, "eff", session.entries().stream().map(TableColumns::efficiency).toList());
+		}
 		if (session.entries().stream().allMatch(e -> TableColumns.campfires(e) == 0)) {
 			measured = measured.stream().filter(c -> !c.key().equals("campfire")).toList();
 		} else {
@@ -744,6 +754,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 					case "powder" -> cell(column, "§f" + Format.number(JournalStats.powder(entry)));
 					case "coins" -> cell(column, coinText(shaftCoins.get(i)));
 					case "campfire" -> cell(column, campfireCell(entry));
+					case "eff" -> cell(column, TableColumns.efficiency(entry));
 					default -> minedCell(column, entry);
 				});
 			}
@@ -1006,6 +1017,23 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		if (entry.metal() != null) {
 			detail.child(section("Metal mined"));
 			detail.child(wrapped(entry.metal().styledText(Surveyor.MONEY.settings().metalTierUsed().tier(), ItemNames.current())));
+		}
+		MiningText.Lines mining = MiningText.of(entry.mining());
+		if (mining != null) {
+			detail.child(section("Mining"));
+			String aside = mining.withSetup() == null ? "" : " §8(" + mining.withSetup() + " with setup)";
+			// narrow panel: the aside would wrap, so its own row
+			boolean fits = font.width("Efficiency") + KEY_GAP + font.width("§f" + mining.value() + aside) <= detailInner;
+			List<Component> tooltip = new ArrayList<>();
+			for (String line : mining.tooltip()) tooltip.add(Component.literal(line));
+			FlowLayout row = keyValue("Efficiency", "§f" + mining.value() + (fits ? aside : ""));
+			applyTooltip(row, tooltip);
+			detail.child(row);
+			if (!fits && mining.withSetup() != null) {
+				FlowLayout second = keyValue("With setup", "§8" + mining.withSetup());
+				applyTooltip(second, tooltip);
+				detail.child(second);
+			}
 		}
 		coinsSection(entry, value);
 	}
@@ -1352,6 +1380,8 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 			totals.child(keyValue("Campfires", "§f" + campfires.placed()
 					+ (cold == null ? "" : " §7avg at §b" + Math.round(cold) + "❄")));
 		}
+		EfficiencyStats.Summary efficiency = EfficiencyStats.of(rangeEntries);
+		if (efficiency.all() != null) totals.child(efficiencyRow(efficiency.all()));
 		totals.child(section("Corpses looted"));
 		for (String type : stats.corpsesSeen().keySet()) {
 			totals.child(corpseRow(type, stats.looted().getOrDefault(type, 0), money, stats.drops().get(type)));
@@ -1426,8 +1456,44 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 			odds.child(row);
 		}
 		typeCoins(odds, money, typeSizes.name());
+		typeEfficiency(odds, efficiency, typeSizes.name());
 		columns.child(scrollColumn(Sizing.fill(STATS_RIGHT), odds));
 		content.child(columns);
+	}
+
+	private FlowLayout efficiencyRow(EfficiencyStats.Group all) {
+		FlowLayout row = keyValue("Efficiency", "§f" + Format.percent(all.median()) + " §8" + all.shafts() + (all.shafts() == 1 ? " shaft" : " shafts"));
+		List<Component> tooltip = new ArrayList<>();
+		tooltip.add(Component.literal("§fEfficiency"));
+		tooltip.add(Component.literal("§7Blocks you broke against nonstop mining"));
+		tooltip.add(Component.literal("§7Middle of your mined shafts in this range"));
+		tooltip.add(Component.literal("§8From your first gem block, no Gemstone Spread"));
+		applyTooltip(row, tooltip);
+		return row;
+	}
+
+	// best first, bar = the efficiency itself
+	private void typeEfficiency(FlowLayout column, EfficiencyStats.Summary efficiency, int nameWidth) {
+		if (efficiency.types().isEmpty()) return;
+		column.child(section("Efficiency per shaft type"));
+		int valueWidth = efficiency.types().stream().mapToInt(t -> font.width(Format.percent(t.all().median()))).max().orElse(0);
+		BarSizes sizes = new BarSizes(nameWidth, valueWidth, statsRightRoom());
+		for (EfficiencyStats.Type type : efficiency.types()) {
+			String name = shaftNames.name(type.type());
+			EfficiencyStats.Group all = type.all();
+			FlowLayout row = barRow(name, Math.min(1, all.median()), "§f" + Format.percent(all.median()),
+					0xFF000000 | shaftNames.rgb(type.type()), sizes);
+			List<Component> tooltip = new ArrayList<>();
+			tooltip.add(Component.literal("§f" + name + " §7" + Format.percent(all.median()) + " over " + all.shafts()
+					+ (all.shafts() == 1 ? " shaft" : " shafts")));
+			if (all.ticks() != null) tooltip.add(Component.literal("§7" + MiningText.ticks(all.ticks()) + " ticks a block"));
+			if (type.variants().size() > 1) {
+				type.variants().forEach((variant, group) -> tooltip.add(Component.literal("§7" + capitalized(ShaftNames.variantName(variant))
+						+ " §f" + Format.percent(group.median()) + " §8" + group.shafts())));
+			}
+			row.tooltip(tooltip);
+			column.child(row);
+		}
 	}
 
 	private FlowLayout coinsTotal(MoneyStats money, AllTime stats, boolean beforeOutside, double tax) {
@@ -1831,7 +1897,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 
 	private static FlowLayout keyValue(String key, String value) {
 		FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-		row.gap(6);
+		row.gap(KEY_GAP);
 		row.child(label("§7" + key));
 		LabelComponent valueLabel = label(value);
 		valueLabel.horizontalSizing(Sizing.expand());

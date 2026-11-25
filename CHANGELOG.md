@@ -2,6 +2,38 @@
 
 [SemVer](https://semver.org). Betas are `X.Y.Z-beta.N` (GitHub pre-releases).
 
+## 0.26.0 (2026-11-25)
+
+- Eff. column in the shaft table: how efficiently you mined each shaft, click to sort.
+- Shaft details: hover the efficiency for blocks broken, ticks a block, boost, setup and paused time, with the number with setup time counted next to it in gray.
+- Efficiency HUD line: this shaft from your first gem block, or your mining in the tunnels since the last shaft, and - while you loot. It can show a line of your last minutes, with your usual for that shaft type.
+- Default Spawn and Shaft boxes show Efficiency.
+- Stats tab: your efficiency in the range and per shaft type.
+- Efficiency / shaft personal best, for shafts with 5 minutes or more of mining.
+- Title when you enter a shaft: its type, then its corpses, whether it has a fossil and your Mayhem buff.
+- Fossil waypoints (on by default): a box around the shaft's fossil, seen through walls, with how far it is. It goes away once the fossil is mined, and has a colour picker next to its setting.
+- Fossil Essence from shaft fossils counts in your coins, at the Bazaar price, and has its own HUD line.
+- Consumables HUD preset: time left on the Pristine Potato, Filet O' Fortune, Cold Resistance potion and Fiesta Flask.
+- HUD boxes stick to each other: drop one on the 4 px gap under or next to another and it moves along when that box grows, shrinks or hides.
+- Framed boxes snap by the frame of the resource pack in use, so it no longer touches the screen edge or another box.
+- Crystals you collect in crystal shafts now count.
+- Developer settings: Auto-record, Record screens, Anonymize recordings, Debug overlay and Copy debug info.
+- Auto-record records your mining sessions, with a chat line when it starts and stops. Old auto recordings are deleted after 30 days, or another time you pick.
+- Anonymize recordings (on): player names in recordings become Player1, Player2, yours becomes You.
+- Mark key (unbound): marks the moment in a recording as Bug, Wrong number or Note, with an optional note.
+- Recordings mark errors, chat Surveyor doesn't know yet and corpse loots that don't add up.
+- Recordings note what menus like Sell Sacks show.
+- Recordings are about 14 times smaller.
+- /sv record start extra also records boss bars and sounds.
+- /sv debug info copies debug info for GitHub issues, /sv debug log lists the last shaft events, unknown chat and errors.
+- A patterns.txt in the skysurveyor folder adds to or fixes Surveyor's chat patterns, /sv debug reload reloads it.
+- Corpse loot hidden in "+N other items" no longer lowers your mined gems.
+- Spawn timer stops at a warp instead of counting the pause after it.
+- Fixed breaks counting twice after a restart.
+- Fixed Auction House items saved at their NPC price while Auction House prices couldn't load.
+- Recordings no longer stall the game when they start or stop.
+- Small HUD editor fixes.
+
 ## 0.25.0 (2026-11-18)
 
 - Drops HUD line: what your coins are made of, by item or by source, for this shaft, the session or all-time.

@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import com.google.gson.JsonObject;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -64,6 +65,22 @@ class JournalTest {
 		at(120_000).chat(WOW);
 		visitShaft(123_000, "JADE_1");
 		assertEquals(60_000, entries.get(0).searchMillis());
+	}
+
+	// recording 8 PERI_C: last hit, 2 warps, next hit 12.5 s later
+	@Test
+	void aWarpEndsTheGap() {
+		at(0).hit(true);
+		at(10_000).hit(true);
+		at(17_000);
+		journal.onWorldChange(now);
+		assertEquals(17_000, journal.spawnTimerMillis(20_000), "stops at the warp");
+		at(21_000);
+		journal.onWorldChange(now);
+		at(22_500).hit(true);
+		at(30_000).chat(WOW);
+		visitShaft(33_000, "PERI_C");
+		assertEquals(24_500, entries.get(0).searchMillis());
 	}
 
 	@Test
@@ -301,6 +318,18 @@ class JournalTest {
 		assertTrue(text.contains("§9Lapis 1/1§7, §fUmber 0/1§7, §fTungsten 0/2"), text);
 	}
 
+	// jade fossil 2:17 to 2:26: 43 quartz blocks (42 + 1 spread), 17 bars after a break summing 112
+	@Test
+	void recording7FossilEssence() throws IOException {
+		Path recording = RecordingReplay.RECORDINGS.resolve("2026-11-21_19-12-23.jsonl.gz");
+		assumeTrue(Files.exists(recording), "Recording not available: " + recording);
+		replay(recording);
+		JournalEntry jade = entries.stream().filter(entry -> "JADE_1".equals(entry.shaftId())).findFirst().orElseThrow();
+		assertEquals(new FossilYield(43, 17, 112), jade.fossil());
+		assertEquals(283, jade.fossilEssence());
+		assertTrue(entries.stream().filter(entry -> !"JADE_1".equals(entry.shaftId())).allMatch(entry -> entry.fossil() == null));
+	}
+
 	@Test
 	void summaryOfRecording3() throws IOException {
 		Path recording = RecordingReplay.RECORDINGS.resolve("2026-11-11_14-13-53.jsonl");
@@ -328,10 +357,12 @@ class JournalTest {
 		assumeTrue(Files.exists(recording), "Recording not available: " + recording);
 		ShaftTracker replayTracker = new ShaftTracker(TextPatterns.defaults(), event -> journal.onEvent(event, now));
 		inMines = false;
-		RecordingReplay.replay(recording, replayTracker, t -> {
-			now = t;
+		for (JsonObject record : RecordingReplay.read(recording)) {
+			now = record.get("t").getAsLong();
 			inMines = replayTracker.inMiningArea();
-		}, journal::onBlockHit);
+			RecordingReplay.feed(record, replayTracker, journal::onBlockHit);
+			if (record.get("type").getAsString().equals("world_change")) journal.onWorldChange(now);
+		}
 
 		assertEquals(List.of("PERI_1", "JADE_1", "AMET_1", "TITA_1", "AQUA_C", "ONYX_1"),
 				entries.stream().map(JournalEntry::shaftId).toList());

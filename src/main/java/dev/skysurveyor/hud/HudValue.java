@@ -6,6 +6,7 @@ import java.util.Locale;
 
 import dev.skysurveyor.data.CorpseType;
 import dev.skysurveyor.data.ShaftNames;
+import dev.skysurveyor.effects.Consumable;
 import dev.skysurveyor.journal.Breaks;
 import dev.skysurveyor.journal.Journal;
 import dev.skysurveyor.journal.PersonalBests;
@@ -21,6 +22,7 @@ public enum HudValue {
 	SESSION_CORPSE_FINE("session_corpse_fine", "Corpse gems (Fine)", Group.SESSION, Kind.DECIMAL, "Corpse Fine: ", Range.values()),
 	// in the metal tier setting
 	MINED_METAL("mined_metal", "Mined metal", Group.SESSION, Kind.DECIMAL, "Mined metal: ", Range.values()),
+	FOSSIL_ESSENCE("fossil_essence", "Fossil Essence", Group.SESSION, Kind.INTEGER, "Fossil Essence: ", Range.values()),
 	SPAWN_TIMER("spawn_timer", "Spawn timer", Group.SPAWN, Kind.TIME, "Spawn: "),
 	// shafts since the last one of the lines shaft type
 	DRYSTREAK("drystreak", "Drystreak", Group.SPAWN, Kind.INTEGER, "Jasper drystreak: "),
@@ -30,6 +32,8 @@ public enum HudValue {
 	CORPSES_LOOTED("corpses_looted", "Corpses looted", Group.SESSION, Kind.INTEGER, "Lapis corpses: ", Range.values()),
 	SESSION_TIME("session_time", "Session length", Group.OTHER, Kind.TIME, "Session: "),
 	SHAFTS_TODAY("shafts_today", "Shafts today", Group.SESSION, Kind.INTEGER, "Shafts today: "),
+	// this shaft from the 1st gem block, or this tunnel loop. whole percent (Docs/efficiency-design.md)
+	EFFICIENCY("efficiency", "Efficiency", Group.OTHER, Kind.INTEGER, "Efficiency: ", "%"),
 	// one of the Stats tabs personal bests, all-time
 	PERSONAL_BEST("personal_best", "Personal best", Group.OTHER, Kind.TEXT, "PB: "),
 	SHAFT_TYPE("shaft_type", "Shaft type", Group.SHAFT, Kind.TEXT, "Shaft: "),
@@ -46,6 +50,11 @@ public enum HudValue {
 			Range.PER_HOUR, Range.ALL_TIME),
 	// several rows, not a tag. label stays empty
 	DROPS("drops", "Drops", Group.MONEY, Kind.TEXT, "", Range.SHAFT, Range.SESSION, Range.ALL_TIME),
+	// time left, line hides while its effect is off (Docs/consumables-design.md)
+	PRISTINE_POTATO("pristine_potato", "Pristine Potato", Group.CONSUMABLES, Kind.TIME, "Pristine Potato: "),
+	FILET_O_FORTUNE("filet_o_fortune", "Filet O' Fortune", Group.CONSUMABLES, Kind.TIME, "Filet O' Fortune: "),
+	COLD_RESISTANCE("cold_resistance", "Cold Resistance potion", Group.CONSUMABLES, Kind.TIME, "Cold Resistance: "),
+	FIESTA_FLASK("fiesta_flask", "Fiesta Flask", Group.CONSUMABLES, Kind.TIME, "Fiesta Flask: "),
 	FPS("fps", "FPS", Group.GAME, Kind.INTEGER, "FPS: "),
 	PING("ping", "Ping", Group.GAME, Kind.INTEGER, "Ping: ", "ms"),
 	TPS("tps", "TPS", Group.GAME, Kind.DECIMAL, "TPS: "),
@@ -59,6 +68,7 @@ public enum HudValue {
 		SESSION("Shafts and loot"),
 		SHAFT("Current shaft"),
 		MONEY("Coins"),
+		CONSUMABLES("Consumables"),
 		OTHER("Other"),
 		GAME("Game");
 
@@ -132,7 +142,9 @@ public enum HudValue {
 		NONE,
 		BAR,
 		// last shafts as columns
-		CHART
+		CHART,
+		// a value over the last minutes
+		LINE
 	}
 
 	// what a line picks besides the range, f.e. {dry:jasper}
@@ -164,8 +176,9 @@ public enum HudValue {
 		static final List<String> CORPSES = CorpseType.ORDER.stream().map(HudValue::targetTag).toList();
 		// Add line order, docs/hud-rethink.md
 		static final List<HudValue> LISTED = List.of(SPAWN_TIMER, AVERAGE_SPAWN, SINCE_LAST_SHAFT, DRYSTREAK, PITY, SESSION_SHAFTS,
-				SHAFTS_PER_HOUR, SHAFTS_TODAY, SESSION_POWDER, SESSION_CORPSE_FINE, MINED_METAL, CORPSES_LOOTED, SHAFT_TYPE,
-				SHAFT_TIME, SHAFT_CORPSES, SHAFT_COLD, SHAFT_CAMPFIRES, COINS, COINS_PER_SHAFT, OUTSIDE_COINS, DROPS, SESSION_TIME,
+				SHAFTS_PER_HOUR, SHAFTS_TODAY, SESSION_POWDER, SESSION_CORPSE_FINE, MINED_METAL, FOSSIL_ESSENCE, CORPSES_LOOTED, SHAFT_TYPE,
+				SHAFT_TIME, SHAFT_CORPSES, SHAFT_COLD, SHAFT_CAMPFIRES, COINS, COINS_PER_SHAFT, OUTSIDE_COINS, DROPS, PRISTINE_POTATO, FILET_O_FORTUNE,
+				COLD_RESISTANCE, FIESTA_FLASK, EFFICIENCY, SESSION_TIME,
 				PERSONAL_BEST, FPS, PING, TPS, CLOCK, MOD_VERSION, MINECRAFT_VERSION);
 
 		private static List<String> shafts() {
@@ -354,8 +367,30 @@ public enum HudValue {
 			case SESSION_POWDER, SHAFT_COLD -> "b";
 			// fine = rare
 			case SESSION_CORPSE_FINE -> "9";
+			// games essence colour
+			case FOSSIL_ESSENCE -> "d";
 			// games colour for the pity number
 			case PITY -> "e";
+			// item rarity colours (epic, rare), cold resistance in the games aqua
+			case PRISTINE_POTATO -> "5";
+			case FILET_O_FORTUNE -> "9";
+			case COLD_RESISTANCE -> "b";
+			default -> null;
+		};
+	}
+
+	// index into HudFormat.options, consumables count down in whole minutes
+	public int defaultFormat() {
+		return consumable() != null ? 3 : 0;
+	}
+
+	// null = not a consumable timer
+	public Consumable consumable() {
+		return switch (this) {
+			case PRISTINE_POTATO -> Consumable.PRISTINE_POTATO;
+			case FILET_O_FORTUNE -> Consumable.FILET_O_FORTUNE;
+			case COLD_RESISTANCE -> Consumable.COLD_RESISTANCE;
+			case FIESTA_FLASK -> Consumable.FIESTA_FLASK;
 			default -> null;
 		};
 	}
@@ -367,7 +402,7 @@ public enum HudValue {
 
 	// small numbers, 1,204 vs 1.2k never matters
 	public boolean hasFormatChoice() {
-		return this != SHAFT_CAMPFIRES && this != FPS && this != PING && this != SHAFTS_TODAY;
+		return this != SHAFT_CAMPFIRES && this != FPS && this != PING && this != SHAFTS_TODAY && this != EFFICIENCY;
 	}
 
 	public Target target() {
@@ -471,6 +506,8 @@ public enum HudValue {
 			case SESSION_CORPSE_FINE -> "Gemstones from corpse loot, counted in Fine. 80 Rough make a Flawed, 80 Flawed a Fine.";
 			case MINED_METAL -> "Tungsten mined in Tungsten shafts and Umber in Umber shafts, in your Metal tier setting. "
 					+ "Counted from Sacks messages, so it goes up every 30 s.";
+			case FOSSIL_ESSENCE -> "Fossil Essence from mining fossils in shafts. The game only shows the last block's, so it's "
+					+ "the fossil blocks you broke times the average shown.";
 			case SPAWN_TIMER -> "Mining time since your last shaft. Block hits and pickaxe abilities in the Dwarven Mines "
 					+ "count, gaps over 40 s count as 40 s.";
 			case DRYSTREAK -> "Shafts since your last shaft of one type, f.e. Jasper. Any variant counts. 0 while you're in one.";
@@ -480,6 +517,9 @@ public enum HudValue {
 			case CORPSES_LOOTED -> "Corpses you looted of one type, f.e. Lapis.";
 			case SESSION_TIME -> "How long this session has been going.";
 			case SHAFTS_TODAY -> "Shafts you finished today.";
+			case EFFICIENCY -> "Blocks you broke against the blocks nonstop mining at your speed would break. In a shaft from "
+					+ "your first gem block, in the tunnels since you left the last shaft. Starts over after 2 min without mining. "
+					+ "Gemstone Spread doesn't count.";
 			case PERSONAL_BEST -> "One of your personal bests from the Stats tab, over all your shafts.";
 			case SHAFT_TYPE -> "The shaft you're in, or the last one, f.e. Jade, in its own colour.";
 			case SHAFT_TIME -> "How long you've been in this shaft, or how long you were in the last one.";
@@ -494,6 +534,8 @@ public enum HudValue {
 			case OUTSIDE_COINS -> "Coins from what you mine in the Dwarven Mines outside shafts, from the Sacks messages, at "
 					+ "your price settings. Items that go to your material stash aren't counted.";
 			case DROPS -> "What your coins are made of, one row per item, biggest first. Gems count as Fine.";
+			case PRISTINE_POTATO, FILET_O_FORTUNE, COLD_RESISTANCE, FIESTA_FLASK -> "Time left on your " + displayName
+					+ ". Starts when you use one and follows the tab list and /effects. Hidden while it's off.";
 			case FPS -> "Frames per second.";
 			case PING -> "Time from your block breaks and clicks to the server's answer. Updates while you mine.";
 			case TPS -> "Server ticks per second, 20 is full speed. Shows - where the server doesn't send tick pings.";
@@ -576,6 +618,7 @@ public enum HudValue {
 	public Graph graph(Range range) {
 		return switch (this) {
 			case PITY -> Graph.BAR;
+			case EFFICIENCY -> Graph.LINE;
 			// this shaft is 1 number, no chart
 			case AVERAGE_SPAWN -> range == Range.SESSION || range == Range.ALL_TIME ? Graph.CHART : Graph.NONE;
 			default -> Graph.NONE;

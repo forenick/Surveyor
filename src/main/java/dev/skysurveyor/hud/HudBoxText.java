@@ -178,6 +178,11 @@ public final class HudBoxText {
 				Object avg = value(value, line.range(), line.target(), data, example);
 				yield spawnChart(data.recentSpawns(example), avg instanceof Number n ? n.doubleValue() : null, ShaftNames.defaults());
 			}
+			case LINE -> {
+				List<Double> points = data.efficiencyTrack(example);
+				yield points.size() < 2 ? null
+						: HudGraph.Line.of(points, data.usualEfficiency(example), HudLayout.argb(line.valueColor != null ? line.valueColor : box.valueColor));
+			}
 			case NONE -> null;
 		};
 	}
@@ -214,6 +219,8 @@ public final class HudBoxText {
 		HudValue hudValue = line.hudValue();
 		if (hudValue == null) return null;
 		if (hudValue.multiRow()) return "§7" + dropsName(line);
+		// off = no line, a box w/ none takes no room (nick, 2026-11-22)
+		if (hudValue.consumable() != null && !example && data.get(hudValue, null) == null) return null;
 		if (line.advancedMode()) {
 			HudExpr.Values values = values(data, example);
 			Map<String, String> colors = HudRules.colors(HudRules.parse(line.advancedRules()), values);

@@ -9,6 +9,7 @@ Enchanted Umber          = minecraft:brown_terracotta
 Enchanted Tungsten       = minecraft:clay_ball
 Enchanted Glacite        = minecraft:packed_ice
 Suspicious Scrap         = minecraft:iron_nugget
+Fossil Essence           = minecraft:bone_meal
 Bejeweled Handle         = minecraft:stick
 Dead Man's Chestplate    = minecraft:chainmail_chestplate
 default                  = minecraft:paper

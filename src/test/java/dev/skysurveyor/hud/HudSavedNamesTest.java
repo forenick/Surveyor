@@ -21,13 +21,14 @@ class HudSavedNamesTest {
 
 	private static final List<String> IDS = List.of("session_shafts", "shafts_per_hour", "average_spawn", "session_powder",
 			"session_corpse_fine", "mined_metal", "spawn_timer", "drystreak", "pity", "since_last_shaft", "corpses_looted", "session_time",
-			"shafts_today", "personal_best", "shaft_type", "shaft_time", "shaft_corpses", "shaft_cold", "shaft_campfires", "coins",
-			"coins_per_shaft", "outside_coins", "drops", "fps", "ping", "tps", "clock", "mod_version", "minecraft_version");
+			"shafts_today", "efficiency", "personal_best", "shaft_type", "shaft_time", "shaft_corpses", "shaft_cold", "shaft_campfires", "coins",
+			"coins_per_shaft", "outside_coins", "drops", "fps", "ping", "tps", "clock", "mod_version", "minecraft_version",
+			"fossil_essence", "pristine_potato", "filet_o_fortune", "cold_resistance", "fiesta_flask");
 
 	private static final List<String> TAGS = List.of("shafts", "shafts_per_hour", "avg_spawn", "shaft_powder", "corpse_fine",
-			"mined_metal", "spawn", "dry", "pity", "since_shaft", "looted", "session_time", "shafts_today", "pb", "shaft_type",
+			"mined_metal", "spawn", "dry", "pity", "since_shaft", "looted", "session_time", "shafts_today", "efficiency", "pb", "shaft_type",
 			"time_inside", "corpses", "cold", "campfires", "coins", "coins_per_shaft", "outside_coins", "fps", "ping", "tps", "clock",
-			"version", "mc_version");
+			"version", "mc_version", "fossil_essence", "pristine_potato", "filet_o_fortune", "cold_resistance", "fiesta_flask");
 
 	@Test
 	void valueIds() {

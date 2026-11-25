@@ -31,6 +31,7 @@ public class JsonLinesFile<T> {
 	// one thread for every file, owner shuts it down
 	private final Executor io;
 	private volatile boolean failed;
+	private volatile int skipped;
 
 	public JsonLinesFile(Path file, Class<T> type, Predicate<T> complete, Executor io) {
 		this.file = file;
@@ -46,6 +47,11 @@ public class JsonLinesFile<T> {
 	// read threw, so some lines may be missing
 	public boolean failed() {
 		return failed;
+	}
+
+	// lines the last read couldnt use, they stay in the file
+	public int skipped() {
+		return skipped;
 	}
 
 	// never completes exceptionally, a failed future = empty journal w/o a word. throwable on purpose
@@ -94,12 +100,19 @@ public class JsonLinesFile<T> {
 				try {
 					T entry = gson.fromJson(line, type);
 					// "null" parses to null
-					if (entry == null) LOGGER.warn("Skipping empty line {} of {}", number, file);
-					// f.e. {} from a hand edit, line stays in the file
-					else if (!complete.test(entry)) LOGGER.warn("Skipping line {} of {}: fields missing", number, file);
-					else entries.add(entry);
+					if (entry == null) {
+						skipped++;
+						LOGGER.warn("Skipping empty line {} of {}", number, file);
+					} else if (!complete.test(entry)) {
+						// f.e. {} from a hand edit, line stays in the file
+						skipped++;
+						LOGGER.warn("Skipping line {} of {}: fields missing", number, file);
+					} else {
+						entries.add(entry);
+					}
 				} catch (RuntimeException e) {
 					// not just JsonParseException, f.e. a price typed as text. line stays in the file
+					skipped++;
 					LOGGER.warn("Skipping unreadable line {} of {}: {}", number, file, e.toString());
 				}
 			}

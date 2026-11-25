@@ -255,7 +255,7 @@ class OldConfigTest {
 		assertFalse(summary.has("style"));
 	}
 
-	// what 0.22.0-alpha.15 wrote on a first start, key order + layout. metalTier new at the end since 0.23.0, ownMetal since 0.24.0, chart types since 0.24.0-alpha.12
+	// what 0.22.0-alpha.15 wrote on a first start, key order + layout. metalTier new at the end since 0.23.0, ownMetal since 0.24.0, chart types since 0.24.0-alpha.12, dev since 0.26.0-alpha.3, entryTitle since 0.26.0-alpha.23, waypoints since alpha.24
 	@Test
 	void newFileLooksTheSame(@TempDir Path tmp) throws Exception {
 		new ConfigFile(tmp).reloadIfChanged();
@@ -281,6 +281,21 @@ class OldConfigTest {
 				    "style": "vanilla",
 				    "position": "top_right",
 				    "seconds": 5.0
+				  },
+				  "dev": {
+				    "autoRecord": "off",
+				    "keepRecordings": "30_days",
+				    "recordScreens": true,
+				    "anonymize": true,
+				    "debugOverlay": false
+				  },
+				  "entryTitle": {
+				    "show": true,
+				    "seconds": 5.0
+				  },
+				  "waypoints": {
+				    "fossil": true,
+				    "color": "#FF55FF"
 				  }
 				}""", Files.readString(tmp.resolve("config.json")));
 	}

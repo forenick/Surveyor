@@ -8,6 +8,7 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 import dev.skysurveyor.journal.JournalEntry;
+import dev.skysurveyor.mining.MiningStats;
 import dev.skysurveyor.screen.TableColumns.Column;
 
 import static dev.skysurveyor.journal.EntryBuilder.entry;
@@ -36,7 +37,7 @@ class TableColumnsTest {
 	@Test
 	void dropsInNicksOrder() {
 		List<String> dropped = new ArrayList<>();
-		List<String> expected = List.of("campfire", "number", "time", "inside", "powder", "spawn");
+		List<String> expected = List.of("campfire", "eff", "number", "time", "inside", "powder", "spawn");
 		for (int step = 1; step <= expected.size(); step++) {
 			List<String> shown = keys(TableColumns.fit(EVEN, needed(EVEN) - step * (10 + GAP), GAP));
 			dropped.clear();
@@ -133,6 +134,27 @@ class TableColumnsTest {
 	void coinsBiggestFirst() {
 		assertArrayEquals(new int[] {2, 0, 3, 1}, order("coins", false));
 		assertArrayEquals(new int[] {0, 3, 2, 1}, order("coins", true));
+	}
+
+	// 1,000 blocks at 13 ticks: 650 s nonstop. 100% in 650 s, 50% in 1,300 s, 99 blocks shows nothing, old entry has none
+	private static MiningStats mined(int blocks, long millis) {
+		return new MiningStats(millis, 0, blocks, 0, "magenta_stained_glass", 13.0, null, 0, 0);
+	}
+
+	private static final List<JournalEntry> MINED = List.of(
+			entry().shaftId("JASP_1").mining(mined(1000, 1_300_000)).build(), entry().shaftId("TOPA_1").build(),
+			entry().shaftId("JASP_C").mining(mined(1000, 650_000)).build(), entry().shaftId("RUBY_1").mining(mined(99, 60_000)).build());
+
+	@Test
+	void efficiencyCells() {
+		assertEquals(List.of("§f50%", "§8-", "§f100%", "§8-"), MINED.stream().map(TableColumns::efficiency).toList());
+	}
+
+	@Test
+	void efficiencyBestFirstNoneLast() {
+		List<Double> coins = Arrays.asList(1.0, 1.0, 1.0, 1.0);
+		assertArrayEquals(new int[] {2, 0, 1, 3}, TableColumns.shaftOrder(MINED, coins, "eff", false, 1));
+		assertArrayEquals(new int[] {0, 2, 1, 3}, TableColumns.shaftOrder(MINED, coins, "eff", true, 1));
 	}
 
 	@Test

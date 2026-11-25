@@ -3,6 +3,7 @@
 	"package": "dev.skysurveyor.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"client": [
+		"BossHealthOverlayAccessor",
 		"ClientCommonPacketListenerMixin",
 		"ClientPacketListenerMixin",
 		"MultiPlayerGameModeMixin",

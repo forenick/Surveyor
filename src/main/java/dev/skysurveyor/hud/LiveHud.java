@@ -7,11 +7,14 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import net.minecraft.SharedConstants;
@@ -31,6 +34,7 @@ import dev.skysurveyor.detection.LiveTracker;
 import dev.skysurveyor.detection.Shaft;
 import dev.skysurveyor.detection.TabListParser;
 import dev.skysurveyor.detection.TextPatterns;
+import dev.skysurveyor.effects.Consumable;
 import dev.skysurveyor.hud.HudData.SessionTotals;
 import dev.skysurveyor.hud.HudData.Totals;
 import dev.skysurveyor.hud.HudLayout.Box;
@@ -44,6 +48,7 @@ import dev.skysurveyor.journal.MetalYield;
 import dev.skysurveyor.journal.MiningEntry;
 import dev.skysurveyor.journal.PersonalBests;
 import dev.skysurveyor.journal.ToastText;
+import dev.skysurveyor.mining.EfficiencyStats;
 import dev.skysurveyor.money.DropList;
 import dev.skysurveyor.money.LiveMoney;
 import dev.skysurveyor.money.MoneyStats;
@@ -70,6 +75,7 @@ public final class LiveHud {
 	private final LiveJournal journal;
 	private final LiveMoney money;
 	private final LiveSettings settings;
+	private final Supplier<Map<Consumable, Long>> consumables;
 	private HudLayout layout = HudLayout.firstStart();
 	// movable shaft toast, client thread only
 	private ToastText toast;
@@ -125,6 +131,9 @@ public final class LiveHud {
 	private final TabListParser tabList = new TabListParser(TextPatterns.defaults());
 	// client thread. null = no widget, or a new world till the next tab list
 	private TabListParser.Pity pity;
+	private Map<String, Double> usual = Map.of();
+	private int usualCount = -1;
+	private JournalEntry usualFirst;
 	private final PingTimer pingTimer = new PingTimer();
 	// drops line, redone when an input changes + a line wants it. client thread
 	private final Cached sessionDrops = new Cached();
@@ -134,7 +143,9 @@ public final class LiveHud {
 	private record Prepared(Box box, HudRenderer.Measured measured, HudRenderer.Bounds bounds) {
 	}
 
-	public LiveHud(LiveTracker tracker, LiveJournal journal, LiveMoney money, LiveSettings settings) {
+	public LiveHud(LiveTracker tracker, LiveJournal journal, LiveMoney money, LiveSettings settings,
+			Supplier<Map<Consumable, Long>> consumables) {
+		this.consumables = consumables;
 		this.tracker = tracker;
 		this.journal = journal;
 		this.money = money;
@@ -297,10 +308,25 @@ public final class LiveHud {
 						session == null ? null : session.id(), breakMillis, shaft != null ? shaftCoins : null))
 				.extra(extra(session, shaft, now, changes, wantPbs, metalTier))
 				.pity(pity)
+				.efficiency(journal.efficiency(now))
+				.efficiencyTrack(journal.efficiencyTrack(now), shaft == null || shaft.id() == null ? null : usualEfficiency().get(shaft.id().type()))
 				.recentSpawns(recentSpawns())
+				.consumables(consumables.get())
 				.game(game(client, now));
 		drops(client, session, shaft, live, changes, miningCount);
 		prepared = null;
+	}
+
+	// shaft type -> median efficiency, the line charts dashes. redone when entries change
+	private Map<String, Double> usualEfficiency() {
+		if (journal.entryCount() != usualCount || journal.firstEntry() != usualFirst) {
+			Map<String, Double> map = new HashMap<>();
+			for (EfficiencyStats.Type type : EfficiencyStats.of(journal.entries()).types()) map.put(type.type(), type.all().median());
+			usual = map;
+			usualCount = journal.entryCount();
+			usualFirst = journal.firstEntry();
+		}
+		return usual;
 	}
 
 	// cold changes dont bump the version, totals dont use it
@@ -446,6 +472,15 @@ public final class LiveHud {
 		return Minecraft.getInstance().gui.screen() instanceof ModScreen;
 	}
 
+	// null = not measured yet
+	public Long ping(long now) {
+		return pingTimer.ping(now);
+	}
+
+	public Double tps(long now) {
+		return tickRate.tps(now);
+	}
+
 	public void render(GuiGraphicsExtractor graphics, DeltaTracker delta) {
 		Minecraft client = Minecraft.getInstance();
 		boolean modScreen = modScreenOpen();
@@ -483,12 +518,15 @@ public final class LiveHud {
 
 	private List<Prepared> prepare(Minecraft client, int width, int height) {
 		List<Prepared> result = new ArrayList<>();
+		// hidden boxes only measured when a shown one hangs on them
+		Map<Box, HudRenderer.Measured> measured = new IdentityHashMap<>();
+		Function<Box, HudRenderer.Measured> measure = box -> measured.computeIfAbsent(box,
+				b -> HudRenderer.measure(client.font, b, HudBoxText.rows(b, data, false)));
+		Predicate<Box> shown = box -> visible(box) && !measure.apply(box).rows().isEmpty();
+		Map<Box, HudRenderer.Bounds> placed = HudPlace.place(layout.boxes, box -> HudRenderer.size(measure.apply(box), box), shown,
+				width, height);
 		for (Box box : layout.boxes) {
-			if (!visible(box)) continue;
-			List<HudRow> rows = HudBoxText.rows(box, data, false);
-			if (rows.isEmpty()) continue;
-			HudRenderer.Measured measured = HudRenderer.measure(client.font, box, rows);
-			result.add(new Prepared(box, measured, HudRenderer.bounds(measured, box, width, height)));
+			if (shown.test(box)) result.add(new Prepared(box, measure.apply(box), placed.get(box)));
 		}
 		pbsDrawn = data.pbRead();
 		return result;

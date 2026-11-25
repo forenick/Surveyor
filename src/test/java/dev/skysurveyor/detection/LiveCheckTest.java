@@ -11,6 +11,7 @@ import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
 
 import dev.skysurveyor.detection.RecordingReplay.LiveCheck;
+import dev.skysurveyor.recorder.RecordingFiles;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -54,6 +55,21 @@ class LiveCheckTest {
 				"{\"t\":100,\"type\":\"world_change\"}",
 				PICKOBULUS.formatted(500)));
 		assertEquals(0, check.firstDifference());
+	}
+
+	// /sv debug reload after the 1st ability, the 2nd line only matches w/ the override
+	@Test
+	void aReloadSwapsThePatternsFromThere() {
+		String reworded = "{\"t\":%d,\"type\":\"chat\",\"legacy\":\"§aYou activated §6Pickobulus§a!\"}";
+		LiveCheck check = RecordingReplay.liveCheck(records(
+				"{\"t\":0,\"type\":\"start\",\"live\":true}",
+				"{\"t\":100,\"type\":\"world_change\"}",
+				reworded.formatted(300),
+				"{\"t\":400,\"type\":\"patterns\",\"patternOverrides\":[\"ability.used ^You activated (?<ability>.+)!$\"]}",
+				reworded.formatted(500),
+				"{\"t\":500,\"type\":\"live\",\"event\":\"PickaxeAbility[ability=Pickobulus]\"}"));
+		assertEquals(-1, check.firstDifference());
+		assertEquals(1, check.replayed().size());
 	}
 
 	// recording 6 at 0:55.9, made w/ alpha.13 before RareDrop existed
@@ -104,7 +120,7 @@ class LiveCheckTest {
 		assumeTrue(Files.isDirectory(RecordingReplay.RECORDINGS), "No recordings");
 		List<Path> files;
 		try (Stream<Path> list = Files.list(RecordingReplay.RECORDINGS)) {
-			files = list.filter(path -> path.toString().endsWith(".jsonl")).sorted().toList();
+			files = list.filter(RecordingFiles::isRecording).sorted().toList();
 		}
 		for (Path file : files) {
 			LiveCheck check = RecordingReplay.liveCheck(RecordingReplay.read(file));

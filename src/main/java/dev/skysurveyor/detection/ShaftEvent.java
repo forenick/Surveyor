@@ -18,6 +18,10 @@ public sealed interface ShaftEvent {
 	record Warping() implements ShaftEvent {
 	}
 
+	// right after Warping, still in the shaft
+	record WarpFailed() implements ShaftEvent {
+	}
+
 	record FrozeToDeath() implements ShaftEvent {
 	}
 
@@ -62,14 +66,22 @@ public sealed interface ShaftEvent {
 	record PickaxeAbility(String ability) implements ShaftEvent {
 	}
 
+	// mining speed boost ran out
+	record AbilityExpired(String ability) implements ShaftEvent {
+	}
+
 	record ScrapFound() implements ShaftEvent {
+	}
+
+	// action bar, the last fossil blocks amount only. sent when the bar changes
+	record FossilEssence(int amount) implements ShaftEvent {
 	}
 
 	// f.e. "Aquamarine Crystal"
 	record CrystalFound(String item) implements ShaftEvent {
 	}
 
-	// takes back the last CrystalFound
+	// never takes a crystal back, see Shaft
 	record CrystalOwned() implements ShaftEvent {
 	}
 

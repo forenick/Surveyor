@@ -1,0 +1,26 @@
+time 33824118
+1795182705215 shafts=2 outside=5 length=346133 shafts/h=- per1k/h=- breaks=72484 stashed=0
+1795176103012 shafts=2 outside=3 length=190383 shafts/h=- per1k/h=- breaks=0 stashed=0
+1795111426658 shafts=5 outside=15 length=1559224 shafts/h=11.5442 per1k/h=2308.8408 breaks=0 stashed=21965
+1795007648960 shafts=19 outside=41 length=3245679 shafts/h=22.5330 per1k/h=1185.9473 breaks=210131 stashed=82506
+1794995582499 shafts=14 outside=35 length=3005746 shafts/h=16.7679 per1k/h=1197.7060 breaks=0 stashed=56414
+1794949340292 shafts=14 outside=35 length=3716417 shafts/h=16.0563 per1k/h=1146.8789 breaks=577463 stashed=0
+1794939351699 shafts=7 outside=32 length=2087983 shafts/h=12.6526 per1k/h=1807.5157 breaks=96299 stashed=0
+1794938624628 shafts=2 outside=1 length=364286 shafts/h=- per1k/h=- breaks=162469 stashed=0
+1794776185033 shafts=8 outside=24 length=1527655 shafts/h=18.8524 per1k/h=2356.5530 breaks=0 stashed=42810
+1794770329994 shafts=6 outside=13 length=1209244 shafts/h=17.8624 per1k/h=2977.0667 breaks=0 stashed=0
+1794766136469 shafts=4 outside=10 length=1048676 shafts/h=13.7316 per1k/h=3432.9002 breaks=0 stashed=0
+1794754944760 shafts=29 outside=0 length=4092778 shafts/h=25.5083 per1k/h=879.5982 breaks=0 stashed=0
+1794753516221 shafts=1 outside=0 length=396140 shafts/h=9.0877 per1k/h=9087.6963 breaks=0 stashed=0
+1794662726153 shafts=2 outside=0 length=129910 shafts/h=- per1k/h=- breaks=0 stashed=0
+1794605156437 shafts=3 outside=0 length=1714892 shafts/h=6.2978 per1k/h=2099.2576 breaks=0 stashed=0
+1794570228113 shafts=1 outside=0 length=735750 shafts/h=4.8930 per1k/h=4892.9664 breaks=0 stashed=0
+1794523818992 shafts=3 outside=0 length=554028 shafts/h=19.4936 per1k/h=6497.8665 breaks=0 stashed=0
+1794519218749 shafts=2 outside=0 length=1014916 shafts/h=7.0942 per1k/h=3547.0916 breaks=0 stashed=0
+1794510646219 shafts=3 outside=0 length=219332 shafts/h=- per1k/h=- breaks=0 stashed=0
+1794441350970 shafts=2 outside=0 length=346771 shafts/h=20.7630 per1k/h=10381.4910 breaks=0 stashed=0
+1794439848110 shafts=1 outside=0 length=41216 shafts/h=- per1k/h=- breaks=0 stashed=0
+1794437267037 shafts=2 outside=0 length=1107687 shafts/h=6.5000 per1k/h=3250.0156 breaks=0 stashed=0
+1794430980131 shafts=12 outside=0 length=4216668 shafts/h=10.2451 per1k/h=853.7547 breaks=0 stashed=0
+1794428607183 shafts=4 outside=0 length=957380 shafts/h=15.0410 per1k/h=3760.2624 breaks=0 stashed=0
+1794413789542 shafts=6 outside=0 length=1114070 shafts/h=19.3884 per1k/h=3231.3948 breaks=0 stashed=0

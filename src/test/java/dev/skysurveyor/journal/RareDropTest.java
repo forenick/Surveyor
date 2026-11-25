@@ -17,6 +17,7 @@ import dev.skysurveyor.money.ShaftValue.Part;
 import dev.skysurveyor.settings.MoneySettings;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 // chat + sacks lines from recording 6, counts in the made up sacks msgs are made up
 class RareDropTest {
@@ -127,5 +128,15 @@ class RareDropTest {
 		tracker.onChat(5_000, CITRINE, List.of());
 		tracker.onWorldChange(9_000);
 		assertEquals(List.of(), left);
+	}
+
+	// skipped a peridot shaft, only peridot was the drop: no gems, not 0.0 fine
+	@Test
+	void ownGemOnlyFromADropIsNoGems() {
+		enter("PERI_1");
+		tracker.onChat(5_000, PERIDOT, List.of());
+		sacks(10_000, FINE_PERIDOT, FLAWED_CITRINE);
+		tracker.onWorldChange(20_000);
+		assertNull(entry().gems());
 	}
 }

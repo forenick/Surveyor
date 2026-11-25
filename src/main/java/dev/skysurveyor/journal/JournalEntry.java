@@ -12,6 +12,7 @@ import dev.skysurveyor.detection.Corpse;
 import dev.skysurveyor.detection.CorpseLoot;
 import dev.skysurveyor.detection.Shaft;
 import dev.skysurveyor.detection.TextPatterns;
+import dev.skysurveyor.mining.MiningStats;
 import dev.skysurveyor.money.ItemPrice;
 
 // times epoch ms. new fields at the end, bump VERSION if a meaning changes
@@ -24,6 +25,8 @@ import dev.skysurveyor.money.ItemPrice;
 // keysSaved = loots indexes whose key resourceful saved, null = none or before 0.24.0
 // sacksAdded, sacksRemoved = raw sacks msgs. gems, otherDrops, metal have compaction taken off since 0.25.0
 // otherDrops has rare drops from chat since 0.25.0, also ones that never reached sacks
+// mining = blocks, break times, boost (efficiency), null = no block broken or before 0.26.0
+// fossil = fossil blocks + essence bars, null = none or before 0.26.0-alpha.22
 public record JournalEntry(
 		int version,
 		long sessionId,
@@ -50,7 +53,9 @@ public record JournalEntry(
 		Map<String, ItemPrice> prices,
 		List<Integer> campfireColds,
 		MetalYield metal,
-		List<Integer> keysSaved) {
+		List<Integer> keysSaved,
+		MiningStats mining,
+		FossilYield fossil) {
 	public static final int VERSION = 1;
 
 	public static JournalEntry of(Shaft shaft, long sessionId, Long searchMillis, TextPatterns patterns) {
@@ -66,13 +71,22 @@ public record JournalEntry(
 				GemYield.of(shaft, patterns), List.copyOf(shaft.crystals()), otherDrops(shaft, patterns), null,
 				// list.copyOf hates nulls
 				Collections.unmodifiableList(new ArrayList<>(shaft.campfireColds())), MetalYield.of(shaft),
-				shaft.keysSaved().isEmpty() ? null : List.copyOf(shaft.keysSaved()));
+				shaft.keysSaved().isEmpty() ? null : List.copyOf(shaft.keysSaved()), null, FossilYield.of(shaft));
 	}
 
 	public JournalEntry withPrices(Map<String, ItemPrice> prices) {
+		return with(prices, mining);
+	}
+
+	public JournalEntry withMining(MiningStats mining) {
+		return with(prices, mining);
+	}
+
+	private JournalEntry with(Map<String, ItemPrice> prices, MiningStats mining) {
 		return new JournalEntry(version, sessionId, shaftId, enteredAt, durationMillis, exit, exitPowder, searchMillis,
 				corpses, extraCorpses, loots, mayhemBuffs, campfiresAt, coldAtExit, scrapFound, pristineProcs,
-				pristineItems, sacksAdded, sacksRemoved, gems, crystals, otherDrops, prices, campfireColds, metal, keysSaved);
+				pristineItems, sacksAdded, sacksRemoved, gems, crystals, otherDrops, prices, campfireColds, metal, keysSaved, mining,
+				fossil);
 	}
 
 	public boolean keySaved(int loot) {
@@ -129,6 +143,10 @@ public record JournalEntry(
 			if (reason.name().equals(exit)) return reason;
 		}
 		return Shaft.ExitReason.UNKNOWN;
+	}
+
+	public long fossilEssence() {
+		return fossil == null ? 0 : fossil.essence();
 	}
 
 	public long corpsePowder() {

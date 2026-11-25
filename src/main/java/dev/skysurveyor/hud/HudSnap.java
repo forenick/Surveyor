@@ -24,12 +24,16 @@ public final class HudSnap {
 		}
 	}
 
-	// anchor null = editor decides
-	public record Result(double x, double y, Anchor anchorX, Anchor anchorY, List<Guide> guides) {
+	// dropped on the gap next to others[other]. cross = edge shared w/ it on the other axis, null = none
+	public record Stick(int other, HudPlace.Side side, Anchor cross) {
 	}
 
-	// edge 0 start, 0.5 mid, 1 end. other null = screen, gapStart = stacked
-	private record Target(double edge, double value, Rect other, Double gapStart) {
+	// anchor null = editor decides
+	public record Result(double x, double y, Anchor anchorX, Anchor anchorY, List<Guide> guides, Stick stick) {
+	}
+
+	// edge 0 start, 0.5 mid, 1 end. gapStart = stacked. index in others, -1 = screen
+	private record Target(double edge, double value, Double gapStart, int index) {
 	}
 
 	private record Hit(double start, Target target) {
@@ -46,27 +50,39 @@ public final class HudSnap {
 
 		List<Guide> guides = new ArrayList<>();
 		if (hx.target() != null) {
-			guides.add(guide(placed, hx.target(), screenHeight, margin, LABEL_WIDTH, LABEL_HEIGHT));
+			guides.add(guide(placed, hx.target(), others, screenHeight, margin, LABEL_WIDTH, LABEL_HEIGHT));
 		}
 		if (hy.target() != null) {
-			guides.add(guide(placed.transposed(), hy.target(), screenWidth, margin, LABEL_HEIGHT, LABEL_WIDTH).transposed());
+			guides.add(guide(placed.transposed(), hy.target(), othersT, screenWidth, margin, LABEL_HEIGHT, LABEL_WIDTH).transposed());
 		}
-		return new Result(placed.x(), placed.y(), anchor(hx), anchor(hy), guides);
+		// stacked wins over side by side
+		Stick stick = stick(hy, hx, HudPlace.Side.BELOW, HudPlace.Side.ABOVE);
+		if (stick == null) stick = stick(hx, hy, HudPlace.Side.RIGHT, HudPlace.Side.LEFT);
+		return new Result(placed.x(), placed.y(), anchor(hx, others), anchor(hy, othersT), guides, stick);
+	}
+
+	private static Stick stick(Hit along, Hit across, HudPlace.Side after, HudPlace.Side before) {
+		Target t = along.target();
+		if (t == null || t.gapStart() == null) return null;
+		Target c = across.target();
+		boolean shared = c != null && c.index() == t.index() && c.gapStart() == null;
+		return new Stick(t.index(), t.edge() == 0 ? after : before, shared ? Anchor.ofEdge(c.edge()) : null);
 	}
 
 	private static Hit snapAxis(Rect box, List<Rect> others, int screen, int margin) {
 		List<Target> targets = new ArrayList<>();
 		// screen first, wins ties
-		targets.add(new Target(0, margin, null, null));
-		targets.add(new Target(1, screen - margin, null, null));
-		targets.add(new Target(0.5, screen / 2.0, null, null));
-		for (Rect o : others) {
-			targets.add(new Target(0, o.x(), o, null));
-			targets.add(new Target(1, o.x() + o.width(), o, null));
-			targets.add(new Target(0.5, o.x() + o.width() / 2, o, null));
+		targets.add(new Target(0, margin, null, -1));
+		targets.add(new Target(1, screen - margin, null, -1));
+		targets.add(new Target(0.5, screen / 2.0, null, -1));
+		for (int i = 0; i < others.size(); i++) {
+			Rect o = others.get(i);
+			targets.add(new Target(0, o.x(), null, i));
+			targets.add(new Target(1, o.x() + o.width(), null, i));
+			targets.add(new Target(0.5, o.x() + o.width() / 2, null, i));
 			if (sideBySide(box, o)) {
-				targets.add(new Target(0, o.x() + o.width() + margin, o, o.x() + o.width()));
-				targets.add(new Target(1, o.x() - margin, o, o.x() - margin));
+				targets.add(new Target(0, o.x() + o.width() + margin, o.x() + o.width(), i));
+				targets.add(new Target(1, o.x() - margin, o.x() - margin, i));
 			}
 		}
 		Target best = null;
@@ -89,20 +105,24 @@ public final class HudSnap {
 	}
 
 	// take other box anchor only if it uses the same edge
-	private static Anchor anchor(Hit hit) {
+	private static Anchor anchor(Hit hit, List<Rect> others) {
 		Target t = hit.target();
 		if (t == null || t.gapStart() != null) return null;
 		Anchor edge = Anchor.ofEdge(t.edge());
-		if (t.other() == null) return edge;
-		return t.other().anchorX() == edge ? edge : null;
+		if (t.index() < 0) return edge;
+		return others.get(t.index()).anchorX() == edge ? edge : null;
 	}
 
-	private static Guide guide(Rect box, Target t, int crossLength, int margin, int labelAlong, int labelAcross) {
-		Rect o = t.other();
+	// middle of where 2 spans meet on the other axis, gap guide + editor link
+	static int middle(double aStart, double aLength, double bStart, double bLength) {
+		return (int) Math.floor((Math.max(aStart, bStart) + Math.min(aStart + aLength, bStart + bLength)) / 2);
+	}
+
+	private static Guide guide(Rect box, Target t, List<Rect> others, int crossLength, int margin, int labelAlong,
+			int labelAcross) {
+		Rect o = t.index() < 0 ? null : others.get(t.index());
 		if (t.gapStart() != null) {
-			double top = Math.max(box.y(), o.y());
-			double bottom = Math.min(box.y() + box.height(), o.y() + o.height());
-			int middle = (int) Math.floor((top + bottom) / 2);
+			int middle = middle(box.y(), box.height(), o.y(), o.height());
 			int gap = (int) Math.round(t.gapStart());
 			int labelAt = (int) Math.round(t.gapStart() + margin / 2.0 - labelAlong / 2.0);
 			int above = (int) Math.floor(Math.min(box.y(), o.y())) - labelAcross - 1;

@@ -113,6 +113,8 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> implements Mo
 			{Anchor.START, Anchor.END}, {Anchor.END, Anchor.END}, {Anchor.MIDDLE, Anchor.END}, {Anchor.MIDDLE, Anchor.MIDDLE}};
 
 	private static final String HIDDEN_NOTE = "hidden";
+	// display choice
+	private static final int LINK = 6;
 	// short, fits 480 wide (1080p auto scale)
 	private static final String[] HINTS = {"§7Drag a box to move it, hold Ctrl to place it freely, click it to edit",
 			"§7Scroll on the selected box to resize it, arrow keys nudge it",
@@ -297,9 +299,10 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		drawn.clear();
 		// before the boxes, so it never covers one more than the text does
 		if (selected == null) drawHintBackdrop(graphics);
+		Map<Box, HudRenderer.Bounds> placed = placeAll();
 		for (Box box : hud.layout().boxes) {
 			HudRenderer.Measured size = measured(box);
-			HudRenderer.Bounds bounds = HudRenderer.bounds(size, box, width, height);
+			HudRenderer.Bounds bounds = placed.get(box);
 			drawn.put(box, bounds);
 			HudRenderer.draw(graphics, font, box, size, bounds);
 			if (!hud.visible(box)) drawHidden(graphics, bounds);
@@ -316,6 +319,7 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> implements Mo
 			graphics.outline(bounds.x() - 1, bounds.y() - 1, bounds.width() + 2, bounds.height() + 2,
 					toast == selected ? OUTLINE_SELECTED : OUTLINE);
 		}
+		for (Box box : hud.layout().boxes) drawLink(graphics, box);
 		for (HudSnap.Guide guide : guides) {
 			graphics.fill(guide.x(), guide.y(), guide.x() + guide.width(), guide.y() + guide.height(), GUIDE);
 			if (guide.label() != null) graphics.text(font, guide.label(), guide.labelX(), guide.labelY(), GUIDE, true);
@@ -417,6 +421,36 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		for (FlowLayout row : page.lineRows) {
 			if (mouseY > row.y() + row.height() / 2.0) lineGap++;
 		}
+	}
+
+	// editor shows every box, so none takes no room
+	private Map<Box, HudRenderer.Bounds> placeAll() {
+		return HudPlace.place(hud.layout().boxes, box -> HudRenderer.size(measured(box), box), box -> true, width, height);
+	}
+
+	private static HudSnap.Rect rect(Box box, HudRenderer.Bounds b) {
+		return new HudSnap.Rect(b.x(), b.y(), b.width(), b.height(), box.anchorX, box.anchorY);
+	}
+
+	// clip across the gap of 2 stuck boxes
+	private void drawLink(GuiGraphicsExtractor graphics, Box box) {
+		Box parent = HudPlace.parent(box, hud.layout().boxes);
+		HudRenderer.Bounds b = drawn.get(box);
+		HudRenderer.Bounds p = parent == null ? null : drawn.get(parent);
+		if (b == null || p == null) return;
+		// pushed over each other by the screen edge = no gap to mark
+		if (b.overlapArea(p) > 0) return;
+		boolean vertical = box.stickSide.vertical();
+		HudSnap.Rect r = vertical ? rect(box, b).transposed() : rect(box, b);
+		HudSnap.Rect q = vertical ? rect(parent, p).transposed() : rect(parent, p);
+		// no overlap across = mark would float between them
+		if (Math.max(r.y(), q.y()) >= Math.min(r.y() + r.height(), q.y() + q.height())) return;
+		int from = (int) Math.min(r.x() + r.width(), q.x() + q.width());
+		int to = (int) Math.max(r.x(), q.x());
+		HudSnap.Guide link = new HudSnap.Guide(from, HudSnap.middle(r.y(), r.height(), q.y(), q.height()) - LINK / 2, to - from,
+				LINK, null, 0, 0);
+		if (vertical) link = link.transposed();
+		graphics.fill(link.x(), link.y(), link.x() + link.width(), link.y() + link.height(), GUIDE);
 	}
 
 	// badge, not a dark cover, so edits stay readable
@@ -538,12 +572,14 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		int y = (int) Math.round(drag.y() - grabY);
 		Anchor anchorX = null;
 		Anchor anchorY = null;
+		HudSnap.Stick stick = null;
+		Box stickTo = null;
 		guides = List.of();
 		if (!minecraft.hasControlDown()) {
-			List<HudSnap.Rect> others = new ArrayList<>();
-			drawn.forEach((box, b) -> {
-				if (box != dragging) others.add(new HudSnap.Rect(b.x(), b.y(), b.width(), b.height(), box.anchorX, box.anchorY));
-			});
+			// boxes hanging on this one move w/ it
+			List<Box> otherBoxes = drawn.keySet().stream()
+					.filter(box -> box != dragging && !HudPlace.follows(box, dragging, hud.layout().boxes)).toList();
+			List<HudSnap.Rect> others = otherBoxes.stream().map(box -> rect(box, drawn.get(box))).toList();
 			HudSnap.Result snap = HudSnap.snap(new HudSnap.Rect(x, y, bounds.width(), bounds.height(), dragging.anchorX,
 					dragging.anchorY), others, width, height, HudLayout.MARGIN);
 			x = (int) Math.round(snap.x());
@@ -551,13 +587,29 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> implements Mo
 			anchorX = snap.anchorX();
 			anchorY = snap.anchorY();
 			guides = snap.guides();
+			stick = snap.stick();
+			if (stick != null) stickTo = otherBoxes.get(stick.other());
 		}
 		x = Anchor.clamp(x, bounds.width(), width);
 		y = Anchor.clamp(y, bounds.height(), height);
-		dragging.anchorX = anchorX != null ? anchorX : Anchor.forPosition(x, bounds.width(), width);
-		dragging.anchorY = anchorY != null ? anchorY : Anchor.forPosition(y, bounds.height(), height);
-		dragging.offsetX = dragging.anchorX.offset(x, bounds.width(), width);
-		dragging.offsetY = dragging.anchorY.offset(y, bounds.height(), height);
+		HudRenderer.Bounds at = new HudRenderer.Bounds(x, y, bounds.width(), bounds.height());
+		Box toast = toastBox();
+		// toast is no box
+		if (stickTo != null && dragging != toast && stickTo != toast) {
+			boolean vertical = stick.side().vertical();
+			Anchor across = stick.cross() != null ? stick.cross() : vertical ? stickTo.anchorX : stickTo.anchorY;
+			HudPlace.stick(dragging, stickTo, stick.side(), across, drawn.get(stickTo), at, width, height);
+			return true;
+		}
+		HudPlace.free(dragging, at, width, height);
+		if (anchorX != null) {
+			dragging.anchorX = anchorX;
+			dragging.offsetX = anchorX.offset(x, bounds.width(), width);
+		}
+		if (anchorY != null) {
+			dragging.anchorY = anchorY;
+			dragging.offsetY = anchorY.offset(y, bounds.height(), height);
+		}
 		return true;
 	}
 
@@ -634,8 +686,18 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> implements Mo
 				HudRenderer.Bounds bounds = boundsOf(selected);
 				int x = Anchor.clamp(bounds.x() + dx, bounds.width(), width);
 				int y = Anchor.clamp(bounds.y() + dy, bounds.height(), height);
-				selected.offsetX = selected.anchorX.offset(x, bounds.width(), width);
-				selected.offsetY = selected.anchorY.offset(y, bounds.height(), height);
+				HudRenderer.Bounds moved = new HudRenderer.Bounds(x, y, bounds.width(), bounds.height());
+				Box parent = HudPlace.parent(selected, hud.layout().boxes);
+				if (parent == null) {
+					selected.offsetX = selected.anchorX.offset(x, bounds.width(), width);
+					selected.offsetY = selected.anchorY.offset(y, bounds.height(), height);
+				} else if (selected.stickSide.vertical() ? dy == 0 : dx == 0) {
+					// along the other box, stays stuck
+					HudPlace.stick(selected, parent, selected.stickSide, selected.stickSide.vertical() ? selected.anchorX : selected.anchorY,
+							placeAll().get(parent), moved, width, height);
+				} else {
+					HudPlace.free(selected, moved, width, height);
+				}
 				return true;
 			}
 		}
@@ -791,6 +853,11 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> implements Mo
 				return;
 			}
 			page.deleteArmed = false;
+			// boxes stuck to it stay where they are
+			Map<Box, HudRenderer.Bounds> placed = placeAll();
+			for (Box other : hud.layout().boxes) {
+				if (HudPlace.parent(other, hud.layout().boxes) == box) HudPlace.free(other, placed.get(other), width, height);
+			}
 			hud.layout().boxes.remove(box);
 			selected = null;
 			rebuildPanel();
@@ -916,7 +983,8 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> implements Mo
 
 	private HudRenderer.Bounds boundsOf(Box box) {
 		if (HudLayout.TOAST_ID.equals(box.id)) return ToastRenderer.bounds(font, ToastText.example(), toastStyle(), box, width, height);
-		return HudRenderer.bounds(font, box, rows(box), width, height);
+		HudRenderer.Bounds placed = placeAll().get(box);
+		return placed != null ? placed : HudRenderer.bounds(font, box, rows(box), width, height);
 	}
 
 	private void buildToastPage(FlowLayout panel) {
@@ -1604,13 +1672,26 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> implements Mo
 	// "Show as" doesnt fit the key column
 	FlowLayout showRow(Line line) {
 		ShowAs now = line.showAs();
-		boolean chart = line.hudValue().graph(line.range()) == HudValue.Graph.CHART;
-		String graph = chart ? "your last 12 shafts' spawn times, dashes = this average" : "a bar";
+		HudValue.Graph kind = line.hudValue().graph(line.range());
+		String graph = switch (kind) {
+			case CHART -> "your last 12 shafts' spawn times, dashes = this average";
+			case LINE -> "a line of the last minute, every 10 s, dashes = your usual for this shaft type";
+			default -> "a bar";
+		};
 		Grid options = new Grid(3, keyWidth);
 		tip(options.add(choice("Text", now == ShowAs.TEXT, () -> line.showAs(ShowAs.TEXT))), "The number only");
 		tip(options.add(choice("Both", now == ShowAs.BOTH, () -> line.showAs(ShowAs.BOTH))), "The number with " + graph + " under it");
-		tip(options.add(choice(chart ? "Chart" : "Bar", now == ShowAs.GRAPH, () -> line.showAs(ShowAs.GRAPH))),
-				chart ? "Your last 12 shafts' spawn times without the number" : "A bar without the number");
+		String only = switch (kind) {
+			case CHART -> "Chart";
+			case LINE -> "Line";
+			default -> "Bar";
+		};
+		String onlyTip = switch (kind) {
+			case CHART -> "Your last 12 shafts' spawn times without the number";
+			case LINE -> "The line without the number";
+			default -> "A bar without the number";
+		};
+		tip(options.add(choice(only, now == ShowAs.GRAPH, () -> line.showAs(ShowAs.GRAPH))), onlyTip);
 		return keyRow("Show", options);
 	}
 
@@ -1675,7 +1756,8 @@ public final class EditHudScreen extends BaseOwoScreen<FlowLayout> implements Mo
 	TextBoxComponent textField(String text, int maxLength, Consumer<String> apply) {
 		TextBoxComponent field = UIComponents.textBox(Sizing.expand());
 		field.verticalSizing(Sizing.fixed(BUTTON));
-		field.setMaxLength(maxLength);
+		// setValue cuts to the max, a longer hand edit in hud.json would get saved cut
+		field.setMaxLength(Math.max(maxLength, text.length()));
 		field.text(text);
 		String[] last = {text};
 		field(field::getValue, typed -> {

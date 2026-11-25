@@ -14,6 +14,7 @@ import dev.skysurveyor.data.Ladder;
 import dev.skysurveyor.detection.CorpseLoot;
 import dev.skysurveyor.detection.ItemCount;
 import dev.skysurveyor.detection.TextPatterns;
+import dev.skysurveyor.journal.FossilYield;
 import dev.skysurveyor.journal.GemYield;
 import dev.skysurveyor.journal.JournalEntry;
 import dev.skysurveyor.journal.MetalYield;
@@ -26,6 +27,8 @@ import dev.skysurveyor.settings.MoneySettings.OwnMetal;
 public record ShaftValue(List<Line> lines, List<CorpseValue> corpses) {
 	// mining fiesta drop, own row bc its worth so much
 	public static final String GLOSSY = "Glossy Gemstone";
+	// bazaar id (money-design.md), not in the item name lists
+	static final String FOSSIL_ESSENCE_ID = "ESSENCE_FOSSIL";
 	private static final String FLAWLESS = "Flawless ";
 	private static final String FINE = "Fine ";
 	private static final String GEMSTONE = " Gemstone";
@@ -38,6 +41,7 @@ public record ShaftValue(List<Line> lines, List<CorpseValue> corpses) {
 		CORPSES("Corpse loot"),
 		SCRAP("Suspicious Scrap"),
 		CRYSTALS("Crystals"),
+		FOSSIL("Fossil Essence"),
 		KEYS("Keys"),
 		CAMPFIRES("Campfires");
 
@@ -142,6 +146,12 @@ public record ShaftValue(List<Line> lines, List<CorpseValue> corpses) {
 		loot.forEach((item, count) -> lines.add(line(v, Part.CORPSES, item, count)));
 
 		if (entry.scrapFound() > 0) lines.add(line(v, Part.SCRAP, "Suspicious Scrap", entry.scrapFound()));
+
+		long essence = entry.fossilEssence();
+		if (essence > 0) {
+			Double each = v.sell(FOSSIL_ESSENCE_ID);
+			lines.add(new Line(Part.FOSSIL, FossilYield.ITEM, essence, each == null ? null : each * essence));
+		}
 
 		if (entry.crystals() != null) {
 			Map<String, Long> crystals = new LinkedHashMap<>();

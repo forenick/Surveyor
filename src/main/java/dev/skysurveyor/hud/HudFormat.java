@@ -13,20 +13,20 @@ public final class HudFormat {
 	public static final String MISSING = "-";
 
 	// spreadsheet style codes, nicks pick (2026-11-12)
-	private static final List<String> TIME = List.of("m:ss", "m\"m\" s\"s\"", "s\"s\"");
+	private static final List<String> TIME = List.of("m:ss", "m\"m\" s\"s\"", "s\"s\"", "m\"m\"");
 	private static final List<String> INTEGER = List.of("#,##0", "0.0k", "0");
 	private static final List<String> DECIMAL = List.of("0.0", "0", "0.00");
 	private static final List<String> COLD = List.of("0❄");
 	private static final List<String> COINS = List.of("0.0M", "#,##0", "0");
 	private static final List<String> TEXT = List.of("Text");
-	private static final List<List<String>> TIME_EXAMPLES = List.of(List.of("1:42"), List.of("1m 42s"), List.of("102s"));
+	private static final List<List<String>> TIME_EXAMPLES = List.of(List.of("1:42"), List.of("1m 42s"), List.of("102s"), List.of("42m", "3:15"));
 	private static final List<List<String>> INTEGER_EXAMPLES = List.of(List.of("43,436"), List.of("43.4k", "1.2M"),
 			List.of("43436"));
 	private static final List<List<String>> DECIMAL_EXAMPLES = List.of(List.of("19.4"), List.of("19"), List.of("19.42"));
 	private static final List<List<String>> COINS_EXAMPLES = List.of(List.of("43.4k", "1.2M"), List.of("1,204,310"),
 			List.of("1204310"));
 	// same order as the lists above
-	private static final List<String> TIME_NAMES = List.of("clock", "minutes", "seconds");
+	private static final List<String> TIME_NAMES = List.of("clock", "minutes", "seconds", "timer");
 	private static final List<String> INTEGER_NAMES = List.of("comma", "short", "plain");
 	private static final List<String> DECIMAL_NAMES = List.of("tenths", "whole", "hundredths");
 	private static final List<String> COINS_NAMES = List.of("short", "comma", "plain");
@@ -138,6 +138,8 @@ public final class HudFormat {
 	private static String time(long seconds, int format) {
 		// -0:13, not 0:-13
 		if (seconds < 0) return "-" + time(-seconds, format);
+		// whole minutes like the tab footer, clock under 10 min (consumables, Docs/consumables-design.md)
+		if (format == 3 && seconds >= 600) return seconds >= 3600 ? seconds / 3600 + "h " + seconds % 3600 / 60 + "m" : seconds / 60 + "m";
 		// hours for session length + time since last shaft
 		if (seconds >= 3600 && format != 2) {
 			return format == 1 ? seconds / 3600 + "h " + seconds % 3600 / 60 + "m"

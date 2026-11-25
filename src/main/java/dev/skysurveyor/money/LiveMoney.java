@@ -123,20 +123,31 @@ public final class LiveMoney {
 	}
 
 	public JournalEntry withPrices(JournalEntry entry) {
-		PriceBook book = book();
-		if (!freshForSnapshot(book, entry.endedAt())) return entry.withPrices(Map.of());
-		return entry.withPrices(ShaftValue.snapshot(entry, book::get, settings(), ids(), TextPatterns.defaults()));
+		ShaftValue.Prices prices = forSnapshot(book(), entry.endedAt());
+		if (prices == null) return entry.withPrices(Map.of());
+		return entry.withPrices(ShaftValue.snapshot(entry, prices, settings(), ids(), TextPatterns.defaults()));
 	}
 
 	public MiningEntry withPrices(MiningEntry entry) {
-		PriceBook book = book();
-		if (!freshForSnapshot(book, entry.at())) return entry.withPrices(Map.of());
-		return entry.withPrices(MiningValue.snapshot(entry, book::get, settings(), ids(), TextPatterns.defaults()));
+		ShaftValue.Prices prices = forSnapshot(book(), entry.at());
+		if (prices == null) return entry.withPrices(Map.of());
+		return entry.withPrices(MiningValue.snapshot(entry, prices, settings(), ids(), TextPatterns.defaults()));
 	}
 
 	// no bazaar = npc/bin only, would undercut gems for good
 	static boolean freshForSnapshot(PriceBook book, long end) {
 		return book.hasBazaar() && end - book.bazaarAt() <= SNAPSHOT_MAX_AGE;
+	}
+
+	// null = nothing saved. old bins = bazaar items only, the rest keep todays price.
+	// not just bins dropped: get() would still give an npc only price for an ah item, saved for good
+	static ShaftValue.Prices forSnapshot(PriceBook book, long end) {
+		if (!freshForSnapshot(book, end)) return null;
+		if (end - book.binsAt() <= SNAPSHOT_MAX_AGE) return book::get;
+		return id -> {
+			ItemPrice price = book.get(id);
+			return price == null || !price.onBazaar() ? null : new ItemPrice(price.buyOrder(), price.sellOffer(), null, price.npcSell());
+		};
 	}
 
 	// null = no prices at all yet. saved entries only, cached

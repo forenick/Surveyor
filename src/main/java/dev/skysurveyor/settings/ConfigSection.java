@@ -18,8 +18,13 @@ record ConfigSection<T>(String key, Function<Settings, T> get, BiFunction<Settin
 			SummarySettings::repaired);
 	static final ConfigSection<PersonalBestSettings> PERSONAL_BESTS = new ConfigSection<>("personalBests", Settings::personalBests,
 			Settings::withPersonalBests, PersonalBestSettings::read, true);
+	static final ConfigSection<DevSettings> DEV = gson("dev", DevSettings.class, Settings::dev, Settings::withDev, DevSettings::repaired);
+	static final ConfigSection<EntryTitleSettings> ENTRY_TITLE = gson("entryTitle", EntryTitleSettings.class, Settings::entryTitle,
+			Settings::withEntryTitle, EntryTitleSettings::repaired);
+	static final ConfigSection<WaypointSettings> WAYPOINTS = gson("waypoints", WaypointSettings.class, Settings::waypoints,
+			Settings::withWaypoints, WaypointSettings::repaired);
 	// a new files key order + the load order, new ones go last
-	static final List<ConfigSection<?>> ALL = List.of(MONEY, JOURNAL, SUMMARY, PERSONAL_BESTS);
+	static final List<ConfigSection<?>> ALL = List.of(MONEY, JOURNAL, SUMMARY, PERSONAL_BESTS, DEV, ENTRY_TITLE, WAYPOINTS);
 
 	private static <T> ConfigSection<T> gson(String key, Class<T> type, Function<Settings, T> get, BiFunction<Settings, T, Settings> with,
 			UnaryOperator<T> repaired) {

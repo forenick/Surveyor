@@ -26,8 +26,8 @@ class RecordingReplayTest {
 		assertEquals(1260, aqua.exitPowder());
 		assertEquals(List.of(new Corpse("Lapis", true), new Corpse("Tungsten", false)), aqua.corpses());
 		assertEquals(1, aqua.loots().size());
-		// nick already had it
-		assertEquals(List.of(), aqua.crystals());
+		// found + 1 owned = given, a 2nd click would be 2 owned (recordings 2, 5, 8)
+		assertEquals(List.of("Aquamarine Crystal"), aqua.crystals());
 
 		Shaft jasper = shafts.get(1);
 		assertEquals(ExitReason.DEATH, jasper.exitReason());

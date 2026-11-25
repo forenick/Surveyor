@@ -1,0 +1,54 @@
+{
+  "money": {
+    "sellPrice": "insta_sell",
+    "gemTier": "flawless",
+    "bazaarTax": 1.125,
+    "oldShafts": "that_day",
+    "crystals": "perfect_minus_flawless",
+    "ironman": false
+  },
+  "journal": {
+    "byDay": true,
+    "coinChart": "bars",
+    "spawnChart": "bars"
+  },
+  "summary": {
+    "position": "top_right",
+    "seconds": 20.0
+  },
+  "personalBests": {
+    "list": [
+      {
+        "stat": "session_rate"
+      },
+      {
+        "stat": "session_shafts"
+      },
+      {
+        "stat": "shaft_gems"
+      },
+      {
+        "stat": "shaft_coins"
+      },
+      {
+        "stat": "session_coin_rate"
+      },
+      {
+        "stat": "drystreak",
+        "shaft": "JASP"
+      },
+      {
+        "stat": "drystreak",
+        "shaft": "FAIR"
+      }
+    ]
+  },
+  "dev": {
+    "autoRecord": "mining_areas",
+    "debugOverlay": false
+  },
+  "waypoints": {
+    "fossil": true,
+    "color": "#C1C1C1"
+  }
+}

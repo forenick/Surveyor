@@ -32,6 +32,30 @@ class GuardTest {
 	}
 
 	@Test
+	void listenersHearLoggedFailures() {
+		List<Guard.Failure> heard = new ArrayList<>();
+		Guard.addListener(failure -> {
+			throw new IllegalStateException("broken listener");
+		});
+		Guard.addListener(heard::add);
+		assertFalse(Guard.run("listener test", () -> Integer.parseInt("x")));
+		Guard.Failure failure = heard.stream().filter(f -> f.what().equals("listener test")).findFirst().orElseThrow();
+		assertEquals(1, failure.count());
+		assertTrue(failure.error().startsWith("java.lang.NumberFormatException"));
+		assertTrue(failure.frame().contains("GuardTest"), failure.frame());
+	}
+
+	@Test
+	void failuresKeepTheFirstErrorAndCount() {
+		for (int i = 0; i < 3; i++) guard.attempt("kinds", () -> Integer.parseInt("y" + System.nanoTime()));
+		List<Guard.Failure> all = guard.all();
+		assertEquals(1, all.size());
+		assertEquals(3, all.getFirst().count());
+		assertTrue(all.getFirst().error().contains("NumberFormatException"));
+		assertEquals(3, guard.total(), "every error, not just the logged ones");
+	}
+
+	@Test
 	void errorsAreNotCaught() {
 		assertThrows(StackOverflowError.class, () -> guard.attempt("hud", () -> {
 			throw new StackOverflowError();

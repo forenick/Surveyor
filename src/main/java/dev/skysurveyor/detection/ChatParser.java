@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
 
+import dev.skysurveyor.detection.ShaftEvent.AbilityExpired;
 import dev.skysurveyor.detection.ShaftEvent.CampfirePlaced;
 import dev.skysurveyor.detection.ShaftEvent.CampfireUsed;
 import dev.skysurveyor.detection.ShaftEvent.CaveIn;
@@ -23,6 +24,7 @@ import dev.skysurveyor.detection.ShaftEvent.RareDrop;
 import dev.skysurveyor.detection.ShaftEvent.SacksChanged;
 import dev.skysurveyor.detection.ShaftEvent.ScrapFound;
 import dev.skysurveyor.detection.ShaftEvent.Supercraft;
+import dev.skysurveyor.detection.ShaftEvent.WarpFailed;
 import dev.skysurveyor.detection.ShaftEvent.Warping;
 
 // hypixel sends corpse loot as 1 msg per line, hence the state
@@ -93,6 +95,7 @@ public final class ChatParser {
 		if (patterns.matches("spawn.nearby", text)) return new PortalSpawned(false);
 		if ((m = patterns.match("exit.bye", text)) != null) return new ExitBonus(TextPatterns.number(m.group("powder")));
 		if (patterns.matches("exit.warp", text)) return new Warping();
+		if (patterns.matches("exit.warp_failed", text)) return new WarpFailed();
 		if (patterns.matches("death.cold", text)) return new FrozeToDeath();
 		if ((m = patterns.match("mayhem", text)) != null) return new MayhemBuff(m.group("buff"));
 		if ((m = patterns.match("corpse.extra", text)) != null) return new ExtraCorpses(Integer.parseInt(m.group("count")));
@@ -102,6 +105,7 @@ public final class ChatParser {
 		if (patterns.matches("scrap", text)) return new ScrapFound();
 		if (patterns.matches("loot.key_saved", text)) return new KeySaved();
 		if ((m = patterns.match("ability.used", text)) != null) return new PickaxeAbility(m.group("ability"));
+		if ((m = patterns.match("ability.expired", text)) != null) return new AbilityExpired(m.group("ability"));
 		if ((m = patterns.match("supercraft", text)) != null) {
 			return new Supercraft(new ItemCount(m.group("item"), TextPatterns.number(m.group("count"))));
 		}

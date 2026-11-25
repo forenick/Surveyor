@@ -85,7 +85,7 @@ final class ConfigFile {
 		}
 	}
 
-	private static JsonObject json(Settings settings) {
+	static JsonObject json(Settings settings) {
 		JsonObject json = new JsonObject();
 		for (ConfigSection<?> section : ConfigSection.ALL) {
 			if (section.whole() && section.isDefault(settings)) continue;

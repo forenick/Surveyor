@@ -6,6 +6,8 @@ import net.minecraft.network.protocol.game.ClientboundLoginPacket;
 import net.minecraft.network.protocol.game.ClientboundRespawnPacket;
 import net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket;
 import net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket;
+import net.minecraft.network.protocol.game.ClientboundSoundEntityPacket;
+import net.minecraft.network.protocol.game.ClientboundSoundPacket;
 import net.minecraft.network.protocol.game.ClientboundSystemChatPacket;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -49,6 +51,18 @@ public abstract class ClientPacketListenerMixin {
 	@Inject(method = "handleRespawn", require = 0, at = @At(value = "INVOKE", target = ENSURE_THREAD, shift = At.Shift.AFTER))
 	private void skysurveyor$onRespawn(ClientboundRespawnPacket packet, CallbackInfo ci) {
 		Guard.run("server change", () -> Surveyor.HUD.onServerChange());
+	}
+
+	@Inject(method = "handleSoundEvent", require = 0, at = @At(value = "INVOKE", target = ENSURE_THREAD, shift = At.Shift.AFTER))
+	private void skysurveyor$onSound(ClientboundSoundPacket packet, CallbackInfo ci) {
+		Guard.run("recorder sound", () -> Surveyor.RECORDER.onSound(packet.getSound(), packet.getSource(), packet.getX(), packet.getY(),
+				packet.getZ(), packet.getVolume(), packet.getPitch(), null));
+	}
+
+	@Inject(method = "handleSoundEntityEvent", require = 0, at = @At(value = "INVOKE", target = ENSURE_THREAD, shift = At.Shift.AFTER))
+	private void skysurveyor$onEntitySound(ClientboundSoundEntityPacket packet, CallbackInfo ci) {
+		Guard.run("recorder sound", () -> Surveyor.RECORDER.onSound(packet.getSound(), packet.getSource(), 0, 0, 0, packet.getVolume(),
+				packet.getPitch(), packet.getId()));
 	}
 
 	@Inject(method = "handleBlockChangedAck", require = 0, at = @At(value = "INVOKE", target = ENSURE_THREAD, shift = At.Shift.AFTER))

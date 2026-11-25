@@ -1,8 +1,11 @@
 package dev.skysurveyor.util;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -16,10 +19,24 @@ public final class Guard {
 	// display choice, a throw per tick or frame cant flood the log
 	static final int LOG_EVERY = 1000;
 	private static final Logger LOGGER = LoggerFactory.getLogger("Surveyor");
+	private static final List<Consumer<Failure>> LISTENERS = new CopyOnWriteArrayList<>();
 	private static final Guard SHARED = new Guard((what, count, error) -> {
 		if (count == 1) LOGGER.error("Error in {}, carrying on", what, error);
 		else LOGGER.error("Error in {} again ({} times), carrying on", what, count, error);
+		Failure failure = new Failure(what, count, error.toString(), ownFrame(error.getStackTrace()));
+		for (Consumer<Failure> listener : LISTENERS) {
+			try {
+				listener.accept(failure);
+			} catch (RuntimeException e) {
+				// not through the guard, it'd loop
+				LOGGER.warn("Error listener failed: {}", e.toString());
+			}
+		}
 	});
+
+	// logged ones only (1st + every LOG_EVERY), any thread
+	public record Failure(String what, long count, String error, String frame) {
+	}
 
 	interface Report {
 		void failed(String what, long count, RuntimeException error);
@@ -27,9 +44,35 @@ public final class Guard {
 
 	private final Report report;
 	private final Map<String, AtomicLong> counts = new ConcurrentHashMap<>();
+	private final Map<String, Failure> firsts = new ConcurrentHashMap<>();
 
 	Guard(Report report) {
 		this.report = report;
+	}
+
+	// every kind since start, w/ its count so far + its 1st error
+	public static List<Failure> failures() {
+		return SHARED.all();
+	}
+
+	List<Failure> all() {
+		List<Failure> all = new ArrayList<>();
+		firsts.forEach((key, first) -> all.add(new Failure(first.what(), counts.get(key).get(), first.error(), first.frame())));
+		all.sort(Comparator.comparing(Failure::what));
+		return all;
+	}
+
+	// every error since start, listeners only see the logged ones
+	public static long errorCount() {
+		return SHARED.total();
+	}
+
+	long total() {
+		return counts.values().stream().mapToLong(AtomicLong::get).sum();
+	}
+
+	public static void addListener(Consumer<Failure> listener) {
+		LISTENERS.add(listener);
 	}
 
 	// false = it threw
@@ -78,6 +121,7 @@ public final class Guard {
 	private void failed(String what, RuntimeException error) {
 		String key = what + "|" + error.getClass().getName() + "|" + ownFrame(error.getStackTrace());
 		long count = counts.computeIfAbsent(key, k -> new AtomicLong()).incrementAndGet();
+		if (count == 1) firsts.put(key, new Failure(what, 1, error.toString(), ownFrame(error.getStackTrace())));
 		if (count == 1 || count % LOG_EVERY == 0) report.failed(what, count, error);
 	}
 

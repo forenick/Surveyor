@@ -19,6 +19,8 @@ tab.mining_area        ^Area: Dwarven Mines$
 exit.bye               ^BYE! You got a \+(?<powder>[\d,]+) Glacite Powder bonus for leaving a Mineshaft before you died!$
 exit.warp              ^Warping\.\.\.$
 exit.warp              ^Warping you to your SkyBlock island\.\.\.$
+# reason in () varies: DYNAMIC_POOL_ERROR, PLAYER_TRANSFER_COOLDOWN (recording 5)
+exit.warp_failed       ^Couldn't warp you! Try again later\.
 death.cold             ^ ☠ You froze to death\.$
 
 mayhem                 ^MAYHEM! You received a (?:\p{Co} )?(?<buff>.+) buff from your Mineshaft Mayhem perk!$
@@ -49,11 +51,15 @@ campfire.used          ^You've warmed your feet by your campfire\. Your ❄ Cold
 pristine               ^PRISTINE! You found (?:\p{Co} )?(?<item>.+) x(?<count>[\d,]+)!$
 # pickobulus breaks ~180 blocks w/o a block hit (research/08)
 ability.used           ^You used your (?<ability>.+) Pickaxe Ability!$
+# boost only, 9 of 9 uses in recording 6. other abilities unrecorded
+ability.expired        ^Your (?<ability>Mining Speed Boost) has expired!$
 scrap                  ^EXCAVATOR! You found a Suspicious Scrap!$
+# action bar, not chat. only the last blocks amount, stays up ~1.5s after (recordings 2026-11-17, 11-21)
+fossil.essence         (?:^|\s)\+(?<amount>\d+) Fossil Essence(?:\s|$)
 # _C shaft crystal, name comes on the next line (recording 1)
 crystal.found          ^ +✦ CRYSTAL FOUND$
 crystal.name           ^ +(?<item>\w+ Crystal)$
-# already had 1, so none given (research/05, nicks call 2026-11-12)
+# also right after every find, each click runs twice. not a takeback (recordings 1 to 8)
 crystal.owned          ^You have already obtained this Crystal!$
 supercraft             ^You Supercrafted (?:\p{Co} )?(?<item>.+) x(?<count>[\d,]+)!$
 # 0.27.3+, drops w/ base chance <= 5%. gems have an icon, glacite jewel doesnt (recording 6)
@@ -79,3 +85,39 @@ sacks.other            ^  (?<sign>[+-])(?<count>[\d,]+) other items\.$
 chat.private           ^(?:From|To) \S
 chat.private           ^(?:Guild|Officer|Party|Co-op|Friend) > \S
 chat.private           ^\[\d+\] [^:]+:\s
+# anonymize: "[MVP+] Name" anywhere in a line, also players not in this lobby. vip/mvp from recordings, rest hypixel staff ranks
+recorder.ranked        \[(?:VIP|MVP|YOUTUBE|ADMIN|GM|MOD|HELPER|OWNER)\+*] (?<name>[A-Za-z0-9_]{3,16})(?![A-Za-z0-9_])
+
+# consumable timers, Docs/consumables-design.md. item names + lore from held items (recording 2026-11-08)
+consumable.pristine_potato  ^Chilled Pristine Potato$
+consumable.filet_o_fortune  ^Filet O' Fortune$
+# splash seen, drinkable unconfirmed
+consumable.cold_resistance  ^Cold Resistance [IVX]+(?: Splash)? Potion$
+# unconfirmed, never held in a recording
+consumable.fiesta_flask     ^Fiesta Flask$
+# potato + filet "Duration: 60m"
+consumable.duration         ^Duration: (?<time>.+)$
+# potion "Cold Resistance IV (51:12)"
+consumable.duration         ^.+ [IVX]+ \((?<time>\d+(?::\d\d)+)\)$
+# others splashing u unconfirmed
+consumable.buff             ^BUFF! You splashed yourself with (?<effect>.+) [IVX]+!
+
+# effect names in the tab footer + /effects. potato + flask seen in the footer, rest unconfirmed
+effect.pristine_potato      ^Chilled Pristine Potato$
+effect.filet_o_fortune      ^Filet O' Fortune$
+effect.cold_resistance      ^Cold Resistance$
+effect.fiesta_flask         ^Fiesta Flask$
+# footer, f.e. "Chilled Pristine Potato I 45m", "Glowing Mush Mixin I 8h"
+effect.line                 ^(?<effect>.+?) (?<level>[IVX]+) (?<time>(?:\d+[dhms] ?)+)$
+effect.footer_start         ^Active Effects$
+# "You have 6 non-god effects." w/ a god potion, w/o one unconfirmed
+effect.footer_count         ^You have (?<count>\d+) (?:non-god |active )?effects?[.!]
+# /effects screen, unconfirmed, never opened in a recording
+# narrow on purpose, debug chat watch skips anything a pattern matches
+effect.screen               ^(?:Active |Potion )?Effects\b
+# item name w/o its level, no level = the whole name
+effect.screen_name          ^(?<effect>.+) (?<level>[IVX]+)$
+effect.screen_time          ^(?:Remaining|Time left|Duration): (?<time>.+)$
+effect.screen_time          ^(?<time>\d+(?::\d\d)+)$
+# scoreboard title, timers pause off skyblock
+scoreboard.skyblock         ^SKYBLOCK

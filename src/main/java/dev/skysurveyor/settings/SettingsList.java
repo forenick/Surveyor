@@ -3,6 +3,8 @@ package dev.skysurveyor.settings;
 import java.util.ArrayList;
 import java.util.List;
 
+import dev.skysurveyor.settings.DevSettings.AutoRecord;
+import dev.skysurveyor.settings.DevSettings.KeepRecordings;
 import dev.skysurveyor.settings.MoneySettings.Crystals;
 import dev.skysurveyor.settings.MoneySettings.GemTier;
 import dev.skysurveyor.settings.MoneySettings.MetalTier;
@@ -50,10 +52,12 @@ public final class SettingsList {
 
 	public static final String MONEY = "money";
 	public static final String JOURNAL = "journal";
+	public static final String DEV = "dev";
 
 	// money/PriceRules: ironman returns before reading these. old shafts still picks saved vs todays npc prices
 	private static final Unused IRONMAN = new Unused(s -> s.money().isIronman(), "Not used while Ironman is on");
 	private static final Unused NO_TOAST = new Unused(s -> !s.summary().show().toast(), "Not used while the toast is off");
+	private static final Unused NO_TITLE = new Unused(s -> !s.entryTitle().isShow(), "Not used while the entry title is off");
 
 	public static final List<Category> CATEGORIES = List.of(
 			new Category(MONEY, "Money", "money_icon", "How a shaft turns into coins, everywhere the journal and HUD show coins.", List.of(
@@ -99,10 +103,24 @@ public final class SettingsList {
 											new Option<>(OldShafts.THAT_DAY, "That day's", "The prices saved when each shaft ended."),
 											new Option<>(OldShafts.TODAY, "Today's", "Every shaft at the latest prices.")),
 									s -> s.money().oldShafts(), (s, v) -> s.withMoney(s.money().withOldShafts(v))))))),
-			new Category(JOURNAL, "Journal", "journal_icon", "The journal screen and the summary after each shaft.", List.of(
+			new Category(JOURNAL, "Journal", "journal_icon", "The journal screen, what you see in a shaft and the summary "
+					+ "after each one.", List.of(
 					new Section("Overview", List.of(
 							new Toggle("Group by day", "Sessions sit under a row per day with that day's totals.",
 									s -> s.journal().byDay(), (s, v) -> s.withJournal(s.journal().withByDay(v))))),
+					new Section("Entry title", List.of(
+							new Toggle("Entry title", "A title when you enter a shaft: its type, then its corpses, "
+									+ "whether it has a fossil and your Mayhem buff once the game shows them.",
+									s -> s.entryTitle().isShow(), (s, v) -> s.withEntryTitle(s.entryTitle().withShow(v))),
+							new Number("Title time", "How long the title stays after the last thing it learned.", "s",
+									EntryTitleSettings.MIN_SECONDS, EntryTitleSettings.MAX_SECONDS,
+									s -> s.entryTitle().seconds(), (s, v) -> s.withEntryTitle(s.entryTitle().withSeconds(v)), NO_TITLE))),
+					new Section("Waypoints", List.of(
+							new Toggle("Fossil waypoints", "A box around the fossil you can mine for Fossil Essence, seen through walls, "
+									+ "with how far it is. Only in shafts whose fossil Surveyor knows, gone once you mined most of it.",
+									s -> s.waypoints().isFossil(), (s, v) -> s.withWaypoints(s.waypoints().withFossil(v)), null,
+									new Setting.Swatch("Waypoint colour", s -> s.waypoints().colorRgb(),
+											(s, v) -> s.withWaypoints(s.waypoints().withColor(v)))))),
 					new Section("Shaft summary", List.of(
 							new Choice<>("Show summary", "What you see when you leave a shaft.", List.of(
 									new Option<>(Show.TOAST, "Toast", "A short card that pops up for a few seconds."),
@@ -121,7 +139,31 @@ public final class SettingsList {
 									s -> s.summary().position(), (s, v) -> s.withSummary(s.summary().withPosition(v)), NO_TOAST),
 							new Number("Toast time", "How long the card stays. Minecraft's Notification Time setting stretches it.", "s",
 									SummarySettings.MIN_SECONDS, SummarySettings.MAX_SECONDS,
-									s -> s.summary().seconds(), (s, v) -> s.withSummary(s.summary().withSeconds(v)), NO_TOAST))))));
+									s -> s.summary().seconds(), (s, v) -> s.withSummary(s.summary().withSeconds(v)), NO_TOAST))))),
+			new Category(DEV, "Developer", "dev_icon", "For testing and bug reports.", List.of(
+					new Section("Recording", List.of(
+							new Choice<>("Auto-record", "Records what the game shows you to a file in skysurveyor/recordings, "
+									+ "for bug reports and testing.", List.of(
+											new Option<>(AutoRecord.OFF, "Off", "Only /sv record start records."),
+											new Option<>(AutoRecord.MINING_AREAS, "Mining areas",
+													"Starts when you mine in the Dwarven Mines or a shaft, stops when your session ends.")),
+									s -> s.dev().autoRecord(), (s, v) -> s.withDev(s.dev().withAutoRecord(v))),
+							new Choice<>("Keep auto recordings", "Older auto recordings are deleted when the game starts. "
+									+ "Recordings you started yourself always stay.", List.of(
+											new Option<>(KeepRecordings.DAYS_7, "7 days", "About 1 MB per hour played."),
+											new Option<>(KeepRecordings.DAYS_30, "30 days", "About 1 MB per hour played."),
+											new Option<>(KeepRecordings.DAYS_90, "90 days", "About 1 MB per hour played."),
+											new Option<>(KeepRecordings.FOREVER, "Forever", "Never deleted.")),
+									s -> s.dev().keepRecordings(), (s, v) -> s.withDev(s.dev().withKeepRecordings(v))),
+							new Toggle("Record screens", "Recordings also note what menus like Sell Sacks show. Your own inventory isn't recorded.",
+									s -> s.dev().isRecordScreens(), (s, v) -> s.withDev(s.dev().withRecordScreens(v))),
+							new Toggle("Anonymize recordings", "Player names in new recordings become Player1, Player2 and so on, "
+									+ "yours becomes You. Names that are also SkyBlock words stay.",
+									s -> s.dev().isAnonymize(), (s, v) -> s.withDev(s.dev().withAnonymize(v))))),
+					new Section("Debug", List.of(
+							new Toggle("Debug overlay", "A box in the top left with what Surveyor sees right now: area, shaft, session, "
+									+ "spawn timer, last event, errors, prices, ping and recording. /sv debug log lists the last events.",
+									s -> s.dev().isDebugOverlay(), (s, v) -> s.withDev(s.dev().withDebugOverlay(v))))))));
 
 	private SettingsList() {
 	}

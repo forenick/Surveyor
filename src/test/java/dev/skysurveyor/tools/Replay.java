@@ -12,6 +12,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Stream;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import dev.skysurveyor.detection.EventText;
@@ -24,15 +26,19 @@ import dev.skysurveyor.detection.ShaftEvent.Pristine;
 import dev.skysurveyor.detection.ShaftEvent.ShaftEntered;
 import dev.skysurveyor.detection.ShaftTracker;
 import dev.skysurveyor.detection.TextPatterns;
+import dev.skysurveyor.effects.Consumable;
+import dev.skysurveyor.effects.EffectText;
+import dev.skysurveyor.effects.EffectTimers;
 import dev.skysurveyor.journal.Journal;
 import dev.skysurveyor.journal.JournalEntry;
 import dev.skysurveyor.journal.MiningEntry;
 import dev.skysurveyor.journal.OutsideMining;
 import dev.skysurveyor.journal.SummaryText;
+import dev.skysurveyor.recorder.RecordingFiles;
 import dev.skysurveyor.settings.MoneySettings;
 import dev.skysurveyor.util.Format;
 
-// dev tool, not in the jar. ./gradlew replay --args="<recording> [--raw] [--cold]"
+// dev tool, not in the jar. ./gradlew replay --args="<recording> [--raw] [--cold] [--marks]"
 public final class Replay {
 	private static final String INDENT = "          ";
 	// live + replay entry of the same shaft, enteredAt off by a ms or so
@@ -57,6 +63,11 @@ public final class Replay {
 	private long pristineTo;
 	private int pristineProcs;
 	private final Map<String, Long> pristineItems = new LinkedHashMap<>();
+	private final EffectText effectText = new EffectText(TextPatterns.defaults());
+	private final EffectTimers effects = new EffectTimers(effectText);
+	private boolean onSkyblock;
+	private Map<Consumable, Long> effectsBefore = Map.of();
+	private long effectsAt;
 
 	private Replay(boolean raw, boolean cold) {
 		this.raw = raw;
@@ -66,14 +77,17 @@ public final class Replay {
 	public static void main(String[] args) throws IOException {
 		boolean raw = false;
 		boolean cold = false;
+		boolean marks = false;
 		String name = null;
 		for (String arg : args) {
 			switch (arg) {
 				case "--raw" -> raw = true;
 				case "--cold" -> cold = true;
+				case "--marks" -> marks = true;
 				default -> {
 					if (arg.startsWith("--")) {
-						System.err.println("Unknown option " + arg + ". Options: --raw (unmatched chat, titles), --cold (cold changes)");
+						System.err.println("Unknown option " + arg
+								+ ". Options: --raw (unmatched chat, titles), --cold (cold changes), --marks (marks + the lines around them)");
 						System.exit(1);
 					}
 					name = arg;
@@ -85,7 +99,8 @@ public final class Replay {
 			System.err.println("No recording found" + (name == null ? " in " + RecordingReplay.RECORDINGS.toAbsolutePath().normalize() : ": " + name));
 			System.exit(1);
 		}
-		new Replay(raw, cold).run(file);
+		if (marks) Marks.print(file, RecordingReplay.read(file));
+		else new Replay(raw, cold).run(file);
 	}
 
 	// newest in ../Recordings, a name in there, or any path
@@ -93,11 +108,12 @@ public final class Replay {
 		if (name == null) {
 			if (!Files.isDirectory(RecordingReplay.RECORDINGS)) return null;
 			try (Stream<Path> files = Files.list(RecordingReplay.RECORDINGS)) {
-				return files.filter(path -> path.toString().endsWith(".jsonl"))
+				return files.filter(RecordingFiles::isRecording)
 						.max(Comparator.comparing(path -> path.getFileName().toString())).orElse(null);
 			}
 		}
-		for (Path path : List.of(Path.of(name), RecordingReplay.RECORDINGS.resolve(name), RecordingReplay.RECORDINGS.resolve(name + ".jsonl"))) {
+		for (Path path : List.of(Path.of(name), RecordingReplay.RECORDINGS.resolve(name), RecordingReplay.RECORDINGS.resolve(name + ".jsonl"),
+				RecordingReplay.RECORDINGS.resolve(name + ".jsonl.gz"))) {
 			if (Files.isRegularFile(path)) return path;
 		}
 		return null;
@@ -129,7 +145,10 @@ public final class Replay {
 				outside.onEvent(event, now);
 				print(event);
 			}
-			if (type.equals("world_change")) outside.onWorldChange(now);
+			if (type.equals("world_change")) {
+				journal.onWorldChange(now);
+				outside.onWorldChange(now);
+			}
 			for (MiningEntry entry : mining.subList(miningCount, mining.size())) printMining(entry);
 			if (!wasSearching && journal.searchRunning()) line("spawn timer started");
 			if (wasSearching && !journal.searchRunning()) {
@@ -138,6 +157,7 @@ public final class Replay {
 			}
 			for (JournalEntry entry : entries.subList(entryCount, entries.size())) printEntry(entry);
 			printOther(record, type);
+			feedEffects(record, type);
 		}
 		flushPristine();
 		printMiningTotals();
@@ -217,6 +237,55 @@ public final class Replay {
 		}
 	}
 
+	// no slot or use key in recordings: every stack drop counts as used
+	private void feedEffects(JsonObject record, String type) {
+		boolean running = onSkyblock;
+		effects.tick(now, running);
+		switch (type) {
+			case "scoreboard" -> {
+				JsonArray lines = record.getAsJsonArray("lines");
+				onSkyblock = !lines.isEmpty() && effectText.skyblock(lines.get(0).getAsString());
+			}
+			case "held_item" -> {
+				JsonElement item = record.get("item");
+				JsonObject held = item == null || item.isJsonNull() ? null : item.getAsJsonObject();
+				effects.onHeld(now, 0, held == null ? null : held.get("name").getAsString(), held == null ? 0 : held.get("count").getAsInt(),
+						() -> held == null ? null : strings(held.getAsJsonArray("lore")), true);
+			}
+			case "chat" -> effects.onChat(now, record.get("legacy").getAsString());
+			case "tab_header_footer" -> effects.onFooter(now, effectText.footer(record.get("footer").getAsString()));
+			case "screen" -> {
+				List<EffectText.Item> items = new ArrayList<>();
+				for (JsonElement slot : record.getAsJsonArray("slots")) {
+					JsonObject o = slot.getAsJsonObject();
+					if (o.has("name")) items.add(new EffectText.Item(o.get("name").getAsString(), strings(o.getAsJsonArray("lore"))));
+				}
+				effects.onScreen(effectText.screen(record.get("title").getAsString(), items));
+			}
+			default -> {
+			}
+		}
+		Map<Consumable, Long> after = effects.all();
+		long passed = running ? now - effectsAt : 0;
+		for (Consumable c : Consumable.values()) {
+			Long was = effectsBefore.get(c);
+			Long is = after.get(c);
+			if (was != null && is == null) line(c.id() + " ended");
+			else if (was == null && is != null) line(c.id() + " started, " + Format.duration(is) + " left");
+			// countdown alone moves it by about the time passed
+			else if (was != null && Math.abs(was - passed - is) > 1500) line(c.id() + " set to " + Format.duration(is) + " (was " + Format.duration(Math.max(0, was - passed)) + ")");
+		}
+		effectsBefore = after;
+		effectsAt = now;
+	}
+
+	private static List<String> strings(JsonArray array) {
+		if (array == null) return null;
+		List<String> out = new ArrayList<>();
+		array.forEach(e -> out.add(e.getAsString()));
+		return out;
+	}
+
 	private void printLiveCheck(LiveCheck check, List<LiveEntry> liveEntries) {
 		if (!check.hasLive()) {
 			System.out.println("Live check: no live lines, recorded before 0.24.0");
@@ -258,7 +327,7 @@ public final class Replay {
 		System.out.println(String.format(Locale.ROOT, "%9s  %s", time(now), text));
 	}
 
-	private static String time(long millis) {
+	static String time(long millis) {
 		long tenths = millis / 100;
 		long seconds = tenths / 10;
 		if (seconds >= 3600) {

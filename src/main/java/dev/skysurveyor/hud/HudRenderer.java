@@ -6,7 +6,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.resources.Identifier;
 
 import dev.skysurveyor.hud.HudLayout.Box;
 
@@ -15,12 +14,8 @@ public final class HudRenderer {
 	private static final int LINE_GAP = 1;
 	private static final int HINT_GAP = 2;
 	private static final int DARK = 0x80000000;
-	private static final Identifier FRAME_BACKGROUND = Identifier.withDefaultNamespace("tooltip/background");
-	private static final Identifier FRAME_BORDER = Identifier.withDefaultNamespace("tooltip/frame");
 	// vanilla tooltip sprites overhang the text by 12px
-	private static final int FRAME_OVERHANG = 12;
-	// sprite shows 1px past the padding. in bounds, so snap + margin use it
-	static final int FRAME_RIM = 1;
+	static final int FRAME_OVERHANG = 12;
 	private static final String HINT = "§7(/sv hud)";
 
 	public record Bounds(int x, int y, int width, int height) {
@@ -39,9 +34,10 @@ public final class HudRenderer {
 		}
 	}
 
-	// a box measured once: text + right column widths per row, inner size w/ padding + hint, unscaled
+	// a box measured once: text + right column widths per row, inner size w/ padding + hint, unscaled.
+	// rim here so bounds + draw use the same one after a pack reload
 	public record Measured(List<HudRow> rows, int[] textWidths, int[] rightWidths, int width, int height, float hintScale,
-			int hintWidth) {
+			int hintWidth, FrameRim.Rim rim) {
 	}
 
 	private HudRenderer() {
@@ -64,19 +60,25 @@ public final class HudRenderer {
 			width = Math.max(width, text);
 		}
 		int height = HudRow.height(rows, font.lineHeight, LINE_GAP) + 2 * PADDING + hintHeight(font, box, hintScale);
-		return new Measured(rows, textWidths, rightWidths, width + 2 * PADDING, height, hintScale, hintWidth);
+		return new Measured(rows, textWidths, rightWidths, width + 2 * PADDING, height, hintScale, hintWidth, rim(box));
 	}
 
 	public static Bounds bounds(Font font, Box box, List<HudRow> rows, int screenWidth, int screenHeight) {
 		return bounds(measure(font, box, rows), box, screenWidth, screenHeight);
 	}
 
+	// own anchors only, stuck boxes go through HudPlace
 	public static Bounds bounds(Measured measured, Box box, int screenWidth, int screenHeight) {
-		int rim = rim(box);
-		int width = Math.round((measured.width() + 2 * rim) * box.scale);
-		int height = Math.round((measured.height() + 2 * rim) * box.scale);
-		return new Bounds(box.anchorX.start(box.offsetX, width, screenWidth),
-				box.anchorY.start(box.offsetY, height, screenHeight), width, height);
+		HudPlace.Size size = size(measured, box);
+		return new Bounds(box.anchorX.start(box.offsetX, size.width(), screenWidth),
+				box.anchorY.start(box.offsetY, size.height(), screenHeight), size.width(), size.height());
+	}
+
+	// on screen, w/ scale + frame rim. in bounds, so snap + margin use it
+	public static HudPlace.Size size(Measured measured, Box box) {
+		FrameRim.Rim rim = measured.rim();
+		return new HudPlace.Size(Math.round((measured.width() + rim.width()) * box.scale),
+				Math.round((measured.height() + rim.height()) * box.scale));
 	}
 
 	public static void draw(GuiGraphicsExtractor graphics, Font font, Box box, List<HudRow> rows, Bounds bounds) {
@@ -92,7 +94,8 @@ public final class HudRenderer {
 		graphics.pose().pushMatrix();
 		graphics.pose().translate(bounds.x(), bounds.y());
 		graphics.pose().scale(box.scale, box.scale);
-		graphics.pose().translate(rim(box), rim(box));
+		FrameRim.Rim rim = measured.rim();
+		graphics.pose().translate(rim.left(), rim.top());
 		switch (box.background) {
 			case DARK -> graphics.fill(0, 0, width, height, DARK);
 			case FRAME -> drawFrame(graphics, width, height, -1);
@@ -164,11 +167,28 @@ public final class HudRenderer {
 					graphics.fill(left + dx, y + lineY, left + Math.min(dx + HudGraph.Chart.DASH, w), y + lineY + 1, HudGraph.Chart.LINE);
 				}
 			}
+			case HudGraph.Line chart -> {
+				int w = HudGraph.Line.WIDTH;
+				int left = x + (int) alignX(align, width, w);
+				Integer usual = chart.usualY();
+				if (usual != null) {
+					for (int dx = 0; dx < w; dx += 2 * HudGraph.Chart.DASH) {
+						graphics.fill(left + dx, y + usual, left + Math.min(dx + HudGraph.Chart.DASH, w), y + usual + 1, HudGraph.Chart.LINE);
+					}
+				}
+				// 1 px line, steps filled so it never breaks
+				int last = chart.yAt(0);
+				for (int dx = 0; dx < w; dx++) {
+					int now = chart.yAt(dx);
+					graphics.fill(left + dx, y + Math.min(last, now), left + dx + 1, y + Math.max(last, now) + 1, chart.argb());
+					last = now;
+				}
+			}
 		}
 	}
 
-	private static int rim(Box box) {
-		return box.background == HudLayout.Background.FRAME ? FRAME_RIM : 0;
+	private static FrameRim.Rim rim(Box box) {
+		return box.background == HudLayout.Background.FRAME ? FrameRim.get() : FrameRim.NONE;
 	}
 
 	// not via TooltipRenderUtil, iconographic recolours that w/ the last hovered item
@@ -176,8 +196,8 @@ public final class HudRenderer {
 		int x = PADDING - FRAME_OVERHANG;
 		int w = width - 2 * PADDING + 2 * FRAME_OVERHANG;
 		int h = height - 2 * PADDING + 2 * FRAME_OVERHANG;
-		graphics.blitSprite(RenderPipelines.GUI_TEXTURED, FRAME_BACKGROUND, x, x, w, h, color);
-		graphics.blitSprite(RenderPipelines.GUI_TEXTURED, FRAME_BORDER, x, x, w, h, color);
+		graphics.blitSprite(RenderPipelines.GUI_TEXTURED, FrameRim.BACKGROUND, x, x, w, h, color);
+		graphics.blitSprite(RenderPipelines.GUI_TEXTURED, FrameRim.BORDER, x, x, w, h, color);
 	}
 
 	private static void drawLine(GuiGraphicsExtractor graphics, Font font, String line, int x, int y) {

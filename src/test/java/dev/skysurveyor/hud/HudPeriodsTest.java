@@ -33,6 +33,8 @@ class HudPeriodsTest {
 					List.of("Corpse Fine this shaft: ", "Corpse Fine: ", "Corpse Fine/h: ", "Corpse Fine all-time: ")),
 			Map.entry(HudValue.MINED_METAL,
 					List.of("Mined metal this shaft: ", "Mined metal: ", "Mined metal/h: ", "Mined metal all-time: ")),
+			Map.entry(HudValue.FOSSIL_ESSENCE,
+					List.of("Fossil Essence this shaft: ", "Fossil Essence: ", "Fossil Essence/h: ", "Fossil Essence all-time: ")),
 			Map.entry(HudValue.COINS, List.of("Coins this shaft: ", "Coins: ", "Coins/h: ", "Coins all-time: ")),
 			Map.entry(HudValue.COINS_PER_SHAFT, Arrays.asList(null, "Coins/shaft: ", null, "Coins/shaft all-time: ")),
 			Map.entry(HudValue.OUTSIDE_COINS, Arrays.asList(null, "Outside coins: ", "Outside coins/h: ", "Outside coins all-time: ")),
@@ -44,9 +46,11 @@ class HudPeriodsTest {
 			Map.entry(HudValue.SINCE_LAST_SHAFT, "Since last shaft: "), Map.entry(HudValue.SESSION_TIME, "Session: "),
 			Map.entry(HudValue.SHAFT_TYPE, "Shaft: "), Map.entry(HudValue.SHAFT_TIME, "Time inside: "),
 			Map.entry(HudValue.SHAFT_CORPSES, "Corpses: "), Map.entry(HudValue.SHAFT_COLD, "Cold: "),
-			Map.entry(HudValue.SHAFT_CAMPFIRES, "Campfires: "), Map.entry(HudValue.FPS, "FPS: "), Map.entry(HudValue.PING, "Ping: "),
+			Map.entry(HudValue.SHAFT_CAMPFIRES, "Campfires: "), Map.entry(HudValue.FPS, "FPS: "), Map.entry(HudValue.PING, "Ping: "), Map.entry(HudValue.EFFICIENCY, "Efficiency: "),
 			Map.entry(HudValue.TPS, "TPS: "), Map.entry(HudValue.CLOCK, "Clock: "), Map.entry(HudValue.MOD_VERSION, "Surveyor "),
-			Map.entry(HudValue.MINECRAFT_VERSION, "Minecraft "));
+			Map.entry(HudValue.MINECRAFT_VERSION, "Minecraft "), Map.entry(HudValue.PRISTINE_POTATO, "Pristine Potato: "),
+			Map.entry(HudValue.FILET_O_FORTUNE, "Filet O' Fortune: "), Map.entry(HudValue.COLD_RESISTANCE, "Cold Resistance: "),
+			Map.entry(HudValue.FIESTA_FLASK, "Fiesta Flask: "));
 
 	@Test
 	void defaultLabels() {
@@ -245,7 +249,7 @@ class HudPeriodsTest {
 		assertEquals(HudValue.SHAFTS_TODAY.periods(), HudValue.SESSION_SHAFTS.periods(), "same family both ways");
 		assertEquals("Today", HudValue.SHAFTS_TODAY.period(null).name());
 		assertEquals("Per hour", HudValue.SHAFTS_PER_HOUR.period(null).name());
-		assertEquals(27, HudValue.listed().stream().filter(HudValue::inAddLine).count(), "27 rows in Add line");
+		assertEquals(33, HudValue.listed().stream().filter(HudValue::inAddLine).count(), "33 rows in Add line");
 		assertEquals(HudValue.values().length, HudValue.listed().size(), "every value listed once");
 	}
 

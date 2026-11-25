@@ -9,6 +9,7 @@ import dev.skysurveyor.hud.HudData.SessionTotals;
 import dev.skysurveyor.hud.HudData.Totals;
 import dev.skysurveyor.hud.HudExpr.Type;
 import dev.skysurveyor.hud.HudValue.Range;
+import dev.skysurveyor.journal.PersonalBests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -193,6 +194,19 @@ class HudExprTest {
 		assertEquals(new HudTyping.Edit("{looted:umber:session}", 22),
 				HudTyping.option("{looted:lapis:session}", 22, HudValue.CORPSES_LOOTED, "umber"), "a type swaps the type, goes first");
 		assertEquals(new HudTyping.Edit("{dry:vanguard}", 14), HudTyping.option("{dry}", 5, HudValue.DRYSTREAK, "vanguard"));
+	}
+
+	// review 2026-11-21: bare pb stayed on the pb it was 1st parsed with
+	@Test
+	void barePbFollowsTheListOrder() {
+		List<PersonalBests.Def> list = PersonalBests.DEFAULTS;
+		try {
+			assertEquals("pb:session_rate", HudExpr.key(HudExpr.parseOrThrow("pb")));
+			HudValue.personalBests(List.of(list.get(2), list.get(0)));
+			assertEquals("pb:shaft_powder", HudExpr.key(HudExpr.parseOrThrow("pb")));
+		} finally {
+			HudValue.personalBests(list);
+		}
 	}
 
 	@Test

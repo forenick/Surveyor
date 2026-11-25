@@ -7,6 +7,8 @@ import java.util.concurrent.Executor;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
+import com.google.gson.JsonObject;
+
 // config.json for the whole mod. get() from any thread, the file only on the io thread its handed
 public final class LiveSettings {
 	private final List<BiConsumer<Settings, Settings>> listeners = new CopyOnWriteArrayList<>();
@@ -44,6 +46,11 @@ public final class LiveSettings {
 	// (before, after) right after change(), on its thread. not for hand edits, those come in w/ reloadIfChanged
 	public void onChange(BiConsumer<Settings, Settings> listener) {
 		listeners.add(listener);
+	}
+
+	// what config.json would hold, f.e. for a recordings start line
+	public static JsonObject toJson(Settings settings) {
+		return ConfigFile.json(settings);
 	}
 
 	// null = saved fine

@@ -1,9 +1,6 @@
 package dev.skysurveyor.detection;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,8 +12,12 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
+import dev.skysurveyor.detection.ShaftEvent.AbilityExpired;
+import dev.skysurveyor.detection.ShaftEvent.FossilEssence;
 import dev.skysurveyor.detection.ShaftEvent.RareDrop;
 import dev.skysurveyor.detection.ShaftEvent.ShaftLeft;
+import dev.skysurveyor.detection.ShaftEvent.WarpFailed;
+import dev.skysurveyor.recorder.RecordingFiles;
 
 public final class RecordingReplay {
 	// not in git (player names), tests skip w/o them
@@ -24,7 +25,8 @@ public final class RecordingReplay {
 	// world change + the live ShaftLeft it causes land in the same tick
 	private static final long SAME_TICK_MILLIS = 50;
 	// event added after live lines -> 1st version that writes it. older recordings cant have it, so replay skips it there
-	static final Map<Class<? extends ShaftEvent>, String> NEWER_EVENTS = Map.of(RareDrop.class, "0.25.0-alpha.16");
+	static final Map<Class<? extends ShaftEvent>, String> NEWER_EVENTS = Map.of(RareDrop.class, "0.25.0-alpha.16",
+			AbilityExpired.class, "0.26.0-alpha.1", WarpFailed.class, "0.26.0-alpha.21", FossilEssence.class, "0.26.0-alpha.22");
 
 	private RecordingReplay() {
 	}
@@ -61,13 +63,18 @@ public final class RecordingReplay {
 
 	public static List<JsonObject> read(Path file) throws IOException {
 		List<JsonObject> records = new ArrayList<>();
-		try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-			String line;
-			while ((line = reader.readLine()) != null) {
-				if (!line.isBlank()) records.add(JsonParser.parseString(line).getAsJsonObject());
-			}
-		}
+		for (String line : RecordingFiles.lines(file)) records.add(JsonParser.parseString(line).getAsJsonObject());
 		return records;
+	}
+
+	// recorded w/ skysurveyor/patterns.txt overrides (0.26.0-alpha.9+) = replay w/ them too
+	static TextPatterns patterns(List<JsonObject> records) {
+		for (JsonObject record : records) {
+			if (!type(record).equals("start") || !record.has("patternOverrides")) continue;
+			return TextPatterns.builtInWith(strings(record.getAsJsonArray("patternOverrides")));
+		}
+		// own copy, a patterns line swaps it
+		return TextPatterns.builtInWith(List.of());
 	}
 
 	public static void feed(JsonObject record, ShaftTracker tracker, LongConsumer onBlockHit) {
@@ -77,6 +84,10 @@ public final class RecordingReplay {
 			case "chat" -> tracker.onChat(t, record.get("legacy").getAsString(), strings(record.getAsJsonArray("hover")));
 			case "scoreboard" -> tracker.onScoreboard(t, strings(record.getAsJsonArray("lines")));
 			case "tablist" -> tracker.onTabList(t, strings(record.getAsJsonArray("lines")));
+			case "actionbar" -> tracker.onActionBar(t, record.get("legacy").getAsString());
+			// 0.26.0-alpha.16+, older recordings have no fossil blocks
+			case "block_break" -> tracker.onBlockBreak(record.get("block").getAsString(),
+					record.has("gone") ? strings(record.getAsJsonArray("gone")) : List.of());
 			case "block_hit" -> onBlockHit.accept(t);
 			default -> {
 			}
@@ -92,7 +103,8 @@ public final class RecordingReplay {
 		List<Timed> replayed = new ArrayList<>();
 		long[] now = {0};
 		boolean[] synced = {false};
-		ShaftTracker tracker = new ShaftTracker(TextPatterns.defaults(), event -> {
+		TextPatterns patterns = patterns(records);
+		ShaftTracker tracker = new ShaftTracker(patterns, event -> {
 			if (synced[0] && knows(version, event)) replayed.add(new Timed(now[0], EventText.of(event)));
 		});
 		long syncedAt = -1;
@@ -107,6 +119,8 @@ public final class RecordingReplay {
 							&& now[0] - syncedAt <= SAME_TICK_MILLIS;
 					if (!syncLeft) live.add(new Timed(now[0], text));
 				}
+				// /sv debug reload mid recording (0.26.0-alpha.21+)
+				case "patterns" -> patterns.replaceOverrides(strings(record.getAsJsonArray("patternOverrides")));
 				case "world_change" -> {
 					feed(record, tracker, t -> {
 					});

@@ -26,7 +26,7 @@ public final class ToastRenderer {
 	private static final int HUD_LINE = 10;
 	private static final int DARK = 0x80000000;
 
-	public record Size(int width, int height, int labelWidth) {
+	public record Size(int width, int height, int labelWidth, FrameRim.Rim rim) {
 	}
 
 	private ToastRenderer() {
@@ -36,9 +36,10 @@ public final class ToastRenderer {
 		int labelWidth = labelWidth(font, text);
 		int textWidth = Math.max(font.width(title(text, style)), labelWidth + LABEL_GAP + valueWidth(font, text));
 		int rows = text.rows().size();
-		if (style == Style.VANILLA) return new Size(Math.max(VANILLA_MIN_WIDTH, 2 * VANILLA_X + textWidth), 20 + rows * 12, labelWidth);
-		int rim = rim(style);
-		return new Size(textWidth + 2 * PADDING + 2 * rim, 2 * PADDING + HUD_LINE + rows * HUD_LINE - 1 + 2 * rim, labelWidth);
+		if (style == Style.VANILLA) return new Size(Math.max(VANILLA_MIN_WIDTH, 2 * VANILLA_X + textWidth), 20 + rows * 12, labelWidth, FrameRim.NONE);
+		FrameRim.Rim rim = rim(style);
+		return new Size(textWidth + 2 * PADDING + rim.width(), 2 * PADDING + HUD_LINE + rows * HUD_LINE - 1 + rim.height(), labelWidth,
+				rim);
 	}
 
 	public static HudRenderer.Bounds bounds(Font font, ToastText text, Style style, Box box, int screenWidth, int screenHeight) {
@@ -65,24 +66,24 @@ public final class ToastRenderer {
 	// at 0,0 of the current pose, unscaled. alpha 0..1 for the hud fade
 	public static void draw(GuiGraphicsExtractor graphics, Font font, ToastText text, Style style, Size size, float alpha) {
 		int white = ARGB.white(alpha);
-		int rim = rim(style);
+		FrameRim.Rim rim = size.rim();
 		switch (style) {
 			case VANILLA -> sliced(graphics, size.width(), size.height(), white);
 			case FRAME -> {
 				graphics.pose().pushMatrix();
-				graphics.pose().translate(rim, rim);
-				HudRenderer.drawFrame(graphics, size.width() - 2 * rim, size.height() - 2 * rim, white);
+				graphics.pose().translate(rim.left(), rim.top());
+				HudRenderer.drawFrame(graphics, size.width() - rim.width(), size.height() - rim.height(), white);
 				graphics.pose().popMatrix();
 			}
 			case DARK -> graphics.fill(0, 0, size.width(), size.height(), ARGB.multiplyAlpha(DARK, alpha));
 		}
 		boolean vanilla = style == Style.VANILLA;
-		int x = vanilla ? VANILLA_X : PADDING + rim;
-		int y = vanilla ? 7 : PADDING + rim;
+		int x = vanilla ? VANILLA_X : PADDING + rim.left();
+		int y = vanilla ? 7 : PADDING + rim.top();
 		// vanilla toasts draw text w/o shadow
 		graphics.text(font, title(text, style), x, y, white, !vanilla);
 		int valueX = x + size.labelWidth() + LABEL_GAP;
-		int rowY = vanilla ? 18 : PADDING + rim + HUD_LINE;
+		int rowY = vanilla ? 18 : PADDING + rim.top() + HUD_LINE;
 		for (ToastText.Row row : text.rows()) {
 			graphics.text(font, "§7" + row.label(), x, rowY, white, !vanilla);
 			graphics.text(font, row.value(), valueX, rowY, white, !vanilla);
@@ -90,8 +91,8 @@ public final class ToastRenderer {
 		}
 	}
 
-	private static int rim(Style style) {
-		return style == Style.FRAME ? HudRenderer.FRAME_RIM : 0;
+	private static FrameRim.Rim rim(Style style) {
+		return style == Style.FRAME ? FrameRim.get() : FrameRim.NONE;
 	}
 
 	// per frame, so no regex

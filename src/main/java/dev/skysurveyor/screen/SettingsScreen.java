@@ -10,6 +10,7 @@ import java.util.function.Function;
 import com.mojang.blaze3d.platform.NativeImage;
 import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.ButtonComponent;
+import io.wispforest.owo.ui.component.ColorPickerComponent;
 import io.wispforest.owo.ui.component.LabelComponent;
 import io.wispforest.owo.ui.component.TextBoxComponent;
 import io.wispforest.owo.ui.component.UIComponents;
@@ -32,6 +33,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.util.FormattedCharSequence;
 
 import dev.skysurveyor.Surveyor;
+import dev.skysurveyor.debug.LiveDebug;
 import dev.skysurveyor.money.LiveMoney;
 import dev.skysurveyor.money.PriceBook;
 import dev.skysurveyor.settings.Setting;
@@ -41,6 +43,7 @@ import dev.skysurveyor.settings.Settings;
 import dev.skysurveyor.settings.SettingsList;
 import dev.skysurveyor.settings.SettingsList.Category;
 import dev.skysurveyor.settings.SettingsList.Section;
+import dev.skysurveyor.util.Format;
 
 import static dev.skysurveyor.screen.ScreenParts.label;
 import static dev.skysurveyor.screen.ScreenParts.wrapped;
@@ -63,6 +66,10 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 	private static final int BUTTON = 16;
 	private static final int OPTION = 11;
 	private static final int FIELD = 44;
+	// colour swatch + picker, display choices
+	private static final int SWATCH = 12;
+	private static final int PICKER_WIDTH = 150;
+	private static final int PICKER_HEIGHT = 60;
 	// below this the control goes under the text
 	private static final int MIN_TEXT = 140;
 	// below this each card sizes its own control, display choice
@@ -366,6 +373,7 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 		body.add(wrapped("§7" + c.description()));
 		sections(body, c);
 		if (c.id().equals(SettingsList.MONEY)) prices(body);
+		if (c.id().equals(SettingsList.DEV)) bugReports(body);
 		armReset(false);
 	}
 
@@ -446,6 +454,27 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 		LabelComponent note = label("§7Fetched when you enter a shaft or open the journal.");
 		note.horizontalSizing(Sizing.fixed(mainInner() - 2 * CARD_PADDING));
 		box.child(note);
+		body.add(box);
+	}
+
+	private void bugReports(List<UIComponent> body) {
+		body.add(sectionHead("Bug reports"));
+		FlowLayout box = card();
+		LabelComponent note = label("§7Copies versions, your mods, changed settings, errors and data file sizes, to paste into a "
+				+ "GitHub issue. No names, chat or coordinates.");
+		note.horizontalSizing(Sizing.fixed(mainInner() - 2 * CARD_PADDING));
+		box.child(note);
+		FlowLayout row = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
+		row.gap(6);
+		row.verticalAlignment(VerticalAlignment.CENTER);
+		LabelComponent done = label("");
+		ButtonComponent copy = PackButton.button(Component.literal("Copy debug info"),
+				b -> LiveDebug.copyDebugInfo(minecraft, () -> done.text(Component.literal("§aCopied"))));
+		copy.horizontalSizing(Sizing.fixed(font.width("Copy debug info") + 20));
+		copy.verticalSizing(Sizing.fixed(BUTTON));
+		row.child(copy);
+		row.child(done);
+		box.child(row);
 		body.add(box);
 	}
 
@@ -547,7 +576,7 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 				yield 2 + 8 + 4 + text + 2;
 			}
 			case Setting.Number number -> FIELD + 3 + font.width(number.unit());
-			case Setting.Toggle toggle -> toggleWidth();
+			case Setting.Toggle toggle -> toggleWidth() + (toggle.swatch() == null ? 0 : SWATCH + 2);
 		};
 	}
 
@@ -579,6 +608,16 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 		private final List<FlowLayout> options = new ArrayList<>();
 		private int picked = -1;
 		private IconButton toggle;
+		private FlowLayout swatch;
+		// open picker, null = closed. not in extra, a refresh mid drag would rebuild it
+		private FlowLayout pickerBox;
+		private LabelComponent pickerHex;
+		private ColorPickerComponent picker;
+		// picker moved by us, not a drag
+		private boolean syncingPicker;
+		// dragged colour not saved yet, saved like a typed number
+		private Integer pendingColor;
+		private int colorAt;
 		private TextBoxComponent field;
 		private String lastText;
 		private boolean pending;
@@ -612,6 +651,11 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 			text.child(description);
 			extra = UIContainers.verticalFlow(Sizing.fixed(textWidth), Sizing.content());
 			text.child(extra);
+			if (setting instanceof Setting.Toggle t && t.swatch() != null) {
+				pickerBox = UIContainers.verticalFlow(Sizing.fixed(textWidth), Sizing.content());
+				pickerBox.gap(2);
+				text.child(pickerBox);
+			}
 			box.child(text);
 			box.child(control(controlWidth));
 
@@ -647,6 +691,15 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 					toggle.verticalSizing(Sizing.fixed(BUTTON));
 					tip(tips, toggle, "§8Default: " + t.defaultText());
 					control.child(toggle);
+					if (t.swatch() != null) {
+						swatch = UIContainers.horizontalFlow(Sizing.fixed(SWATCH), Sizing.fixed(SWATCH));
+						swatch.cursorStyle(CursorStyle.HAND);
+						swatch.mouseDown().subscribe((event, doubleClick) -> {
+							togglePicker(t.swatch());
+							return true;
+						});
+						control.child(swatch);
+					}
 				}
 			}
 			return control;
@@ -678,8 +731,47 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 			control.child(list);
 		}
 
+		private void togglePicker(Setting.Swatch of) {
+			if (!pickerBox.children().isEmpty()) {
+				flushColor();
+				pickerBox.clearChildren();
+				picker = null;
+				return;
+			}
+			picker = new ColorPickerComponent();
+			picker.horizontalSizing(Sizing.fixed(Math.min(PICKER_WIDTH, pickerBox.width() > 0 ? pickerBox.width() : PICKER_WIDTH)));
+			picker.verticalSizing(Sizing.fixed(PICKER_HEIGHT));
+			picker.showAlpha(false);
+			picker.selectedColor(Color.ofRgb(of.get().applyAsInt(settings)));
+			picker.onChanged().subscribe(color -> {
+				if (syncingPicker) return;
+				pendingColor = color.rgb();
+				colorAt = ticks;
+				paintSwatch(pendingColor);
+			});
+			pickerHex = label("§7" + of.name() + " §f" + Format.hex(of.get().applyAsInt(settings)));
+			pickerBox.child(picker);
+			pickerBox.child(pickerHex);
+		}
+
+		private void paintSwatch(int rgb) {
+			swatch.surface(Surface.flat(0xFF000000 | rgb).and(Surface.outline(0xFF000000)));
+			Setting.Swatch of = ((Setting.Toggle) setting).swatch();
+			tip(tips, swatch, "§f" + of.name() + " §7" + Format.hex(rgb) + "\n§7Click to pick\n§8Default: "
+					+ Format.hex(of.get().applyAsInt(Settings.DEFAULTS)));
+			if (pickerHex != null) pickerHex.text(Component.literal("§7" + of.name() + " §f" + Format.hex(rgb)));
+		}
+
+		private void flushColor() {
+			if (pendingColor == null || !(setting instanceof Setting.Toggle t)) return;
+			int rgb = pendingColor;
+			pendingColor = null;
+			apply(s -> t.swatch().set().apply(s, rgb));
+		}
+
 		// polled bc caxton cancels onValueChange
 		void poll() {
+			if (pendingColor != null && ticks - colorAt >= TYPE_DELAY) flushColor();
 			if (!(setting instanceof Setting.Number)) return;
 			boolean focused = field.isFocused();
 			if (!field.getValue().equals(lastText)) {
@@ -695,6 +787,7 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 		}
 
 		void flush() {
+			flushColor();
 			if (!pending || !(setting instanceof Setting.Number number)) return;
 			pending = false;
 			Double value = number.parse(field.getValue());
@@ -738,6 +831,19 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 					boolean on = t.get().test(settings);
 					toggle.icon(on ? CHECK_ICON : CROSS_ICON);
 					toggle.setMessage(Component.literal(on ? "§fOn" : "§fOff"));
+					if (swatch != null && pendingColor == null) {
+						int rgb = t.swatch().get().applyAsInt(settings);
+						paintSwatch(rgb);
+						// reset or hand edit while its open
+						if (picker != null && picker.selectedColor().rgb() != rgb) {
+							syncingPicker = true;
+							try {
+								picker.selectedColor(Color.ofRgb(rgb));
+							} finally {
+								syncingPicker = false;
+							}
+						}
+					}
 				}
 			}
 		}

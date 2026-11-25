@@ -18,7 +18,7 @@ import dev.skysurveyor.util.Format;
 public final class SummaryText {
 	private static final String RULE = "§8§m                                                  ";
 	private static final Map<Part, String> PART_NAMES = Map.of(Part.MINED, "gems", Part.MINED_METAL, "metal", Part.GLOSSY, "glossy",
-			Part.OTHER, "other", Part.CORPSES, "corpses", Part.SCRAP, "scrap", Part.CRYSTALS, "crystals", Part.KEYS, "keys",
+			Part.OTHER, "other", Part.CORPSES, "corpses", Part.SCRAP, "scrap", Part.CRYSTALS, "crystals", Part.FOSSIL, "essence", Part.KEYS, "keys",
 			Part.CAMPFIRES, "campfires");
 
 	private SummaryText() {

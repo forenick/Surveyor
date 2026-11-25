@@ -8,6 +8,8 @@ import dev.skysurveyor.journal.CorpseCounts;
 import dev.skysurveyor.journal.JournalEntry;
 import dev.skysurveyor.journal.JournalStats;
 import dev.skysurveyor.journal.JournalStats.CorpseCount;
+import dev.skysurveyor.mining.Efficiency;
+import dev.skysurveyor.util.Format;
 
 // which columns fit + how wide, the shaft sort. plain java
 final class TableColumns {
@@ -30,13 +32,14 @@ final class TableColumns {
 		}
 	}
 
-	// width = least, measured per table (0 = all measured). drops: campfire, #, entered, inside, powder, spawn
+	// width = least, measured per table (0 = all measured). drops: campfire, eff, #, entered, inside, powder, spawn
 	static final List<Column> SHAFTS = List.of(
 			new Column("number", "#", 14, false, 5), new Column("shaft", "Shaft", 44, false, 0),
 			new Column("time", "Entered", 0, false, 4), new Column("spawn", "Spawn", 66, false, 1),
 			new Column("inside", "Inside", 0, true, 3), new Column("corpses", "Corpses", 0, false, 0).asTight(),
 			new Column("powder", "Powder", 44, true, 2), new Column("mined", "Mined", 40, true, 0),
-			new Column("coins", "Coins", 0, true, 0), new Column("campfire", "Campfire", 0, false, 6));
+			new Column("eff", "Eff.", 0, true, 6), new Column("coins", "Coins", 0, true, 0),
+			new Column("campfire", "Campfire", 0, false, 7));
 
 	// overview. by day: start time goes under the days date, no start column
 	static final List<Column> SESSIONS = List.of(
@@ -132,9 +135,16 @@ final class TableColumns {
 			case "mined" -> entry.gems() != null ? (Comparable<?>) entry.gems().fineEquivalent()
 					: entry.metal() != null ? entry.metal().in(metalTier) : null;
 			case "coins" -> coins;
+			case "eff" -> Efficiency.shown(entry.mining());
 			case "campfire" -> campfires(entry);
 			default -> index;
 		};
+	}
+
+	// eff cell, § coded. - = skipped shaft or mined before 0.26.0
+	static String efficiency(JournalEntry entry) {
+		Double efficiency = Efficiency.shown(entry.mining());
+		return efficiency == null ? "§8-" : "§f" + Format.percent(efficiency);
 	}
 
 	// placed or used, whichever saw more

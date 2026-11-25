@@ -64,19 +64,27 @@ public final class HudLayout {
 		}
 
 		public int start(int offset, int size, int screen) {
-			int start = switch (this) {
-				case START -> MARGIN + offset;
-				case MIDDLE -> centred(size, screen) + offset;
-				case END -> screen - MARGIN - size - offset;
-			};
-			return clamp(start, size, screen);
+			return clamp(startIn(offset, size, MARGIN, screen - 2 * MARGIN), size, screen);
 		}
 
 		public int offset(int start, int size, int screen) {
+			return offsetIn(start, size, MARGIN, screen - 2 * MARGIN);
+		}
+
+		// span = screen inside the margin, or the box this one sticks to
+		public int startIn(int offset, int size, int spanStart, int spanLength) {
 			return switch (this) {
-				case START -> start - MARGIN;
-				case MIDDLE -> start - centred(size, screen);
-				case END -> screen - MARGIN - size - start;
+				case START -> spanStart + offset;
+				case MIDDLE -> spanStart + centred(size, spanLength) + offset;
+				case END -> spanStart + spanLength - size - offset;
+			};
+		}
+
+		public int offsetIn(int start, int size, int spanStart, int spanLength) {
+			return switch (this) {
+				case START -> start - spanStart;
+				case MIDDLE -> start - spanStart - centred(size, spanLength);
+				case END -> spanStart + spanLength - size - start;
 			};
 		}
 
@@ -85,8 +93,8 @@ public final class HudLayout {
 			return Math.max(MARGIN, Math.min(start, screen - MARGIN - size));
 		}
 
-		private static int centred(int size, int screen) {
-			return (int) Math.round((screen - size) / 2.0);
+		private static int centred(int size, int span) {
+			return (int) Math.round((span - size) / 2.0);
 		}
 	}
 
@@ -136,7 +144,7 @@ public final class HudLayout {
 		}
 
 		public Line(HudValue value) {
-			this(value, null, true, 0);
+			this(value, null, true, value.defaultFormat());
 		}
 
 		Line(HudValue value, String prefix, boolean shown, int format) {
@@ -358,6 +366,13 @@ public final class HudLayout {
 		public Boolean titleBold;
 		// "(/sv hud)" under the box till the editor opens, new players only. null = none
 		public Boolean hint;
+		// id of the box this one sticks to + on which side of it. null = own anchors.
+		// stuck: anchor + offset across are against that box, along is the gap (HudPlace)
+		public String stickTo;
+		public HudPlace.Side stickSide;
+		// screen anchor + offset across from when it stuck, used if that box is gone. null before 0.26.0-alpha.28
+		public Anchor freeAnchor;
+		public Integer freeOffset;
 
 		public String titleColorOrDefault() {
 			return titleColor != null ? titleColor : "e";
@@ -438,12 +453,14 @@ public final class HudLayout {
 	// nicks picks (2026-11-12), lines matter more than looks
 	public static List<Preset> presets() {
 		return List.of(
-				new Preset("Spawn", "Spawn timer and average spawn", HudLayout::spawnBox),
+				new Preset("Spawn", "Spawn timer, average spawn and efficiency", HudLayout::spawnBox),
 				new Preset("Session", "Shafts, shafts per hour and powder", HudLayout::sessionBox),
-				new Preset("Current shaft", "Time inside, corpses, campfires and coins", HudLayout::shaftBox),
+				new Preset("Current shaft", "Time inside, corpses, campfires, coins and efficiency", HudLayout::shaftBox),
 				new Preset("All-time", "Shafts, powder and corpse Fine, all-time", HudLayout::allTimeBox),
 				new Preset("Session profit", "Coins this session, per hour, per shaft, session length and drops", HudLayout::moneyBox),
-				new Preset("Performance", "FPS, ping and TPS", HudLayout::performanceBox));
+				new Preset("Performance", "FPS, ping and TPS", HudLayout::performanceBox),
+				new Preset("Consumables", "Time left on the Pristine Potato, Filet O' Fortune, Cold Resistance potion and Fiesta Flask. "
+						+ "A line only shows while its effect is on", HudLayout::consumablesBox));
 	}
 
 	private static Box sessionBox() {
@@ -462,6 +479,8 @@ public final class HudLayout {
 		spawn.valueBold = true;
 		spawn.lines.add(new Line(HudValue.SPAWN_TIMER, null, true, 0));
 		spawn.lines.add(new Line(HudValue.AVERAGE_SPAWN, "Avg: ", true, 0));
+		// this tunnel loop here, this shaft in the shaft box (nick, 2026-11-21)
+		spawn.lines.add(new Line(HudValue.EFFICIENCY, null, true, 0));
 		return spawn;
 	}
 
@@ -473,6 +492,7 @@ public final class HudLayout {
 		shaft.lines.add(new Line(HudValue.SHAFT_CAMPFIRES, null, true, 0));
 		// title says the shaft already. no cold, the scoreboard has it (nick, 2026-11-15)
 		shaft.lines.add(rangeLine(HudValue.COINS, "Coins: ", Range.SHAFT));
+		shaft.lines.add(new Line(HudValue.EFFICIENCY, null, true, 0));
 		return shaft;
 	}
 
@@ -486,7 +506,8 @@ public final class HudLayout {
 	}
 
 	private static Box moneyBox() {
-		Box box = box("money", "Session profit", true, true, Background.DARK, Align.LEFT, Anchor.START, 0, Anchor.START, 120);
+		// under the shaft box w/ its efficiency line + the 4 px snap gap
+		Box box = box("money", "Session profit", true, true, Background.DARK, Align.LEFT, Anchor.START, 0, Anchor.START, 128);
 		// this shaft lives in the shaft box (nick, 2026-11-15)
 		box.lines.add(rangeLine(HudValue.COINS, "Total: ", Range.SESSION));
 		box.lines.add(rangeLine(HudValue.COINS, "Per hour: ", Range.PER_HOUR));
@@ -501,6 +522,16 @@ public final class HudLayout {
 		Line line = new Line(value, prefix, true, 0);
 		line.range = range;
 		return line;
+	}
+
+	// no title, so the box takes no room w/o an effect on. mines + shafts (nick, 2026-11-22)
+	private static Box consumablesBox() {
+		// left middle: top right has the potion icons, right middle the scoreboard. editor moves it if taken
+		Box box = box("consumables", "Consumables", false, true, Background.DARK, Align.LEFT, Anchor.START, 0, Anchor.MIDDLE, 0);
+		for (HudValue value : List.of(HudValue.PRISTINE_POTATO, HudValue.FILET_O_FORTUNE, HudValue.COLD_RESISTANCE, HudValue.FIESTA_FLASK)) {
+			box.lines.add(new Line(value));
+		}
+		return box;
 	}
 
 	private static Box performanceBox() {
@@ -551,6 +582,10 @@ public final class HudLayout {
 				while (!ids.add("box" + n)) n++;
 				box.id = "box" + n;
 			}
+		}
+		if (layout.toast != null) HudPlace.unlink(layout.toast);
+		for (Box box : layout.boxes) {
+			if (HudPlace.parent(box, layout.boxes) == null) HudPlace.unlink(box);
 		}
 		layout.version = VERSION;
 		return layout;

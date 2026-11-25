@@ -15,9 +15,11 @@ import dev.skysurveyor.detection.CorpseLoot;
 import dev.skysurveyor.detection.Shaft;
 import dev.skysurveyor.detection.TabListParser;
 import dev.skysurveyor.detection.TextPatterns;
+import dev.skysurveyor.effects.Consumable;
 import dev.skysurveyor.hud.HudValue.Range;
 import dev.skysurveyor.journal.BreakEntry;
 import dev.skysurveyor.journal.CorpseCounts;
+import dev.skysurveyor.journal.FossilYield;
 import dev.skysurveyor.journal.GemYield;
 import dev.skysurveyor.journal.JournalEntry;
 import dev.skysurveyor.journal.JournalStats;
@@ -54,6 +56,8 @@ public final class HudData {
 	private final Map<HudValue, Long> maxes = new EnumMap<>(HudValue.class);
 	// oldest 1st, empty = none
 	private List<Spawn> recentSpawns = List.of();
+	private List<Double> efficiencyTrack = List.of();
+	private Double usualEfficiency;
 	// drops line per period, missing = not worked out (no line wants it)
 	private final Map<Range, DropList> drops = new EnumMap<>(Range.class);
 	// a line asked for a pb, LiveHud only works them out then. client thread
@@ -143,14 +147,15 @@ public final class HudData {
 
 	// spawnMillis over timedSpawns shafts, for the avg. metal = shafts own metal in raw. looted = corpse type -> count
 	public record Totals(long shafts, long powder, double fine, long spawnMillis, long timedSpawns, double metal,
-			Map<String, Long> looted) {
-		public static final Totals NONE = new Totals(0, 0, 0, 0, 0, 0, Map.of());
+			Map<String, Long> looted, long essence) {
+		public static final Totals NONE = new Totals(0, 0, 0, 0, 0, 0, Map.of(), 0);
 
 		public Totals plus(Totals other) {
 			Map<String, Long> sum = new HashMap<>(looted);
 			other.looted.forEach((type, count) -> sum.merge(type, count, Long::sum));
 			return new Totals(shafts + other.shafts, powder + other.powder, fine + other.fine,
-					spawnMillis + other.spawnMillis, timedSpawns + other.timedSpawns, metal + other.metal, Map.copyOf(sum));
+					spawnMillis + other.spawnMillis, timedSpawns + other.timedSpawns, metal + other.metal, Map.copyOf(sum),
+					essence + other.essence);
 		}
 
 		public long looted(String type) {
@@ -167,8 +172,10 @@ public final class HudData {
 			long spawn = 0;
 			long timed = 0;
 			double metal = 0;
+			long essence = 0;
 			Map<String, Long> looted = new HashMap<>();
 			for (JournalEntry entry : entries) {
+				essence += entry.fossilEssence();
 				addLooted(looted, CorpseCounts.of(entry));
 				powder += JournalStats.powder(entry);
 				fine += fine(entry.loots(), patterns);
@@ -178,15 +185,17 @@ public final class HudData {
 					timed++;
 				}
 			}
-			return new Totals(entries.size(), powder, fine, spawn, timed, metal, Map.copyOf(looted));
+			return new Totals(entries.size(), powder, fine, spawn, timed, metal, Map.copyOf(looted), essence);
 		}
 
 		public static Totals of(Shaft shaft, TextPatterns patterns) {
 			MetalYield metal = MetalYield.of(shaft);
+			FossilYield fossil = FossilYield.of(shaft);
 			Map<String, Long> looted = new HashMap<>();
 			addLooted(looted, CorpseCounts.of(shaft));
 			return new Totals(1, JournalStats.powder(shaft.loots(), shaft.exitPowder()), fine(shaft.loots(), patterns), 0, 0,
-					metal == null ? 0 : metal.in(MetalYield.RAW), Map.copyOf(looted));
+					metal == null ? 0 : metal.in(MetalYield.RAW), Map.copyOf(looted),
+					fossil == null ? 0 : fossil.essence());
 		}
 
 		private static void addLooted(Map<String, Long> looted, Map<String, CorpseCount> counts) {
@@ -235,17 +244,20 @@ public final class HudData {
 		data.put(HudValue.SESSION_POWDER, totals.powder());
 		data.put(HudValue.SESSION_CORPSE_FINE, totals.fine());
 		data.put(HudValue.MINED_METAL, totals.metal() / perTier);
+		data.put(HudValue.FOSSIL_ESSENCE, totals.essence());
 		// so the editor shows all examples, not mixed w/ zeros
 		if (session.summary() == null) data.placeholders(Range.SESSION);
 		data.put(HudValue.SESSION_SHAFTS, Range.ALL_TIME, allTime.shafts());
 		data.put(HudValue.SESSION_POWDER, Range.ALL_TIME, allTime.powder());
 		data.put(HudValue.SESSION_CORPSE_FINE, Range.ALL_TIME, allTime.fine());
 		data.put(HudValue.MINED_METAL, Range.ALL_TIME, allTime.metal() / perTier);
+		data.put(HudValue.FOSSIL_ESSENCE, Range.ALL_TIME, allTime.essence());
 		if (allTime.shafts() == 0) data.placeholders(Range.ALL_TIME);
 		if (thisShaft != null) {
 			data.put(HudValue.SESSION_POWDER, Range.SHAFT, thisShaft.powder());
 			data.put(HudValue.SESSION_CORPSE_FINE, Range.SHAFT, thisShaft.fine());
 			data.put(HudValue.MINED_METAL, Range.SHAFT, thisShaft.metal() / perTier);
+			data.put(HudValue.FOSSIL_ESSENCE, Range.SHAFT, thisShaft.essence());
 		}
 		for (String type : CorpseType.ORDER) {
 			String target = HudValue.targetTag(type);
@@ -268,6 +280,8 @@ public final class HudData {
 			if (powderPerHour != null) data.put(HudValue.SESSION_POWDER, Range.PER_HOUR, Math.round(powderPerHour));
 			data.put(HudValue.SESSION_CORPSE_FINE, Range.PER_HOUR, summary.perHour(totals.fine(), now));
 			data.put(HudValue.MINED_METAL, Range.PER_HOUR, summary.perHour(totals.metal() / perTier, now));
+			Double essencePerHour = summary.perHour(totals.essence(), now);
+			if (essencePerHour != null) data.put(HudValue.FOSSIL_ESSENCE, Range.PER_HOUR, Math.round(essencePerHour));
 		}
 		data.put(HudValue.SPAWN_TIMER, spawnTimer);
 		data.inShaft = shaft != null;
@@ -345,6 +359,35 @@ public final class HudData {
 		put(HudValue.SESSION_TIME, extra.sessionMillis());
 		put(HudValue.SINCE_LAST_SHAFT, extra.sinceShaft());
 		return put(HudValue.SHAFTS_TODAY, extra.shaftsToday());
+	}
+
+	// whole percent, null = -
+	public HudData efficiency(Long percent) {
+		return put(HudValue.EFFICIENCY, percent);
+	}
+
+	// last minute every 10 s, oldest 1st. usual = median of this shaft type, null = none (tunnels, never mined)
+	public HudData efficiencyTrack(List<Double> points, Double usual) {
+		efficiencyTrack = List.copyOf(points);
+		usualEfficiency = usual;
+		return this;
+	}
+
+	public List<Double> efficiencyTrack(boolean example) {
+		return efficiencyTrack.size() < 2 && example ? EXAMPLE.efficiencyTrack : efficiencyTrack;
+	}
+
+	public Double usualEfficiency(boolean example) {
+		return efficiencyTrack.size() < 2 && example ? EXAMPLE.usualEfficiency : usualEfficiency;
+	}
+
+	// ms left per active one, missing = off
+	public HudData consumables(Map<Consumable, Long> left) {
+		for (HudValue value : HudValue.values()) {
+			Long ms = value.consumable() == null ? null : left.get(value.consumable());
+			if (ms != null) put(value, ms);
+		}
+		return this;
 	}
 
 	// null = no pity widget
@@ -456,9 +499,16 @@ public final class HudData {
 				.put(HudValue.MINED_METAL, 301.3)
 				.put(HudValue.MINED_METAL, Range.PER_HOUR, 98.6)
 				.put(HudValue.MINED_METAL, Range.ALL_TIME, 2_140.7)
+				.put(HudValue.FOSSIL_ESSENCE, Range.SHAFT, 283L)
+				.put(HudValue.FOSSIL_ESSENCE, 1_131L)
+				.put(HudValue.FOSSIL_ESSENCE, Range.PER_HOUR, 566L)
+				.put(HudValue.FOSSIL_ESSENCE, Range.ALL_TIME, 6_412L)
 				.put(HudValue.SPAWN_TIMER, 102_000L)
 				.put(HudValue.DRYSTREAK, 12L)
 				.pity(new TabListParser.Pity(1_498, 2_000))
+				.efficiency(69L)
+				// recording 5, 2nd jasper shaft per minute from pristine msgs, own blocks (mockups/efficiency-v1.html)
+				.efficiencyTrack(List.of(0.74, 0.81, 0.78, 0.58, 0.70, 0.68, 0.69, 0.52, 0.62, 0.78, 0.62), 0.68)
 				// mockup hud-graphs-v1, real journal shafts
 				.recentSpawns(List.of(new Spawn(16_000, "UMBE"), new Spawn(4_000, "TITA"), new Spawn(79_000, "FAIR"),
 						new Spawn(81_000, "JASP"), new Spawn(41_000, "TUNG"), new Spawn(42_000, "CITR"), new Spawn(80_000, "ONYX"),
@@ -506,6 +556,8 @@ public final class HudData {
 						item("Suspicious Scrap", 1, 0.14)), List.of(),
 						List.of(source("Mined gems", 2.8, gem("Jasper", 61, 2.8)), source("Glossy Gemstones", 1.5, item("Glossy Gemstone", 1, 1.5)),
 								source("Corpse loot", 0.2, gem("Citrine", 6, 0.2)), source("Suspicious Scrap", 0.14, item("Suspicious Scrap", 1, 0.14)))))
+				.consumables(Map.of(Consumable.PRISTINE_POTATO, 2_532_000L, Consumable.FILET_O_FORTUNE, 2_528_000L,
+						Consumable.COLD_RESISTANCE, 1_814_000L, Consumable.FIESTA_FLASK, 712_000L))
 				.put(HudValue.FPS, 144L)
 				.put(HudValue.PING, 42L)
 				.put(HudValue.TPS, 19.9);
@@ -548,6 +600,7 @@ public final class HudData {
 			case SESSION_SPAWN -> Format.duration(n) + " avg";
 			case SHAFT_CORPSES, SHAFT_LAPIS, SESSION_SHAFTS -> Long.toString(n);
 			case SHAFT_COLD -> n + "❄";
+			case SHAFT_EFFICIENCY -> Format.percent(v);
 			case SESSION_RATE -> Format.decimal(v);
 			case DRYSTREAK -> result.current() + " (longest " + n + ")";
 		};

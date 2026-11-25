@@ -27,7 +27,8 @@ final class EditorGuide {
 	private static final int SCROLL_STEP = 12;
 	private static final String TEXT = "§eHow the HUD editor works\n"
 			+ "§fBoxes §7Drag a box to move it. It snaps to the screen edges and other boxes, hold Ctrl to place it "
-			+ "freely. Arrow keys nudge the selected box, scrolling on it resizes it. Click a box to edit it.\n"
+			+ "freely. Drop it on the 4 px gap under or next to another box and it sticks: it moves along when that box "
+			+ "grows, shrinks or hides. Arrow keys nudge the selected box, scrolling on it resizes it. Click a box to edit it.\n"
 			+ "§fLines §7Add line shows every value, hover one to see what it counts. Click a line to change its "
 			+ "label, period, format and colours. Drag the grip to move it, untick to hide it. Some values can show a bar or a "
 			+ "chart: pick it under Show.\n"

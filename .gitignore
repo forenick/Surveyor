@@ -45,3 +45,4 @@ logs/
 
 # old-save test output, check by hand
 src/test/resources/old-saves/*/*.new
+Claude outputs/

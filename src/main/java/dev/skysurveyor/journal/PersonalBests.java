@@ -7,6 +7,7 @@ import java.util.function.Function;
 import dev.skysurveyor.data.CorpseType;
 import dev.skysurveyor.data.ShaftNames;
 import dev.skysurveyor.journal.JournalStats.SessionSummary;
+import dev.skysurveyor.mining.Efficiency;
 import dev.skysurveyor.money.MoneyStats;
 
 // the Stats tabs personal bests, built from a list the player can change
@@ -39,6 +40,8 @@ public final class PersonalBests {
 		SHAFT_LAPIS("shaft_lapis", Per.SHAFT, "Lapis", false),
 		// coldest = lowest, cold is negative
 		SHAFT_COLD("shaft_cold", Per.SHAFT, "Cold", true),
+		// own blocks against nonstop, shafts w/ 5 min of mining (mining/Efficiency.record)
+		SHAFT_EFFICIENCY("shaft_efficiency", Per.SHAFT, "Efficiency", false),
 		SESSION_SHAFTS("session_shafts", Per.SESSION, "Shafts", false),
 		SESSION_RATE("session_rate", Per.SESSION, "Shafts / h", false),
 		SESSION_COINS("session_coins", Per.SESSION, "Coins", false),
@@ -132,7 +135,7 @@ public final class PersonalBests {
 	// nicks pick (2026-11-14): fastest spawn, fastest session + lapis / shaft gone
 	public static final List<Def> DEFAULTS = List.of(new Def("session_rate", null, null, null),
 			new Def("session_shafts", null, null, null), new Def("shaft_powder", null, null, null),
-			new Def("shaft_gems", null, null, null), new Def("shaft_metal", null, null, null),
+			new Def("shaft_gems", null, null, null), new Def("shaft_efficiency", null, null, null), new Def("shaft_metal", null, null, null),
 			new Def("shaft_coins", null, null, null), new Def("session_coin_rate", null, null, null),
 			new Def("drystreak", DEFAULT_DRY, null, null));
 
@@ -258,6 +261,7 @@ public final class PersonalBests {
 			case SHAFT_CORPSES -> (double) CorpseCounts.looted(CorpseCounts.of(entry));
 			case SHAFT_LAPIS -> (double) CorpseCounts.looted(entry, CorpseType.LAPIS.label());
 			case SHAFT_COLD -> entry.coldAtExit() == null ? null : (double) entry.coldAtExit();
+			case SHAFT_EFFICIENCY -> Efficiency.record(entry.mining());
 			default -> null;
 		};
 	}

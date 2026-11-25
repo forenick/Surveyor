@@ -15,6 +15,7 @@ import dev.skysurveyor.detection.ShaftEvent.CrystalFound;
 import dev.skysurveyor.detection.ShaftEvent.CrystalOwned;
 import dev.skysurveyor.detection.ShaftEvent.ExitBonus;
 import dev.skysurveyor.detection.ShaftEvent.ExtraCorpses;
+import dev.skysurveyor.detection.ShaftEvent.FossilEssence;
 import dev.skysurveyor.detection.ShaftEvent.FrozeToDeath;
 import dev.skysurveyor.detection.ShaftEvent.KeySaved;
 import dev.skysurveyor.detection.ShaftEvent.MayhemBuff;
@@ -23,6 +24,7 @@ import dev.skysurveyor.detection.ShaftEvent.RareDrop;
 import dev.skysurveyor.detection.ShaftEvent.SacksChanged;
 import dev.skysurveyor.detection.ShaftEvent.ScrapFound;
 import dev.skysurveyor.detection.ShaftEvent.Supercraft;
+import dev.skysurveyor.detection.ShaftEvent.WarpFailed;
 import dev.skysurveyor.detection.ShaftEvent.Warping;
 
 // only ShaftTracker changes it, final once exitReason is set
@@ -73,6 +75,11 @@ public final class Shaft {
 	private final Map<String, Long> notMinedInSacks = new LinkedHashMap<>();
 	// display choice, unconfirmed. loot block + msg come in the same click
 	static final long KEY_SAVED_WINDOW = 3_000;
+	// fossil blocks u broke, the bar only shows the last ones essence: essence = blocks x avg of the bars after a break
+	private int fossilBlocks;
+	private int essenceSamples;
+	private long essenceShown;
+	private boolean essencePending;
 	// goes up on every change but cold, so callers can cache
 	private int version;
 
@@ -88,6 +95,9 @@ public final class Shaft {
 				exitPowder = bye.powder();
 			}
 			case Warping warping -> pendingExit = ExitReason.WARP;
+			case WarpFailed failed -> {
+				if (pendingExit == ExitReason.WARP) pendingExit = null;
+			}
 			case FrozeToDeath death -> pendingExit = ExitReason.DEATH;
 			case MayhemBuff mayhem -> mayhemBuffs.add(mayhem.buff());
 			case ExtraCorpses extra -> extraCorpses += extra.count();
@@ -120,9 +130,12 @@ public final class Shaft {
 			case CampfirePlaced placed -> campfiresPlaced.add(now);
 			case CampfireUsed used -> campfireColds.add(cold);
 			case ScrapFound scrap -> scrapFound++;
+			// ShaftTracker samples it, not here
+			case FossilEssence essence -> {
+			}
 			case CrystalFound crystal -> crystals.add(crystal.item());
+			// each click runs twice: find = FOUND + 1 owned, owned crystal = 2 owned (recordings)
 			case CrystalOwned owned -> {
-				if (!crystals.isEmpty()) crystals.removeLast();
 			}
 			case Pristine pristine -> {
 				pristineProcs++;
@@ -136,12 +149,30 @@ public final class Shaft {
 				craftedSinceSacks.clear();
 				lastSacksAt = now;
 				pristineSinceSacks.clear();
-				notMinedPending.forEach((item, count) -> notMinedInSacks.merge(item, count, Long::sum));
-				notMinedPending.clear();
+				reported(sacks);
 			}
 			default -> {
 			}
 		}
+	}
+
+	void addFossilBlocks(int count) {
+		version++;
+		fossilBlocks += count;
+		essencePending = true;
+	}
+
+	boolean essencePending() {
+		return essencePending;
+	}
+
+	// 1st bar after a new block, lingering bars would weigh the last block twice. version only on a sample
+	void sampleEssence(int amount) {
+		if (!essencePending) return;
+		version++;
+		essenceSamples++;
+		essenceShown += amount;
+		essencePending = false;
 	}
 
 	void setId(ShaftId id) {
@@ -163,6 +194,19 @@ public final class Shaft {
 		version++;
 		leftAt = now;
 		exitReason = pendingExit == null ? ExitReason.UNKNOWN : pendingExit;
+	}
+
+	// capped hover ends in "+N other items", loot in there never reached sacksAdded so it isnt taken off (recording 8 PERI_C)
+	private void reported(SacksChanged sacks) {
+		if (sacks.otherAdded() > 0) {
+			Map<String, Long> listed = new LinkedHashMap<>();
+			sacks.added().forEach(item -> add(listed, item));
+			notMinedPending.replaceAll((item, count) -> Math.min(count, listed.getOrDefault(item, 0L)));
+		}
+		notMinedPending.forEach((item, count) -> {
+			if (count > 0) notMinedInSacks.merge(item, count, Long::sum);
+		});
+		notMinedPending.clear();
 	}
 
 	private void keySaved() {
@@ -249,6 +293,19 @@ public final class Shaft {
 
 	public List<String> crystals() {
 		return Collections.unmodifiableList(crystals);
+	}
+
+	public int fossilBlocks() {
+		return fossilBlocks;
+	}
+
+	public int essenceSamples() {
+		return essenceSamples;
+	}
+
+	// sum of the sampled bars
+	public long essenceShown() {
+		return essenceShown;
 	}
 
 	public int pristineProcs() {

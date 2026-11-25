@@ -19,6 +19,7 @@ import dev.skysurveyor.detection.ShaftEvent;
 import dev.skysurveyor.detection.ShaftTracker;
 import dev.skysurveyor.detection.TabListParser;
 import dev.skysurveyor.detection.TextPatterns;
+import dev.skysurveyor.effects.Consumable;
 import dev.skysurveyor.hud.HudData.SessionTotals;
 import dev.skysurveyor.hud.HudData.Totals;
 import dev.skysurveyor.hud.HudLayout.Anchor;
@@ -72,6 +73,10 @@ class HudTest {
 		assertEquals("1m 42s", HudFormat.format(Kind.TIME, 1, 102_000L));
 		assertEquals("42s", HudFormat.format(Kind.TIME, 1, 42_000L));
 		assertEquals("102s", HudFormat.format(Kind.TIME, 2, 102_000L));
+		assertEquals("42m", HudFormat.format(Kind.TIME, 3, 2_532_000L));
+		assertEquals("1h 0m", HudFormat.format(Kind.TIME, 3, 3_600_000L));
+		assertEquals("3:15", HudFormat.format(Kind.TIME, 3, 195_000L));
+		assertEquals(3, new HudLayout.Line(HudValue.PRISTINE_POTATO).format);
 		assertEquals("43,436", HudFormat.format(Kind.INTEGER, 0, 43_436L));
 		assertEquals("43.4k", HudFormat.format(Kind.INTEGER, 1, 43_436L));
 		assertEquals("1.2M", HudFormat.format(Kind.INTEGER, 1, 1_204_310L));
@@ -92,10 +97,10 @@ class HudTest {
 		List<Box> boxes = HudLayout.defaults().boxes;
 		assertEquals(List.of("§e§lSession", "§7Shafts: §f6", "§7Shafts/h: §f19.4", "§7Shaft powder: §b43,436"),
 				HudBoxText.lines(boxes.get(0), example, false));
-		assertEquals(List.of("§7Spawn: §f§l1:42", "§7Avg: §f§l1:25"), HudBoxText.lines(boxes.get(1), example, false),
+		assertEquals(List.of("§7Spawn: §f§l1:42", "§7Avg: §f§l1:25", "§7Efficiency: §f§l69%"), HudBoxText.lines(boxes.get(1), example, false),
 				"no colour rules on the defaults");
 		assertEquals(List.of("§a§l§a§lJade§a§l Shaft", "§7Time inside: §f2:14", "§7Corpses: §f2/4 §9Lapis§f, §6Umber§f",
-				"§7Campfires: §61", "§7Coins: §62.4M"), HudBoxText.lines(boxes.get(2), example, false), "title in the shafts colour");
+				"§7Campfires: §61", "§7Coins: §62.4M", "§7Efficiency: §f69%"), HudBoxText.lines(boxes.get(2), example, false), "title in the shafts colour");
 		assertEquals(List.of("§e§lSession profit", "§7Total: §614.8M", "§7Per hour: §646.8M", "§7Per shaft: §62.5M",
 				"§7Time: §f19:02", "§9Fine Jasper Gemstone §8x931", "§fGlossy Gemstone §8x13", "§9Fine Jade Gemstone §8x378",
 				"§fRefined Mineral §8x35", "§9Fine Amber Gemstone §8x83", "§77 more", "§fTungsten Key §8x3"), HudBoxText.lines(boxes.get(3), example, false), "/h once, drops last (nick, 2026-11-16)");
@@ -119,8 +124,8 @@ class HudTest {
 	void missingValuesShowADashOrTheExample() {
 		Box spawn = HudLayout.defaults().boxes.get(1);
 		HudData empty = HudFixtures.live(SessionTotals.NONE, Totals.NONE, null, null, null, 0, ShaftNames.defaults());
-		assertEquals(List.of("§7Spawn: §f§l-", "§7Avg: §f§l-"), HudBoxText.lines(spawn, empty, false));
-		assertEquals(List.of("§7Spawn: §f§l1:42", "§7Avg: §f§l1:25"), HudBoxText.lines(spawn, empty, true));
+		assertEquals(List.of("§7Spawn: §f§l-", "§7Avg: §f§l-", "§7Efficiency: §f§l-"), HudBoxText.lines(spawn, empty, false));
+		assertEquals(List.of("§7Spawn: §f§l1:42", "§7Avg: §f§l1:25", "§7Efficiency: §f§l69%"), HudBoxText.lines(spawn, empty, true));
 		assertEquals("Shaft", HudBoxText.tags("{shaft_type} Shaft", empty, false).strip(), "a missing tag is left out");
 		Box session = HudLayout.defaults().boxes.get(0);
 		assertEquals("§7Shafts: §f0", HudBoxText.lines(session, empty, false).get(1), "the HUD shows the real zero");
@@ -223,6 +228,8 @@ class HudTest {
 	@Test
 	void movesLinesToAGap() {
 		Box box = HudLayout.defaults().boxes.get(2);
+		// 4 lines, as when this was written
+		box.lines.subList(4, box.lines.size()).clear();
 		List<String> start = box.lines.stream().map(l -> l.value).toList();
 		box.moveLine(0, 2);
 		assertEquals(List.of(start.get(1), start.get(0), start.get(2), start.get(3)), box.lines.stream().map(l -> l.value).toList());
@@ -690,7 +697,7 @@ class HudTest {
 		bad.colorRules = new ArrayList<>(List.of(chain + " > 1 &c", deep + " < 1 &a"));
 		box.lines.add(1, bad);
 		List<String> lines = HudBoxText.lines(box, HudData.EXAMPLE, true);
-		assertEquals(List.of(before.get(0), "§7" + bad.text, before.get(1)), lines, "like any tag mistake: as typed");
+		assertEquals(List.of(before.get(0), "§7" + bad.text, before.get(1), before.get(2)), lines, "like any tag mistake: as typed");
 		assertEquals(List.of(chain + ": too long", deep + ": too long"), HudBoxText.problems(bad.text));
 		assertEquals(List.of("too long", "too long"), HudRules.parse(bad.colorRules).stream().map(HudRules.Rule::error).toList());
 	}
@@ -960,6 +967,44 @@ class HudTest {
 	}
 
 	@Test
+	void efficiencyLineRows() {
+		HudData data = HudFixtures.live(SessionTotals.NONE, Totals.NONE, null, null, null, 0, ShaftNames.defaults())
+				.efficiency(66L).efficiencyTrack(List.of(0.5, 0.8, 0.66), 0.7);
+		Line line = new Line(HudValue.EFFICIENCY);
+		line.valueColor = null;
+		Box box = pityBox(line);
+		line.showAs(HudLayout.ShowAs.BOTH);
+		HudRow row = HudBoxText.rows(box, data, false).getFirst();
+		assertEquals("§7Efficiency: §f66%", row.text());
+		HudGraph.Line chart = (HudGraph.Line) row.graph();
+		assertEquals(List.of(0.5, 0.8, 0.66), chart.points());
+		assertEquals(0.7, chart.usual());
+		line.showAs(HudLayout.ShowAs.GRAPH);
+		assertEquals("§7Efficiency", HudBoxText.rows(box, data, false).getFirst().text());
+		HudData one = HudFixtures.live(SessionTotals.NONE, Totals.NONE, null, null, null, 0, ShaftNames.defaults())
+				.efficiency(66L).efficiencyTrack(List.of(0.66), null);
+		assertNull(HudBoxText.rows(box, one, false).getFirst().graph(), "one point is no line yet");
+		assertEquals(11, ((HudGraph.Line) HudBoxText.rows(box, one, true).getFirst().graph()).points().size(), "editor example");
+	}
+
+	@Test
+	void efficiencyLineMaths() {
+		HudGraph.Line line = HudGraph.Line.of(List.of(0.0, 1.0), 0.5, 0xFFFFFFFF);
+		assertEquals(15, line.yAt(0), "lowest point at the bottom row");
+		assertEquals(0, line.yAt(HudGraph.Line.WIDTH - 1), "highest at the top row");
+		assertEquals(7, line.usualY(), "middle = row 15 - 7.5 rounded up");
+		assertEquals(HudGraph.Line.WIDTH, line.minWidth());
+		HudGraph.Line steady = HudGraph.Line.of(List.of(0.68, 0.70), null, 0);
+		assertEquals(0.59, steady.low(), 1e-9, "at least 20 points tall, around the points");
+		assertEquals(0.79, steady.high(), 1e-9);
+		HudGraph.Line real = HudGraph.Line.of(List.of(0.74, 0.81, 0.52), 0.68, 0);
+		assertEquals(0.52, real.low(), 1e-9, "wide enough on its own");
+		assertEquals(0, real.y(0.81));
+		HudGraph.Line one = HudGraph.Line.of(List.of(0.7), null, 0);
+		assertEquals(one.yAt(0), one.yAt(30), "one point is flat");
+	}
+
+	@Test
 	void coldIsANumber() {
 		HudData data = HudFixtures.live(SessionTotals.NONE, Totals.NONE, null, null, null, 0, ShaftNames.defaults()).cold(-12);
 		assertEquals("-12❄", HudBoxText.text(HudValue.SHAFT_COLD, null, 0, data, false));
@@ -1070,8 +1115,8 @@ class HudTest {
 
 	@Test
 	void totalsAddUp() {
-		assertEquals(new Totals(3, 30, 1.5, 0, 0, 480, Map.of()),
-				new Totals(1, 10, 0.5, 0, 0, 160, Map.of()).plus(new Totals(2, 20, 1, 0, 0, 320, Map.of())));
+		assertEquals(new Totals(3, 30, 1.5, 0, 0, 480, Map.of(), 0),
+				new Totals(1, 10, 0.5, 0, 0, 160, Map.of(), 0).plus(new Totals(2, 20, 1, 0, 0, 320, Map.of(), 0)));
 	}
 
 	@Test
@@ -1283,7 +1328,7 @@ class HudTest {
 		assertEquals("§7Spawn time last shaft: §f-", HudBoxText.lines(box, outside, false).getFirst());
 		spawn.setRange(Range.ALL_TIME);
 		assertEquals("§7Avg spawn all-time: §f1:31", HudBoxText.lines(box, HudData.EXAMPLE, false).getFirst());
-		assertEquals(Long.valueOf(15), new Totals(2, 0, 0, 30, 2, 0, Map.of()).averageSpawn());
+		assertEquals(Long.valueOf(15), new Totals(2, 0, 0, 30, 2, 0, Map.of(), 0).averageSpawn());
 		assertNull(Totals.NONE.averageSpawn());
 	}
 
@@ -1306,7 +1351,7 @@ class HudTest {
 	@Test
 	void presetsAddTheirLines() {
 		List<HudLayout.Preset> presets = HudLayout.presets();
-		assertEquals(List.of("Spawn", "Session", "Current shaft", "All-time", "Session profit", "Performance"),
+		assertEquals(List.of("Spawn", "Session", "Current shaft", "All-time", "Session profit", "Performance", "Consumables"),
 				presets.stream().map(HudLayout.Preset::name).toList());
 		HudLayout defaults = HudLayout.defaults();
 		assertEquals(defaults.boxes.get(1).id, presets.get(0).box().get().id);
@@ -1320,6 +1365,21 @@ class HudTest {
 		assertEquals(List.of("§7FPS: §f144", "§7Ping: §f42ms", "§7TPS: §f19.9"),
 				HudBoxText.lines(performance, HudData.EXAMPLE, true));
 		assertTrue(presets.get(0).box().get() != presets.get(0).box().get(), "a new box each time");
+		Box consumables = presets.get(6).box().get();
+		assertTrue(consumables.visible(true, false) && consumables.visible(false, true), "mines + shafts");
+		assertFalse(consumables.visible(false, false), "not elsewhere");
+		assertEquals(List.of("§7Pristine Potato: §542m", "§7Filet O' Fortune: §942m", "§7Cold Resistance: §b30m", "§7Fiesta Flask: §f11m"),
+				HudBoxText.lines(consumables, HudData.EXAMPLE, true));
+	}
+
+	@Test
+	void consumableLinesHideWhileOff() {
+		Box box = HudLayout.presets().get(6).box().get();
+		HudData none = HudData.live(SessionTotals.NONE, Totals.NONE, null, null, null, 0, ShaftNames.defaults(), MetalYield.ENCHANTED);
+		assertEquals(List.of(), HudBoxText.lines(box, none, false));
+		HudData potato = HudData.live(SessionTotals.NONE, Totals.NONE, null, null, null, 0, ShaftNames.defaults(), MetalYield.ENCHANTED)
+				.consumables(Map.of(Consumable.PRISTINE_POTATO, 61_000L));
+		assertEquals(List.of("§7Pristine Potato: §51:01"), HudBoxText.lines(box, potato, false));
 	}
 
 	private static String json(Box box) {
@@ -1332,7 +1392,7 @@ class HudTest {
 	void formatCodesMatchTheFormats() {
 		assertEquals(List.of("#,##0", "0.0k", "0"), HudFormat.options(Kind.INTEGER));
 		assertEquals(List.of("0.0", "0", "0.00"), HudFormat.options(Kind.DECIMAL));
-		assertEquals(List.of("m:ss", "m\"m\" s\"s\"", "s\"s\""), HudFormat.options(Kind.TIME));
+		assertEquals(List.of("m:ss", "m\"m\" s\"s\"", "s\"s\"", "m\"m\""), HudFormat.options(Kind.TIME));
 		for (Kind kind : List.of(Kind.INTEGER, Kind.DECIMAL, Kind.TIME)) {
 			assertEquals(HudFormat.options(kind).size(), HudFormat.names(kind).size(), kind + " names");
 			for (int i = 0; i < HudFormat.options(kind).size(); i++) assertFalse(HudFormat.example(kind, i, "").isEmpty());

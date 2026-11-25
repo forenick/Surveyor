@@ -39,6 +39,8 @@ public final class Journal {
 	private boolean searching;
 	private long searchMillis;
 	private long lastMiningAt;
+	// gap ends at a world change, a warp isnt searching (recording 8 PERI_C)
+	private boolean warped;
 	private long portalFoundAt = -1;
 	private Long timedSearch;
 
@@ -50,6 +52,11 @@ public final class Journal {
 
 	public Session session() {
 		return session;
+	}
+
+	// last block hit, ability or shaft activity of the session
+	public long lastActivity() {
+		return lastActivity;
 	}
 
 	// session only really ends at the next activity
@@ -80,7 +87,7 @@ public final class Journal {
 	// null once session ran out, next activity drops that timer anyway
 	public Long spawnTimerMillis(long now) {
 		if (activeSession(now) == null) return null;
-		if (searching) return searchMillis + Math.max(0, Math.min(now - lastMiningAt, PAUSE_MILLIS));
+		if (searching) return searchMillis + Math.max(0, gap(now));
 		return timedSearch;
 	}
 
@@ -93,7 +100,7 @@ public final class Journal {
 		switch (event) {
 			case PortalSpawned spawned when spawned.foundByYou() -> {
 				touch(now);
-				timedSearch = searching ? searchMillis + Math.min(now - lastMiningAt, PAUSE_MILLIS) : null;
+				timedSearch = searching ? searchMillis + gap(now) : null;
 				searching = false;
 				portalFoundAt = now;
 			}
@@ -114,6 +121,12 @@ public final class Journal {
 		}
 	}
 
+	public void onWorldChange(long now) {
+		if (!searching || warped) return;
+		searchMillis += gap(now);
+		warped = true;
+	}
+
 	public void newSession(long now) {
 		session = new Session(now, 0, 0, 0);
 		lastActivity = now;
@@ -130,7 +143,7 @@ public final class Journal {
 		// mining between finding and entering belongs to neither search
 		if (portalFoundAt >= 0 && now - portalFoundAt <= PAUSE_MILLIS) return;
 		if (searching) {
-			searchMillis += Math.min(now - lastMiningAt, PAUSE_MILLIS);
+			searchMillis += gap(now);
 		} else {
 			searching = true;
 			searchMillis = 0;
@@ -138,6 +151,11 @@ public final class Journal {
 			timedSearch = null;
 		}
 		lastMiningAt = now;
+		warped = false;
+	}
+
+	private long gap(long now) {
+		return warped ? 0 : Math.min(now - lastMiningAt, PAUSE_MILLIS);
 	}
 
 	private void touch(long now) {

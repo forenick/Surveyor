@@ -86,7 +86,8 @@ final class AdvancedPage {
 
 		String start = line.advancedText(box);
 		textArea = new FreeTextArea(Sizing.fill(100), Sizing.fixed(3 * lineHeight + 8), false);
-		textArea.setCharacterLimit(TEXT_LIMIT);
+		// never below whats there, setValue would cut a hand edit + it gets saved
+		textArea.setCharacterLimit(Math.max(TEXT_LIMIT, start.length()));
 		textArea.text(start);
 		textArea.margins(Insets.top(2));
 		String[] last = {start};
@@ -113,7 +114,7 @@ final class AdvancedPage {
 		panel.child(rulesHead);
 		String rules = String.join("\n", line.advancedRules());
 		rulesArea = new FreeTextArea(Sizing.fill(100), Sizing.fixed(4 * lineHeight + 8), true);
-		rulesArea.setCharacterLimit(RULES_LIMIT);
+		rulesArea.setCharacterLimit(Math.max(RULES_LIMIT, rules.length()));
 		rulesArea.text(rules);
 		rulesArea.margins(Insets.top(2));
 		screen.tip(rulesArea, RULES_HELP);

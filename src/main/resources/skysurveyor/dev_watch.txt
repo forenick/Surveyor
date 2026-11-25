@@ -1,0 +1,17 @@
+# chat w/ one of these words that no pattern in patterns.txt matches gets an "unmatched" mark in recordings
+# display choice, not game data. one word per line, case doesnt matter
+corpse
+shaft
+mineshaft
+sacks
+pristine
+campfire
+cold
+frozen
+glacite
+gemstone
+loot
+key
+treasure
+powder
+fossil

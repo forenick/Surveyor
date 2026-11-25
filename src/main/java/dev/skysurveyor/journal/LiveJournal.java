@@ -2,6 +2,7 @@ package dev.skysurveyor.journal;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -18,6 +19,8 @@ import org.slf4j.LoggerFactory;
 
 import dev.skysurveyor.detection.ShaftEvent;
 import dev.skysurveyor.detection.TextPatterns;
+import dev.skysurveyor.mining.MiningMeter;
+import dev.skysurveyor.mining.MiningNow;
 import dev.skysurveyor.money.LiveMoney;
 import dev.skysurveyor.settings.LiveSettings;
 import dev.skysurveyor.settings.SummarySettings;
@@ -33,6 +36,7 @@ public final class LiveJournal {
 	private final Stash stash;
 	private final PriceCheck priceCheck = new PriceCheck();
 	private final Breaks breaks;
+	private final MiningNow meter;
 	private final FirstRunHint firstRun = new FirstRunHint();
 	private final LiveMoney money;
 	private final LiveSettings settings;
@@ -60,6 +64,7 @@ public final class LiveJournal {
 		outside = new OutsideMining(TextPatterns.defaults(), inMiningArea, journal::activeSession, this::onMining);
 		stash = new Stash(TextPatterns.defaults(), inMiningArea, journal::activeSession, savedStash::add);
 		breaks = new Breaks(inMiningArea, journal::activeSession, savedBreaks::add);
+		meter = new MiningNow(inMiningArea);
 		this.money = money;
 		this.settings = settings;
 	}
@@ -74,14 +79,13 @@ public final class LiveJournal {
 
 	public void start(Minecraft client) {
 		Path folder = DataFolder.in(client.gameDirectory.toPath());
-		saved.load(client, new JournalFile(folder.resolve("journal.jsonl"), io), () -> Resume.shafts(journal, breaks, entries, mining));
+		saved.load(client, new JournalFile(folder.resolve("journal.jsonl"), io), () -> Resume.shafts(journal, breaks, entries, mining, paused));
 		savedMining.load(client, new JsonLinesFile<>(folder.resolve("mining.jsonl"), MiningEntry.class, entry -> entry.items() != null, io),
-				() -> Resume.activity(journal, breaks, entries, mining));
+				() -> Resume.activity(journal, breaks, entries, mining, paused));
 		savedStash.load(client, new JsonLinesFile<>(folder.resolve("stash.jsonl"), StashEntry.class, entry -> entry.grew() > 0, io), () -> {
 		});
 		savedBreaks.load(client, new JsonLinesFile<>(folder.resolve("breaks.jsonl"), BreakEntry.class, entry -> entry.to() > entry.from(), io),
-				() -> {
-				});
+				() -> Resume.activity(journal, breaks, entries, mining, paused));
 	}
 
 	// client thread list + its file
@@ -112,6 +116,8 @@ public final class LiveJournal {
 	public void onEvent(ShaftEvent event) {
 		boolean wasRunning = journal.searchRunning();
 		long now = System.currentTimeMillis();
+		// before the journal, a shaft left reads it
+		Guard.run("mining meter", () -> meter.onEvent(event, now));
 		Guard.run("journal", () -> journal.onEvent(event, now));
 		Guard.run("outside mining", () -> outside.onEvent(event, now));
 		Guard.run("stash", () -> stash.onEvent(event, now));
@@ -135,6 +141,7 @@ public final class LiveJournal {
 		Guard.run("stash block hit", () -> stash.onBlockHit(now));
 		Guard.run("price check block hit", () -> priceCheck.onBlockHit(now));
 		Guard.run("breaks block hit", () -> breaks.onBlockHit(now));
+		Guard.run("mining meter block hit", () -> meter.onHit(now));
 		logTimerStart(wasRunning);
 	}
 
@@ -145,8 +152,35 @@ public final class LiveJournal {
 		}
 	}
 
+	// a block u were hitting went (mining/BlockWatch). spread = touching blocks that went w/ it
+	public void onBlockBreak(String block, int ticks, boolean clean, List<String> gone) {
+		meter.onBreak(System.currentTimeMillis(), block, ticks, clean, MiningMeter.spread(block, gone));
+	}
+
+	// every tick on the same block, so a slow block isnt a pause
+	public void onStillMining() {
+		meter.onHit(System.currentTimeMillis());
+	}
+
+	public boolean boosting() {
+		return meter.boosting();
+	}
+
+	// the hud line: this shaft or this tunnel loop, whole percent. null = -. client thread
+	public Long efficiency(long now) {
+		return meter.percent(now);
+	}
+
+	// the hud line chart, oldest 1st. client thread
+	public List<Double> efficiencyTrack(long now) {
+		return meter.track(now);
+	}
+
+	// after the trackers world change, so the shaft left already has its numbers
 	public void onWorldChange() {
+		journal.onWorldChange(System.currentTimeMillis());
 		outside.onWorldChange(System.currentTimeMillis());
+		meter.onWorldChange();
 	}
 
 	private void logTimerStart(boolean wasRunning) {
@@ -174,6 +208,10 @@ public final class LiveJournal {
 	// new object on every change
 	public Journal.Session activeSession(long now) {
 		return journal.activeSession(now);
+	}
+
+	public long lastActivity() {
+		return journal.lastActivity();
 	}
 
 	public List<JournalEntry> sessionEntries(Journal.Session session) {
@@ -238,6 +276,15 @@ public final class LiveJournal {
 		return journal.spawnTimerMillis(now);
 	}
 
+	// file name -> lines it couldnt read, for bug reports
+	public Map<String, Integer> skippedLines() {
+		Map<String, Integer> skipped = new LinkedHashMap<>();
+		for (Saved<?> part : List.of(saved, savedMining, savedStash, savedBreaks)) {
+			if (part.file != null) skipped.put(part.file.path().getFileName().toString(), part.file.skipped());
+		}
+		return skipped;
+	}
+
 	public void newSession() {
 		journal.newSession(System.currentTimeMillis());
 	}
@@ -261,7 +308,8 @@ public final class LiveJournal {
 
 	// called from inside journal.onEvent, a throw here would leave the journal half done
 	private void onEntry(JournalEntry finished) {
-		JournalEntry entry = Guard.get("entry prices", () -> money.withPrices(finished), () -> finished.withPrices(Map.of()));
+		JournalEntry mined = Guard.get("entry mining", () -> finished.withMining(meter.shaftStats(finished.enteredAt(), finished.endedAt())), () -> finished);
+		JournalEntry entry = Guard.get("entry prices", () -> money.withPrices(mined), () -> mined.withPrices(Map.of()));
 		saved.add(entry);
 		Guard.each("entry listener", entryListeners, entry);
 		SummarySettings.Show show = settings.get().summary().show();

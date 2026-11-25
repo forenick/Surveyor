@@ -43,6 +43,9 @@ Saves every shaft automatically:
 - powder, Mayhem buff, cold, campfires and Suspicious Scrap
 - mined gems, from your Sacks
 - spawn time: mining time in the Dwarven Mines until "WOW!" (breaks count as 40 s max)
+- mining efficiency per shaft, with blocks broken, ticks a block, boost and setup time
+- title on entry: shaft type, corpses, fossil and Mayhem buff
+- fossil waypoint: a box around the shaft's fossil
 - chat summary after each shaft
 
 </td>
@@ -50,7 +53,7 @@ Saves every shaft automatically:
 
 <h3><img src="docs/icons/money.png" height="16" alt=""> Real Value's</h3>
 
-- coin value per shaft: mined gems, drops, corpse loot, scrap and crystals, minus keys and campfires
+- coin value per shaft: mined gems, drops, corpse loot, scrap, crystals and Fossil Essence, minus keys and campfires
 - Bazaar, lowest BIN or NPC prices
 - each shaft keeps the prices from that day
 - sell price, gem tier and Bazaar tax in `/sv settings`
@@ -75,6 +78,7 @@ Saves every shaft automatically:
 - drop chances per corpse type, from your own corpses
 - avg coins per shaft type
 - coins/h and avg spawn per session, as bars or a line
+- efficiency per shaft type
 - personal bests
 - range: all time, last 7 days, last 5 sessions or since the last shaft patch
 
@@ -86,10 +90,10 @@ Saves every shaft automatically:
 <h3><img src="docs/icons/settings.png" height="16" alt=""> HUD <code>/sv</code> → Edit HUD</h3>
 
 - default boxes: session, session profit, spawn timer and current shaft
-- add your own boxes and lines: spawn timer, shafts/h, powder, coins, drops, shaft pity, corpses, cold, FPS, ping, TPS and more
+- add your own boxes and lines: spawn timer, efficiency, shafts/h, powder, coins, drops, shaft pity, corpses, cold, consumable timers, FPS, ping, TPS and more
 - periods: this shaft, session, today, per hour or all-time
 - colour rules, f.e. spawn timer red above your avg
-- snapping, presets, undo and redo
+- snapping, boxes that stick to each other, presets, undo and redo
 - custom text with `&` colour codes and `{tags}`
 
 </td>
@@ -135,7 +139,8 @@ The journal can also get a hotkey in Controls, under Surveyor.
 
 ### Is it safe?
 Surveyor only reads what your game already receives and draws its own screens. It never sends chat, commands,
-clicks or packets, and has no ESP or x-ray. The only thing it downloads is
+clicks or packets, and has no ESP or x-ray. The fossil waypoint shows through walls, but its spots come
+from Surveyor's own list of shaft layouts, not from the world. The only thing it downloads is
 prices, from Hypixel's API and a lowest BIN list (EliteSkyblock or hysky.de).
 
 ### Your data

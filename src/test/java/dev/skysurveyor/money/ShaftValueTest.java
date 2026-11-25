@@ -11,6 +11,7 @@ import dev.skysurveyor.detection.CorpseLoot;
 import dev.skysurveyor.detection.ItemCount;
 import dev.skysurveyor.detection.TextPatterns;
 import dev.skysurveyor.journal.EntryBuilder;
+import dev.skysurveyor.journal.FossilYield;
 import dev.skysurveyor.journal.GemYield;
 import dev.skysurveyor.journal.JournalEntry;
 import dev.skysurveyor.journal.MetalYield;
@@ -216,6 +217,29 @@ class ShaftValueTest {
 		assertFalse(LiveMoney.freshForSnapshot(PriceBook.EMPTY, at));
 	}
 
+	// bin sources down for days, bazaar fine: the cached bin isnt saved as that days price
+	@Test
+	void snapshotsLeaveOldBinsOut() {
+		long at = 1_000_000_000L;
+		long end = at + 3 * 24 * 60 * 60_000L + 60_000;
+		// made up npc prices, the live book always has them from the item list
+		PriceBook book = PriceBook.EMPTY.withBins(Map.of("CAGED_WISP", 60_000_000.0, "FINE_JADE_GEM", 1.0), at)
+				.withBazaar(Map.of("FINE_JADE_GEM", bz(28_000, 30_000)), at + 3 * 24 * 60 * 60_000L)
+				.withNpc(Map.of("CAGED_WISP", 50_000.0, "FINE_JADE_GEM", 3_000.0));
+		ShaftValue.Prices saved = LiveMoney.forSnapshot(book, end);
+		assertNull(saved.get("CAGED_WISP"), "ah item w/ an npc price isnt saved at npc");
+		assertEquals(new ItemPrice(28_000.0, 30_000.0, null, 3_000.0), saved.get("FINE_JADE_GEM"));
+		// layered = todays bin once it comes back
+		JournalEntry withSaved = entry().withPrices(ShaftValue.snapshot(saved, (prices, used) -> {
+			prices.get("CAGED_WISP");
+			prices.get("FINE_JADE_GEM");
+		}));
+		assertFalse(withSaved.prices().containsKey("CAGED_WISP"));
+		assertEquals(60_000_000.0, LiveMoney.forSnapshot(book.withBins(Map.of("CAGED_WISP", 60_000_000.0), at + 3 * 24 * 60 * 60_000L), end)
+				.get("CAGED_WISP").lowestBin(), 1e-6);
+		assertNull(LiveMoney.forSnapshot(PriceBook.EMPTY, at));
+	}
+
 	@Test
 	void pricesSaveAsShortArrays() {
 		Gson gson = new Gson();
@@ -260,6 +284,22 @@ class ShaftValueTest {
 		assertTrue(value.unpriced().stream().anyMatch(l -> l.item().equals("Caged Wisp")));
 		assertTrue(value.unpriced().stream().anyMatch(l -> l.part() == Part.SCRAP));
 		assertEquals(0, value.corpses().get(1).key(), 1e-6);
+	}
+
+	@Test
+	void fossilEssenceAtTheSellPrice() {
+		Map<String, ItemPrice> prices = new HashMap<>(PRICES);
+		prices.put("ESSENCE_FOSSIL", bz(1_700, 1_900));
+		JournalEntry entry = EntryBuilder.from(entry()).fossil(new FossilYield(43, 17, 112)).build();
+		ShaftValue value = ShaftValue.of(entry, prices::get, MoneySettings.DEFAULTS, IDS, PATTERNS);
+		assertEquals(List.of(new Line(Part.FOSSIL, "Fossil Essence", 283, 283 * 1_700 * TAX)),
+				value.lines().stream().filter(l -> l.part() == Part.FOSSIL).toList());
+		assertTrue(ShaftValue.snapshot(entry, prices::get, MoneySettings.DEFAULTS, IDS, PATTERNS).containsKey("ESSENCE_FOSSIL"));
+		// no npc price
+		ShaftValue ironman = ShaftValue.of(entry, prices::get, MoneySettings.DEFAULTS.withIronman(true), IDS, PATTERNS);
+		assertTrue(ironman.unpriced().stream().anyMatch(l -> l.part() == Part.FOSSIL));
+		assertTrue(ShaftValue.of(entry(), prices::get, MoneySettings.DEFAULTS, IDS, PATTERNS).lines().stream()
+				.noneMatch(l -> l.part() == Part.FOSSIL));
 	}
 
 	@Test

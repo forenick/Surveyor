@@ -8,6 +8,9 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.ToDoubleFunction;
+import java.util.function.ToIntFunction;
+
+import dev.skysurveyor.util.Format;
 
 public sealed interface Setting permits Setting.Choice, Setting.Number, Setting.Toggle {
 	String name();
@@ -47,6 +50,10 @@ public sealed interface Setting permits Setting.Choice, Setting.Number, Setting.
 	}
 
 	record Unused(Predicate<Settings> when, String why) {
+	}
+
+	// colour next to a toggle, same row. rgb
+	record Swatch(String name, ToIntFunction<Settings> get, BiFunction<Settings, Integer, Settings> set) {
 	}
 
 	record Choice<T>(String name, String description, List<Option<T>> options, Function<Settings, T> get,
@@ -117,22 +124,31 @@ public sealed interface Setting permits Setting.Choice, Setting.Number, Setting.
 		}
 	}
 
+	// swatch null = no colour
 	record Toggle(String name, String description, Predicate<Settings> get, BiFunction<Settings, Boolean, Settings> set,
-			Unused unusedWhen) implements Setting {
+			Unused unusedWhen, Swatch swatch) implements Setting {
 		public Toggle(String name, String description, Predicate<Settings> get, BiFunction<Settings, Boolean, Settings> set) {
-			this(name, description, get, set, null);
+			this(name, description, get, set, null, null);
+		}
+
+		public Toggle(String name, String description, Predicate<Settings> get, BiFunction<Settings, Boolean, Settings> set,
+				Unused unusedWhen) {
+			this(name, description, get, set, unusedWhen, null);
 		}
 
 		public boolean isDefault(Settings settings) {
-			return get.test(settings) == get.test(Settings.DEFAULTS);
+			return get.test(settings) == get.test(Settings.DEFAULTS)
+					&& (swatch == null || swatch.get().applyAsInt(settings) == swatch.get().applyAsInt(Settings.DEFAULTS));
 		}
 
 		public Settings reset(Settings settings) {
-			return set.apply(settings, get.test(Settings.DEFAULTS));
+			Settings reset = set.apply(settings, get.test(Settings.DEFAULTS));
+			return swatch == null ? reset : swatch.set().apply(reset, swatch.get().applyAsInt(Settings.DEFAULTS));
 		}
 
 		public String defaultText() {
-			return get.test(Settings.DEFAULTS) ? "On" : "Off";
+			String onOff = get.test(Settings.DEFAULTS) ? "On" : "Off";
+			return swatch == null ? onOff : onOff + ", " + Format.hex(swatch.get().applyAsInt(Settings.DEFAULTS));
 		}
 	}
 }

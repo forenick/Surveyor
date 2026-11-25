@@ -68,8 +68,10 @@ public record GemYield(String gem, long rough, long flawed, long fine, long tail
 		// tail ratio from the mix as mined, compaction turns rough into flawed and would skew it
 		MinedCount gross = MinedCount.of(Ladder.gem(), gemOf, shaft.sacksBeforeCompacting(), shaft.notMinedInSacks());
 		long tailFlawed = tail.counts()[FLAWED];
-		return new GemYield(gem, mined.at(ROUGH), mined.at(FLAWED), mined.at(FINE), tailRough(tailFlawed, gross.at(ROUGH), gross.at(FLAWED)),
-				tailFlawed);
+		GemYield yield = new GemYield(gem, mined.at(ROUGH), mined.at(FLAWED), mined.at(FINE),
+				tailRough(tailFlawed, gross.at(ROUGH), gross.at(FLAWED)), tailFlawed);
+		// own gem only from loot = none mined, not 0.0 fine
+		return yield.rough + yield.flawed + yield.fine + yield.tailRough + yield.tailFlawed > 0 ? yield : null;
 	}
 
 	// tail is flawed only, rough in the same ratio as reported

@@ -58,11 +58,19 @@ public final class LiveTracker {
 
 	// each step + listener guarded on its own, a throw here would reach vanilla
 	public void onGameMessage(Component message, boolean overlay) {
-		if (overlay) return;
 		String legacy = Guard.get("chat", () -> TextUtil.toLegacy(message), () -> null);
 		if (legacy == null) return;
+		if (overlay) {
+			Guard.run("action bar", () -> tracker.onActionBar(System.currentTimeMillis(), legacy));
+			return;
+		}
 		Guard.run("chat", () -> tracker.onChat(System.currentTimeMillis(), legacy, TextUtil.hoverTexts(message)));
 		Guard.each("chat listener", chatListeners, legacy);
+	}
+
+	// mining/BlockWatch, client thread
+	public void onBlockBreak(String block, List<String> gone) {
+		tracker.onBlockBreak(block, gone);
 	}
 
 	// game closing inside a shaft, no world change comes

@@ -94,8 +94,9 @@ public final class HudExpr {
 	}
 
 	public static Parsed parse(String src) {
+		String key = cacheKey(src);
 		synchronized (CACHE) {
-			Parsed parsed = CACHE.get(src);
+			Parsed parsed = CACHE.get(key);
 			if (parsed != null) return parsed;
 		}
 		Parsed parsed;
@@ -105,9 +106,14 @@ public final class HudExpr {
 			parsed = new Parsed(null, e.getMessage());
 		}
 		synchronized (CACHE) {
-			CACHE.put(src, parsed);
+			CACHE.put(key, parsed);
 		}
 		return parsed;
+	}
+
+	// bare {pb} = 1st pb in the list, which can change, so its part of the key
+	static String cacheKey(String src) {
+		return HudValue.PERSONAL_BEST.defaultTarget() + "\n" + src;
 	}
 
 	public static Node parseOrThrow(String src) {

@@ -35,9 +35,9 @@ public final class ChartTips {
 		}
 		lines.add("");
 		long fasterSessions = timed.stream().filter(s -> s.averageSearchMillis() < average).count();
-		lines.add("§7Sessions faster than avg §f" + fasterSessions + " of " + timed.size() + " §8(" + percent(fasterSessions, timed.size()) + ")");
+		lines.add("§7Sessions faster than avg §f" + fasterSessions + " of " + timed.size() + " §8(" + Format.percent(fasterSessions, timed.size()) + ")");
 		long fasterShafts = shafts.stream().filter(m -> m < average).count();
-		lines.add("§7Shafts faster than avg §f" + percent(fasterShafts, shafts.size()));
+		lines.add("§7Shafts faster than avg §f" + Format.percent(fasterShafts, shafts.size()));
 		long fastest = timed.stream().mapToLong(SessionSummary::averageSearchMillis).min().orElse(0);
 		long slowest = timed.stream().mapToLong(SessionSummary::averageSearchMillis).max().orElse(0);
 		if (timed.size() > 1) {
@@ -49,7 +49,7 @@ public final class ChartTips {
 			double change = (average - latest) / (double) average;
 			lines.add("");
 			lines.add("§7Latest session §f" + Format.duration(latest) + " §7(" + (Math.round(change * 100) == 0 ? "same as avg"
-					: change > 0 ? "§a" + percent(change) + " faster§7" : "§c" + percent(-change) + " slower§7") + ")");
+					: change > 0 ? "§a" + Format.percent(change) + " faster§7" : "§c" + Format.percent(-change) + " slower§7") + ")");
 		}
 		return lines;
 	}
@@ -76,13 +76,13 @@ public final class ChartTips {
 		}
 		lines.add("");
 		long above = rates.stream().filter(r -> r > average).count();
-		lines.add("§7Sessions above avg §f" + above + " of " + rates.size() + " §8(" + percent(above, rates.size()) + ")");
+		lines.add("§7Sessions above avg §f" + above + " of " + rates.size() + " §8(" + Format.percent(above, rates.size()) + ")");
 		long earning = oldestFirst.stream().filter(s -> s.coins() != null && Math.round(s.coins()) > 0).count();
 		long counted = oldestFirst.stream().filter(s -> s.coins() != null).count();
-		lines.add("§7Sessions that made coins §f" + earning + " of " + counted + " §8(" + percent(earning, counted) + ")");
+		lines.add("§7Sessions that made coins §f" + earning + " of " + counted + " §8(" + Format.percent(earning, counted) + ")");
 		if (counted > 1 && total > 0) {
 			double best = oldestFirst.stream().filter(s -> s.coins() != null).mapToDouble(SessionCoins::coins).max().orElse(0);
-			if (best > 0) lines.add("§7Best session made §f" + percent(best / total) + " §7of all coins");
+			if (best > 0) lines.add("§7Best session made §f" + Format.percent(best / total) + " §7of all coins");
 		}
 		// latest only if it has a rate, else it'd be an older one
 		if (rates.size() > 1 && average > 0 && rated.getLast() == oldestFirst.getLast()) {
@@ -90,7 +90,7 @@ public final class ChartTips {
 			double change = (latest - average) / average;
 			lines.add("");
 			lines.add("§7Latest session " + CoinBreakdown.coins(latest) + " §7/ h (" + (Math.round(change * 100) == 0 ? "same as avg"
-					: change > 0 ? "§a+" + percent(change) + "§7 vs avg" : "§c-" + percent(-change) + "§7 vs avg") + ")");
+					: change > 0 ? "§a+" + Format.percent(change) + "§7 vs avg" : "§c-" + Format.percent(-change) + "§7 vs avg") + ")");
 		}
 		return lines;
 	}
@@ -100,13 +100,5 @@ public final class ChartTips {
 		int middle = sorted.size() / 2;
 		double upper = sorted.get(middle).doubleValue();
 		return sorted.size() % 2 == 1 ? upper : (sorted.get(middle - 1).doubleValue() + upper) / 2;
-	}
-
-	private static String percent(long part, long of) {
-		return percent(of == 0 ? 0 : part / (double) of);
-	}
-
-	private static String percent(double fraction) {
-		return Math.round(fraction * 100) + "%";
 	}
 }

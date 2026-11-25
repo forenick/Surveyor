@@ -5,6 +5,7 @@ import java.util.Map;
 
 import dev.skysurveyor.detection.Corpse;
 import dev.skysurveyor.detection.CorpseLoot;
+import dev.skysurveyor.mining.MiningStats;
 import dev.skysurveyor.money.ItemPrice;
 
 // tests only. defaults = a plain 1 min jade shaft, nothing found
@@ -35,6 +36,8 @@ public final class EntryBuilder {
 	private List<Integer> campfireColds;
 	private MetalYield metal;
 	private List<Integer> keysSaved;
+	private MiningStats mining;
+	private FossilYield fossil;
 
 	public static EntryBuilder entry() {
 		return new EntryBuilder();
@@ -47,13 +50,24 @@ public final class EntryBuilder {
 				.campfiresAt(e.campfiresAt()).coldAtExit(e.coldAtExit()).scrapFound(e.scrapFound())
 				.pristineProcs(e.pristineProcs()).pristineItems(e.pristineItems()).sacksAdded(e.sacksAdded())
 				.sacksRemoved(e.sacksRemoved()).gems(e.gems()).crystals(e.crystals()).otherDrops(e.otherDrops())
-				.prices(e.prices()).campfireColds(e.campfireColds()).metal(e.metal()).keysSaved(e.keysSaved());
+				.prices(e.prices()).campfireColds(e.campfireColds()).metal(e.metal()).keysSaved(e.keysSaved()).mining(e.mining())
+				.fossil(e.fossil());
 	}
 
 	public JournalEntry build() {
 		return new JournalEntry(version, sessionId, shaftId, enteredAt, durationMillis, exit, exitPowder, searchMillis, corpses,
 				extraCorpses, loots, mayhemBuffs, campfiresAt, coldAtExit, scrapFound, pristineProcs, pristineItems, sacksAdded,
-				sacksRemoved, gems, crystals, otherDrops, prices, campfireColds, metal, keysSaved);
+				sacksRemoved, gems, crystals, otherDrops, prices, campfireColds, metal, keysSaved, mining, fossil);
+	}
+
+	public EntryBuilder fossil(FossilYield value) {
+		fossil = value;
+		return this;
+	}
+
+	public EntryBuilder mining(MiningStats value) {
+		mining = value;
+		return this;
 	}
 
 	public EntryBuilder version(int value) {
