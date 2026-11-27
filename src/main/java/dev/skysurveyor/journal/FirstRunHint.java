@@ -1,12 +1,12 @@
 package dev.skysurveyor.journal;
 
-// once per game start, only till the 1st saved shaft. nothing saved
+// once per game start, till the 1st shaft. nothing saved
 public final class FirstRunHint {
-	public static final String TEXT = "§b[Surveyor] §7Tracking your shafts. §f/sv §7opens the journal.";
+	public static final String TEXT = "§b[Surveyor] §7Tracking your shafts. §f/sv §7opens the journal, §f/sv hud §7moves the boxes.";
 
 	private boolean shown;
 
-	// true once, caller prints it. not loaded yet = cant tell if they have shafts
+	// not loaded = cant tell
 	public boolean check(boolean inMines, boolean journalLoaded, int shafts) {
 		if (shown || !inMines || !journalLoaded || shafts > 0) return false;
 		shown = true;

@@ -16,7 +16,7 @@ import dev.skysurveyor.util.GameText;
 import dev.skysurveyor.util.Guard;
 import dev.skysurveyor.util.TextUtil;
 
-// same data and rate as the recorder, so replays act like live
+// same data + rate as the recorder, so replays act like live
 public final class LiveTracker {
 	private static final Logger LOGGER = LoggerFactory.getLogger("Surveyor Detection");
 
@@ -32,7 +32,7 @@ public final class LiveTracker {
 		listeners.add(listener);
 	}
 
-	// raw chat (legacy), after the tracker had it
+	// raw legacy chat, after the tracker
 	public void addChatListener(Consumer<String> listener) {
 		chatListeners.add(listener);
 	}
@@ -42,7 +42,7 @@ public final class LiveTracker {
 		tabListeners.add(listener);
 	}
 
-	// after the tracker, so a shaft left comes first
+	// after the tracker, so shaft left comes first
 	public void onWorldChange(Runnable listener) {
 		worldChanges.add(listener);
 	}
@@ -56,7 +56,7 @@ public final class LiveTracker {
 		return tracker.current();
 	}
 
-	// each step + listener guarded on its own, a throw here would reach vanilla
+	// each step + listener guarded alone, a throw here hits vanilla
 	public void onGameMessage(Component message, boolean overlay) {
 		String legacy = Guard.get("chat", () -> TextUtil.toLegacy(message), () -> null);
 		if (legacy == null) return;
@@ -68,12 +68,12 @@ public final class LiveTracker {
 		Guard.each("chat listener", chatListeners, legacy);
 	}
 
-	// mining/BlockWatch, client thread
+	// BlockWatch, client thread
 	public void onBlockBreak(String block, List<String> gone) {
 		tracker.onBlockBreak(block, gone);
 	}
 
-	// game closing inside a shaft, no world change comes
+	// game closed in a shaft, no world change comes
 	public void onQuit() {
 		worldChange(System.currentTimeMillis());
 	}

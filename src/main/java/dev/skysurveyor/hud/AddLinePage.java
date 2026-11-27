@@ -23,11 +23,10 @@ import static dev.skysurveyor.hud.EditorParts.section;
 import static dev.skysurveyor.hud.EditorParts.spacer;
 import static dev.skysurveyor.screen.ScreenParts.label;
 
-// + Add line: every value, a click adds it. periods under a value add that period
 final class AddLinePage {
-	// period row under a value, display choice
+	// display choice
 	private static final int PERIOD_INDENT = 8;
-	private static final int PERIOD_GAP = 7;
+	private static final int PERIOD_GAP = 3;
 
 	private final EditHudScreen screen;
 
@@ -51,7 +50,8 @@ final class AddLinePage {
 		header.child(label(screen.clip("§7Pick a value or a period", inner - font.width("‹ Back") - 16)));
 		panel.child(screen.crumbs(box, "Add a line"));
 		panel.child(header);
-		boolean full = ValueListing.periodsFit(box, inner - PERIOD_INDENT, PERIOD_GAP, font.width(" ✔"), font::width);
+		boolean full = ValueListing.periodsFit(box, inner - PERIOD_INDENT, PERIOD_GAP, font.width(" ✔"),
+				word -> font.width(word) + 2 * Chip.PAD);
 		for (HudValue.Group group : HudValue.Group.values()) {
 			panel.child(section(group.displayName()));
 			for (HudValue value : ValueListing.addLine(group)) {
@@ -78,7 +78,7 @@ final class AddLinePage {
 				for (HudValue.Period period : periods) {
 					boolean in = ValueListing.has(box, period);
 					String word = full ? period.name().toLowerCase(Locale.ROOT) : period.shortName();
-					Chip chip = new Chip(word + (in ? " §a✔" : ""), RANGE_TEXT, () -> screen.addLine(box, Line.of(period)));
+					Chip chip = new Chip(word + (in ? " §a✔" : ""), RANGE_TEXT, () -> screen.addLine(box, Line.of(period))).outlined();
 					screen.tip(chip, addTip(box, value, period, Line.of(period)));
 					options.child(chip);
 				}
@@ -89,7 +89,7 @@ final class AddLinePage {
 
 	private static FlowLayout periodRow() {
 		FlowLayout row = UIContainers.ltrTextFlow(Sizing.fill(100), Sizing.content());
-		row.margins(Insets.of(0, 2, PERIOD_INDENT, 0));
+		row.margins(Insets.of(1, 2, PERIOD_INDENT, 0));
 		row.gap(PERIOD_GAP);
 		return row;
 	}

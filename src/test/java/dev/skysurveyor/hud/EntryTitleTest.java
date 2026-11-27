@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-// topaz entry from recording 2026-11-15: id at 0.5 s, mayhem 1.5 s, corpses 2.0 s
+// topaz entry, rec 11-15: id 0.5 s, mayhem 1.5 s, corpses 2.0 s
 class EntryTitleTest {
 	private static final List<String> SCOREBOARD = List.of("§8§711/15/26 §8m88§8§u§8§8CT TOPA_1");
 	private static final String MAYHEM = "§b§lMAYHEM! §7You received a §6 Mining Fortune §7buff from your §aMineshaft Mayhem §7perk!";
@@ -43,7 +43,7 @@ class EntryTitleTest {
 		at(500);
 		tracker.onScoreboard(now, SCOREBOARD);
 		EntryTitle.Text first = title.text(now, 5);
-		assertEquals("§eTopaz Mineshaft", first.title());
+		assertEquals("§eTopaz 1", first.title());
 		// topaz has a fossil
 		assertEquals(List.of("§dFossil"), first.lines());
 		at(1_509);
@@ -52,6 +52,21 @@ class EntryTitleTest {
 		tracker.onTabList(now, TAB);
 		assertEquals(List.of("§f3 corpses: §9Lapis§7, §6Umber§7, §7Tungsten", "§dFossil", "§7Mayhem: §fMining Fortune"),
 				title.text(now, 5).lines());
+	}
+
+	@Test
+	void verdictLineOnceTheCorpsesShow() {
+		EntryTitle withVerdict = new EntryTitle(ShaftNames.defaults(), FossilSpots.defaults()::has,
+				shaft -> "§aMine: " + shaft.corpses().size() + " corpses");
+		ShaftTracker live = new ShaftTracker(TextPatterns.defaults(), event -> withVerdict.onEvent(event, now));
+		live.onWorldChange(0);
+		at(500);
+		live.onScoreboard(now, SCOREBOARD);
+		assertEquals(List.of("§dFossil"), withVerdict.text(now, 5).lines(), "no verdict before the corpses");
+		at(2_004);
+		live.onTabList(now, TAB);
+		assertEquals(List.of("§f3 corpses: §9Lapis§7, §6Umber§7, §7Tungsten", "§dFossil", "§aMine: 3 corpses"),
+				withVerdict.text(now, 5).lines(), "last line");
 	}
 
 	@Test
@@ -66,7 +81,7 @@ class EntryTitleTest {
 		assertNotNull(title.text(4_000, 5));
 		assertNotNull(title.text(8_900, 5));
 		assertEquals(0.2f, title.text(8_900, 5).alpha(), 1e-6);
-		// a loot doesnt bring it back or keep it up
+		// a loot doesnt bring it back
 		at(8_950);
 		tracker.onTabList(now, TAB_LOOTED);
 		assertNull(title.text(9_000, 5));
@@ -89,14 +104,14 @@ class EntryTitleTest {
 	void variantsAndCounts() {
 		tracker.onWorldChange(0);
 		tracker.onScoreboard(0, List.of("§711/21/26 §8m113BD PERI_C"));
-		assertEquals("§2Peridot Mineshaft §7(crystal)", title.text(0, 5).title());
+		assertEquals("§2Peridot crystal", title.text(0, 5).title());
 		assertEquals(List.of(), title.text(0, 5).lines(), "no fossil in crystal shafts");
 		assertEquals("§f4 corpses: §93 Lapis§7, §7Tungsten", EntryTitle.corpses(List.of(new Corpse("Lapis", false),
 				new Corpse("Lapis", false), new Corpse("Tungsten", false), new Corpse("Lapis", true))));
 		assertEquals("§f1 corpse: §bVanguard", EntryTitle.corpses(List.of(new Corpse("Vanguard", false))));
 	}
 
-	// every shaft entered in recording 2026-11-15 gets a title w/ its corpses + buff
+	// every shaft in rec 11-15 gets its corpses + buff title
 	@Test
 	void recording8EveryShaft() throws IOException {
 		Path recording = RecordingReplay.RECORDINGS.resolve("2026-11-15_16-10-29.jsonl");
@@ -116,7 +131,7 @@ class EntryTitleTest {
 		assertEquals(25, seen.size());
 		assertEquals(List.of("§f3 corpses: §9Lapis§7, §6Umber§7, §7Tungsten", "§dFossil", "§7Mayhem: §fMining Fortune"),
 				seen.get(2).lines());
-		assertEquals("§eTopaz Mineshaft", seen.get(2).title());
+		assertEquals("§eTopaz 1", seen.get(2).title());
 		assertEquals(List.of("§f1 corpse: §bVanguard", "§7Mayhem: §fMining Fortune"), seen.get(3).lines());
 	}
 }

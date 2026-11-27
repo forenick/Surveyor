@@ -7,10 +7,9 @@ import dev.skysurveyor.detection.ShaftEvent.PickaxeAbility;
 import dev.skysurveyor.detection.ShaftEvent.ShaftEntered;
 import dev.skysurveyor.detection.ShaftEvent.ShaftLeft;
 
-// mining = block hit or pickaxe ability. the one place for that + "in a shaft"
-// each user has its own copy, LiveJournal hands events to them one after another
+// mining = block hit or pickaxe ability, only defined here
+// one copy per user, LiveJournal feeds them in turn
 public final class MiningClock {
-	// where mining counts for lastAt
 	public enum Scope {
 		// price check
 		SHAFT,
@@ -30,12 +29,12 @@ public final class MiningClock {
 		this.inMiningArea = inMiningArea;
 	}
 
-	// true = mining that counts in scope, lastAt moved
+	// true = counts in scope, lastAt moved
 	public boolean onBlockHit(long now) {
 		return mined(now);
 	}
 
-	// true = mining that counts in scope. ShaftEntered/ShaftLeft flip inShaft
+	// true = counts in scope. entered/left flip inShaft
 	public boolean onEvent(ShaftEvent event, long now) {
 		switch (event) {
 			case PickaxeAbility ability -> {
@@ -53,7 +52,7 @@ public final class MiningClock {
 		return inShaft;
 	}
 
-	// tab list, lags a world change. can be true in a shaft for a moment
+	// tab list lags a world change, can be true in a shaft briefly
 	public boolean inMines() {
 		return inMiningArea.getAsBoolean();
 	}

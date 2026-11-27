@@ -24,7 +24,7 @@ dependencies {
 	compileOnly "io.wispforest:endec:0.1.12"
 	testRuntimeOnly "io.wispforest:endec:0.1.12"
 
-	// optional, only its api to compile ModMenuEntry, never in the jar
+	// optional, api for ModMenuEntry only, never in the jar
 	compileOnly("com.terraformersmc:modmenu:${project.modmenu_version}") { transitive = false }
 
 	testImplementation platform("org.junit:junit-bom:5.13.4")
@@ -59,14 +59,51 @@ jar {
 	from('LICENSE', 'COPYING', 'NOTICE.md')
 }
 
-// dev tool, lives in test so its not in the jar
-// ./gradlew replay --args="<recording> [--raw] [--cold]", no recording = newest in ../Recordings
+// dev tool, in test so not in the jar
+// ./gradlew replay --args="<recording> [--raw] [--cold] [--marks]", none = newest in ../Recordings
 tasks.register('replay', JavaExec) {
 	group = 'dev'
 	description = 'Prints a recording as a timeline and checks it against what the game saw live'
 	classpath = sourceSets.test.runtimeClasspath
 	mainClass = 'dev.skysurveyor.tools.Replay'
 	workingDir = projectDir
+}
+
+// screenshots: ./gradlew runClientGameTest, shots in build/run/clientGameTest/screenshots
+// not in build/check, opens a game window
+fabricApi {
+	configureTests {
+		createSourceSet = true
+		modId = "skysurveyor-gametest"
+		enableGameTests = false
+		enableClientGameTests = true
+		eula = true
+		// loom clears on every launch setup, ide sync too, wiped a run mid test
+		clearRunDirectory = false
+	}
+}
+
+def gameTestRun = layout.buildDirectory.dir('run/clientGameTest')
+def gameTestData = gameTestRun.map { it.dir('skysurveyor') }
+tasks.register('cleanGameTestRun', Delete) {
+	delete gameTestRun.map { it.dir('screenshots') }, gameTestRun.map { it.dir('saves') }, gameTestData
+}
+// -Pfresh: no journal, shoots the guide like a new install
+def freshShots = project.hasProperty('fresh')
+// real journal + hud from old-saves, else empty screens
+tasks.register('seedGameTestData', Copy) {
+	if (!freshShots) {
+		from('src/test/resources/old-saves/0.26.0-alpha.20') { exclude 'expected-*', 'hud.json' }
+		from('src/test/resources/old-saves/0.26.0-alpha.25') { include 'hud.json' }
+	}
+	// nicks bazaar prices 11-24, gems + campfire only, for the guide tab
+	from('src/gametest/resources/seed') { include 'prices.json' }
+	into gameTestData
+	dependsOn 'cleanGameTestRun'
+}
+tasks.named('runClientGameTest') {
+	dependsOn 'seedGameTestData'
+	if (freshShots) jvmArgs '-Dskysurveyor.fresh=true'
 }
 
 // build fails until spotlessApply

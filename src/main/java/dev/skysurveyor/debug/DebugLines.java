@@ -6,7 +6,6 @@ import java.util.Locale;
 
 import dev.skysurveyor.util.Format;
 
-// the debug overlays lines, plain java so its testable
 public final class DebugLines {
 	private DebugLines() {
 	}

@@ -98,21 +98,21 @@ import static dev.skysurveyor.screen.ScreenParts.wrapped;
 
 // mc font only so pack fonts work
 public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements ModScreen {
-	private enum Tab { OVERVIEW, SESSION, STATS }
+	private enum Tab { OVERVIEW, STATS, GUIDE }
 
-	// stats tab w/o prices, per range. stats null = no shafts in it
+	// stats null = no shafts
 	private record StatsData(List<SessionSummary> sessions, List<JournalEntry> entries, List<MiningEntry> mining, AllTime stats,
 			JournalStats.Campfires campfires, Long recentSpawn, Long allTimeSpawn) {
 	}
 
-	// the prices part, coins per session in oldestFirst order
+	// sessionCoins in oldestFirst order
 	private record MoneyData(StatsData of, int changes, MoneyStats money, double tax, List<Double> sessionCoins) {
 	}
 
 	private record ShiftTip(FlowLayout row, List<ClientTooltipComponent> normal, List<ClientTooltipComponent> shifted) {
 	}
 
-	// opaque, it covers the table
+	// opaque, covers the table
 	static final Surface OVERLAY = Surface.flat(0xFF141414).and(Surface.outline(0x50FFFFFF));
 	private static final Surface ROW_EVEN = Surface.flat(0x0DFFFFFF);
 	private static final Surface ROW_DAY = Surface.flat(0x1CFFFFFF);
@@ -123,7 +123,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 	private static final int BAR_GOLD = 0xCCFFAA00;
 	private static final int BAR_RED = 0xCCFF5555;
 	private static final int ROW_HEIGHT = JournalTable.ROW_HEIGHT;
-	// display choices from here, not game numbers
+	// display choices, not game numbers
 	static final int PADDING = 8;
 	private static final int GAP = 5;
 	private static final int COLUMN_PADDING = 6;
@@ -137,11 +137,11 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 	private static final int BAR_PADDING = 4;
 	private static final int BAR_GAP = 4;
 	private static final int ARROW_WIDTH = 16;
-	// least widths, measured past them
+	// min widths, measured past
 	private static final int BAR_NAME = 62;
 	private static final int BAR_VALUE = 26;
 	private static final int BAR_ROW_GAP = 4;
-	// display choice: a narrower bar says nothing
+	// display choice
 	private static final int BAR_MIN = 24;
 	private static final int INDENT = 6;
 	private static final int DOT = 3;
@@ -149,22 +149,21 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 	private static final int DOTS_MARGIN = 3;
 	private static final int ARROW_TEX = 3;
 	private static final int ARROW_PAD = 3;
-	private static final int ARROWS_WIDTH = 2 * (ARROW_TEX + 2 * ARROW_PAD);
 	// display choice
 	private static final int DAY_GAP = 8;
 	// display choice
 	private static final int LINE_GAP = 8;
 	private static final int FOOTER_GAP = 16;
-	// display choice: narrower and the session list folds to a strip
+	// display choice
 	private static final int SIDE_MIN_WIDTH = 560;
 	private static final int STRIP_WIDTH = 12;
 	private static final int SIDE_PADDING = 3;
 	private static final Identifier OVERVIEW_ICON = Identifier.fromNamespaceAndPath("skysurveyor", "textures/gui/overview_icon.png");
-	private static final Identifier SESSION_ICON = Identifier.fromNamespaceAndPath("skysurveyor", "textures/gui/session_icon.png");
 	private static final Identifier STATS_ICON = Identifier.fromNamespaceAndPath("skysurveyor", "textures/gui/stats_icon.png");
+	private static final Identifier GUIDE_ICON = Identifier.fromNamespaceAndPath("skysurveyor", "textures/gui/guide_icon.png");
 	static final Identifier SETTINGS_ICON = Identifier.fromNamespaceAndPath("skysurveyor", "textures/gui/settings_icon.png");
 	private static final Identifier MOVE_ICON = Identifier.fromNamespaceAndPath("skysurveyor", "textures/gui/move_icon.png");
-	// label grey, the dark ones got lost on the panel
+	// dark ones got lost on the panel
 	private static final Identifier PREV_ARROW_LIGHT = Identifier.fromNamespaceAndPath("skysurveyor", "textures/gui/prev_arrow_light.png");
 	private static final Identifier OPEN_ARROW_LIGHT = Identifier.fromNamespaceAndPath("skysurveyor", "textures/gui/open_arrow_light.png");
 	private static final int RECENT_SESSIONS = 5;
@@ -178,7 +177,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 	private List<MiningEntry> mining;
 	private List<BreakEntry> breaks;
 	private List<SessionSummary> sessions;
-	// what the snapshot was taken at, checked every tick
+	// at snapshot, checked every tick
 	private int seenEntries;
 	private JournalEntry seenFirstEntry;
 	private int seenMining;
@@ -189,17 +188,20 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 	private final ItemIcons icons = new ItemIcons();
 	private final ShaftNames shaftNames = ShaftNames.defaults();
 	private final PbPanel pbs = new PbPanel(this);
+	private final GuidePanel guide = new GuidePanel(this);
 	private final JournalTable tables = new JournalTable(font, () -> rebuild(true));
 	private Tab tab;
-	// an older session opened from overview or stats, tab stays where it came from
+	// older session open, tab stays
 	private boolean viewing;
-	// session tab = only the one still going, started = going but no shaft yet
+	// clicked somewhere, the live session stops opening itself
+	private boolean touched;
+	// started = no shaft yet
 	private boolean current;
 	private boolean started;
 	private boolean byDay = byDaySetting();
 	private int sessionIndex;
 	private int selected;
-	// next build scrolls the table to the selected shaft, not on kept-view rebuilds
+	// not on kept-view rebuilds
 	private boolean revealSelected = true;
 	private KeptScroll tableScroll;
 	private FlowLayout root;
@@ -210,9 +212,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 	private final List<FlowLayout> shaftRows = new ArrayList<>();
 	private final List<KeptScroll> scrolls = new ArrayList<>();
 	private final List<ShiftTip> shiftTips = new ArrayList<>();
-	// kept while the game runs, not saved
-	private static StatsRange statsRange = StatsRange.ALL_TIME;
-	// arrows + pb edits rebuild the tab, a new snapshot drops these
+	// new snapshot drops these
 	private final Map<StatsRange, StatsData> statsCache = new EnumMap<>(StatsRange.class);
 	private final Map<StatsRange, MoneyData> moneyCache = new EnumMap<>(StatsRange.class);
 	// display row -> entry index
@@ -222,17 +222,18 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 	private int moneyChanges = Surveyor.MONEY.changes();
 	private boolean stripOpen;
 	private KeptScroll sideScroll;
-	// list clicks keep the list where it was
 	private Double keptSideOffset;
 
 	public JournalScreen() {
 		super(Component.literal("Shaft Journal"));
 		snapshot();
 		apply(JournalRefresh.opened(sessions, seenActive));
-		tab = current ? Tab.SESSION : Tab.OVERVIEW;
+		tab = Tab.OVERVIEW;
+		// ready by the time u click Guide
+		Surveyor.GUIDE.refresh();
 	}
 
-	// mining = outside shafts, breaks = gaps not counted per hour
+	// mining = outside shafts
 	private void snapshot() {
 		LiveJournal journal = Surveyor.JOURNAL;
 		seenEntries = journal.entryCount();
@@ -253,7 +254,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		return active == null ? null : active.id();
 	}
 
-	// ints + refs only, runs every tick
+	// runs every tick, keep cheap
 	private boolean journalChanged() {
 		LiveJournal journal = Surveyor.JOURNAL;
 		return journal.entryCount() != seenEntries || journal.firstEntry() != seenFirstEntry || journal.miningCount() != seenMining
@@ -261,23 +262,22 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 				|| !Objects.equals(activeId(), seenActive);
 	}
 
-	// not under the players hands, caught up once it ends
+	// not under ur hands, catches up after
 	private boolean busy() {
 		if (pbs.busy()) return true;
 		FocusHandler focus = root == null ? null : root.focusHandler();
 		UIComponent focused = focus == null ? null : focus.focused();
-		return focused instanceof TextBoxComponent && focused.hasParent();
+		// a box dropped by a rebuild keeps its own parent
+		return focused instanceof TextBoxComponent && focused.root() == root;
 	}
 
-	// new snapshot, same tab + session + shaft, nothing indexes the old lists
+	// nothing may index the old lists
 	private void takeChanges() {
 		List<SessionSummary> before = sessions;
 		JournalRefresh.View view = new JournalRefresh.View(sessionIndex, selected, viewing, current, started);
-		boolean sessionTab = !viewing && tab == Tab.SESSION;
 		JournalEntry shown = selectedEntry();
 		snapshot();
-		apply(JournalRefresh.after(before, sessions, view, seenActive, sessionTab));
-		// f.e. following the newest shaft
+		apply(JournalRefresh.after(before, sessions, view, seenActive, !touched));
 		if (!Objects.equals(selectedEntry(), shown)) revealSelected = true;
 		pbs.forget();
 		statsCache.clear();
@@ -298,12 +298,13 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		return OwoUIAdapter.create(this, UIContainers::verticalFlow);
 	}
 
-	// prices + settings load on the io thread after the journal opens, the journal file too
+	// prices, settings + journal load on io thread after open
 	@Override
 	public void tick() {
 		super.tick();
 		// caxton cancels onValueChange, poll
 		pbs.updatePreview();
+		if (tab == Tab.GUIDE && !viewing) guide.poll();
 		if (byDayChanged()) {
 			rebuild();
 			return;
@@ -313,25 +314,33 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 			rebuild(true);
 			return;
 		}
+		// built off thread, lands later. refresh catches settings + fiesta changes
+		if (tab == Tab.GUIDE && !viewing) Surveyor.GUIDE.refresh();
+		if (tab == Tab.GUIDE && !viewing && guide.stale() && !busy()) {
+			rebuild(true);
+			return;
+		}
 		int changes = Surveyor.MONEY.changes();
-		if (changes == moneyChanges) return;
+		// catches up after typing
+		if (changes == moneyChanges || busy()) return;
 		moneyChanges = changes;
 		rebuild(true);
 	}
 
-	// esc goes back one step before it closes the journal, also while typing
+	// esc = one step back, also while typing
 	@Override
 	public boolean keyPressed(KeyEvent key) {
 		if (key.isEscape() && stepBack()) return true;
+		if (key.isConfirmation() && tab == Tab.GUIDE && !viewing && guide.enter()) return true;
 		if (arrowKey(key)) return true;
 		return super.keyPressed(key);
 	}
 
-	// left/right = the top bars < >, up/down = the shaft above or below. only our own screen
+	// only our own screen
 	private boolean arrowKey(KeyEvent key) {
 		boolean sideways = key.isLeft() || key.isRight();
 		if (!sideways && !key.isUp() && !key.isDown()) return false;
-		// detail = a session view is built, not overview or stats
+		// detail null = overview or stats
 		if (detail == null || busy() || stripOpen && width < SIDE_MIN_WIDTH) return false;
 		if (sideways) {
 			if (!viewing) return false;
@@ -351,12 +360,14 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 	}
 
 	private boolean stepBack() {
+		// typed number saved, 2nd esc closes
+		if (!viewing && tab == Tab.GUIDE && guide.enter()) return true;
 		// pb dropdown, builder, edit mode first
 		if (!viewing && tab == Tab.STATS && pbs.stepBack()) {
 			rebuild(true);
 			return true;
 		}
-		if (stripOpen && width < SIDE_MIN_WIDTH && (viewing || tab == Tab.SESSION && current)) {
+		if (stripOpen && width < SIDE_MIN_WIDTH && viewing) {
 			stripOpen = false;
 		} else if (viewing) {
 			back();
@@ -366,6 +377,13 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		}
 		rebuild(true);
 		return true;
+	}
+
+	// closed or settings opened mid typing
+	@Override
+	public void removed() {
+		guide.saveTyped();
+		super.removed();
 	}
 
 	@Override
@@ -386,16 +404,15 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 	@Override
 	protected void init() {
 		super.init();
-		// back from settings or edit hud, before the 1st frame
+		// back from settings/edit hud, before 1st frame
 		if (root == null) return;
 		boolean journal = journalChanged() && !busy();
 		if (journal) takeChanges();
 		if (byDayChanged()) rebuild();
-		// resize keeps the scrolls the new layout still has
 		else if (journal || width != builtWidth || height != builtHeight) rebuild(true);
 	}
 
-	// by day lives on the settings page now
+	// set on the settings page now
 	private boolean byDayChanged() {
 		if (byDaySetting() == byDay) return false;
 		byDay = byDaySetting();
@@ -419,8 +436,10 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		rebuild(false);
 	}
 
-	// keepScroll = same view w/ new prices or size, scrolls stay put
+	// keepScroll = same view, new prices or size
 	void rebuild(boolean keepScroll) {
+		// clicks rebuild before poll() sees the field go
+		guide.saveTyped();
 		List<KeptScroll> before = keepScroll ? List.copyOf(scrolls) : List.of();
 		List<Double> offsets = before.stream().map(KeptScroll::offset).toList();
 		scrolls.clear();
@@ -431,7 +450,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 			for (int i = 0; i < offsets.size(); i++) scrolls.get(i).offset(offsets.get(i));
 			return;
 		}
-		// side list came or went (resize past SIDE_MIN_WIDTH): the tagged ones by tag
+		// side list came or went: match by tag
 		for (int i = 0; i < before.size(); i++) {
 			String tag = before.get(i).tag();
 			if (tag == null || tags.indexOf(tag) != tags.lastIndexOf(tag)) continue;
@@ -451,6 +470,8 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		builtHeight = height;
 		sideScroll = null;
 		pbs.beforeBuild();
+		// owo keeps focus on removed boxes
+		if (root.focusHandler() != null) root.focusHandler().focus(null, null);
 		root.clearChildren();
 		shaftRows.clear();
 		shiftTips.clear();
@@ -459,20 +480,19 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		root.child(topBar());
 		FlowLayout content = UIContainers.verticalFlow(Sizing.fill(100), Sizing.expand());
 		content.gap(GAP);
-		if (entries.isEmpty() && !viewing && tab == Tab.SESSION && started) {
-			noSession(content);
-		} else if (entries.isEmpty()) {
-			content.child(panelWith(label("§7No shafts yet. Each shaft shows up here after you leave it."),
-					Sizing.fill(100), Sizing.content()));
+		if (entries.isEmpty() && !viewing && tab == Tab.OVERVIEW && started) {
+			sessionStarted(content);
+		} else if (entries.isEmpty() && tab != Tab.GUIDE) {
+			content.child(panelWith(noShafts(), Sizing.fill(100), Sizing.content()));
 		} else {
 			if (viewing) buildSessionTab(content);
 			else switch (tab) {
-				case OVERVIEW -> buildOverviewTab(content);
-				case SESSION -> {
-					if (current) buildSessionTab(content);
-					else noSession(content);
+				case OVERVIEW -> {
+					if (started) sessionStarted(content);
+					buildOverviewTab(content);
 				}
 				case STATS -> buildStatsTab(content);
+				case GUIDE -> guide.build(content, width);
 			}
 		}
 		root.child(content);
@@ -481,31 +501,29 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		footerLines().forEach(line -> footer.child(label(line)));
 		root.child(footer);
 		if (!viewing && tab == Tab.STATS) pbs.buildBuilder(root);
+		if (!viewing && tab == Tab.GUIDE) guide.refocus(root.focusHandler());
 		revealSelected = false;
 	}
 
-	// nothing to explain w/o shafts
 	private List<String> footerLines() {
+		if (!viewing && tab == Tab.GUIDE) return guide.footer();
 		if (entries.isEmpty()) return List.of();
 		List<String> lines = new ArrayList<>();
-		boolean table = viewing || tab == Tab.SESSION && current || tab == Tab.OVERVIEW;
+		boolean table = viewing || tab == Tab.OVERVIEW;
 		if (viewing) {
-			lines.add("§8Click a shaft for details");
-			lines.add("§8< > other sessions");
+			lines.add("§7Click a shaft for details");
+			lines.add("§7< > other sessions");
 		} else switch (tab) {
-			case SESSION -> {
-				if (current) lines.add("§8Click a shaft for details");
-			}
-			case OVERVIEW -> lines.add("§8Click a session to open it");
+			case OVERVIEW -> lines.add("§7Click a session to open it");
 			case STATS -> {
 				if (statsShafts == 0) return List.of();
-				lines.add("§8Counted from your own " + statsShafts + " shafts");
-				lines.add("§8Hover a row for details");
-				lines.add(pbs.editing() ? "§8Drag the grips to reorder" : "§8Click a PB to open it");
+				lines.add("§7Counted from your own " + statsShafts + " shafts");
+				lines.add("§7Hover a row for details");
+				lines.add(pbs.editing() ? "§7Drag the grips to reorder" : "§7Click a PB to open it");
 			}
 		}
-		// one line only, left out when it doesnt fit
-		String hint = "§8Hover a column for what it counts";
+		// dropped if it doesnt fit
+		String hint = "§7Hover a column for what it counts";
 		int used = lines.stream().mapToInt(line -> font.width(line) + FOOTER_GAP).sum() + font.width(hint);
 		if (table && used <= width - 2 * PADDING) lines.add(hint);
 		return lines;
@@ -521,8 +539,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		LabelComponent title = label("§fShaft §bJournal");
 		title.horizontalSizing(Sizing.fixed(font.width("Shaft Journal")));
 		title.margins(Insets.of(0, 0, 2, 8));
-		List<ButtonComponent> tabs = List.of(tabButton("Overview", Tab.OVERVIEW), tabButton("Session", Tab.SESSION),
-				tabButton("Stats", Tab.STATS));
+		List<ButtonComponent> tabs = List.of(tabButton("Overview", Tab.OVERVIEW), tabButton("Stats", Tab.STATS), tabButton("Calculator §7(WIP)", Tab.GUIDE));
 		IconButton editHud = new IconButton(Component.literal("Edit HUD"), MOVE_ICON, 8, 8,
 				b -> minecraft.gui.setScreen(new EditHudScreen(this, Surveyor.HUD)));
 		IconButton settings = new IconButton(Component.literal("§fSettings"), SETTINGS_ICON, 8, 8,
@@ -534,11 +551,14 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		boolean showTitle = true;
 		if (viewing) {
 			int date = font.width(day(sessions.get(sessionIndex).start()));
-			// 480 wide: title steps aside so the date still fits
+			// 480 wide: no title so date fits
 			showTitle = navRoom(withTitle(items, title)) >= date;
 			if (showTitle) items = withTitle(items, title);
-		} else {
+		} else if (navRoom(withTitle(items, title)) + 2 * ARROW_WIDTH + 2 * BAR_GAP >= 0) {
 			items = withTitle(items, title);
+		} else {
+			// 4 tabs at 480: no title
+			showTitle = false;
 		}
 		if (showTitle) bar.child(title);
 		tabs.forEach(bar::child);
@@ -552,8 +572,6 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 			nav.child(button("<", sessionIndex < sessions.size() - 1, () -> showSession(sessionIndex + 1)));
 			nav.child(label("§f" + sessionRange(shown, navRoom(items))));
 			nav.child(button(">", sessionIndex > 0, () -> showSession(sessionIndex - 1)));
-		} else if (tab == Tab.SESSION && current) {
-			nav.child(label("§f" + sessionRange(sessions.getFirst(), navRoom(items))));
 		}
 		bar.child(nav);
 		bar.child(settings);
@@ -567,11 +585,10 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		return all;
 	}
 
-	// back to the list it came from, session tab goes to overview
 	private void back() {
 		viewing = false;
 		stripOpen = false;
-		if (tab == Tab.SESSION) tab = Tab.OVERVIEW;
+		touched = true;
 		rebuild();
 	}
 
@@ -583,37 +600,46 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		Component text = Component.literal((tab == target ? "§e" : "§f") + name);
 		Identifier icon = switch (target) {
 			case OVERVIEW -> OVERVIEW_ICON;
-			case SESSION -> SESSION_ICON;
 			case STATS -> STATS_ICON;
+			case GUIDE -> GUIDE_ICON;
 		};
-		return new IconButton(text, icon, 9, 8, b -> {
+		IconButton button = new IconButton(text, icon, 9, 8, b -> {
 			viewing = false;
 			stripOpen = false;
+			touched = true;
 			pbs.closeBuilder();
 			tab = target;
-			if (target == Tab.SESSION) {
-				sessionIndex = 0;
-				selectLastShaft();
-			}
 			rebuild();
 		});
+		// the other 2 say it themselves
+		if (target == Tab.GUIDE) button.tooltip(List.of(Component.literal("§fWhat mining a shaft makes over leaving it")));
+		return button;
 	}
 
-	private void noSession(FlowLayout content) {
+	// new install, says what fills this tab
+	private FlowLayout noShafts() {
 		FlowLayout panel = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
 		panel.gap(4);
-		if (started) {
-			panel.child(wrapped("§7Your session has started."));
-			panel.child(wrapped("§8Each shaft shows up here after you leave it."));
-			Journal.Session active = Surveyor.JOURNAL.activeSession(System.currentTimeMillis());
-			List<MiningEntry> outside = active == null ? List.of() : mining.stream().filter(m -> m.sessionId() == active.id()).toList();
-			Double coins = MoneyStats.outside(outside, Surveyor.MONEY::value);
-			if (coins != null && Math.round(coins) != 0) panel.child(wrapped("§7Mined outside shafts so far " + CoinBreakdown.coins(coins)));
+		panel.child(wrapped("§fNo shafts yet"));
+		if (tab == Tab.STATS) {
+			panel.child(wrapped("§7Totals, spawn times, corpse odds and personal bests fill in from your first shaft."));
 		} else {
-			panel.child(wrapped("§7No session going right now."));
-			panel.child(wrapped("§8A session starts when you mine in the Dwarven Mines and ends after "
-					+ Journal.SESSION_GAP_MILLIS / 60_000 + " minutes without mining or shafting. Older sessions are in the Overview."));
+			panel.child(wrapped("§7Surveyor tracks every Glacite Mineshaft you enter. Each one shows up here when you leave it."));
+			panel.child(wrapped("§7Your HUD boxes show in the Dwarven Mines. Edit HUD moves them."));
 		}
+		return panel;
+	}
+
+	// going, no shaft yet
+	private void sessionStarted(FlowLayout content) {
+		FlowLayout panel = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
+		panel.gap(4);
+		panel.child(wrapped("§7Your session has started."));
+		panel.child(wrapped("§8It shows up here after you leave your first shaft."));
+		Journal.Session active = Surveyor.JOURNAL.activeSession(System.currentTimeMillis());
+		List<MiningEntry> outside = active == null ? List.of() : mining.stream().filter(m -> m.sessionId() == active.id()).toList();
+		Double coins = MoneyStats.outside(outside, Surveyor.MONEY::value);
+		if (coins != null && Math.round(coins) != 0) panel.child(wrapped("§7Mined outside shafts so far " + CoinBreakdown.coins(coins)));
 		content.child(panelWith(panel, Sizing.fill(100), Sizing.content()));
 	}
 
@@ -625,6 +651,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 	}
 
 	private void showSession(int index) {
+		touched = true;
 		sessionIndex = index;
 		selectLastShaft();
 		viewing = true;
@@ -639,6 +666,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 				sessionIndex = i;
 				selected = index;
 				viewing = true;
+				touched = true;
 				revealSelected = true;
 				rebuild();
 				return;
@@ -656,7 +684,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		revealSelected = true;
 	}
 
-	// selected row + a row of context in view, after the table is built
+	// after the table is built
 	private void revealSelected() {
 		if (tableScroll == null) return;
 		for (int position = 0; position < shaftOrder.length; position++) {
@@ -725,7 +753,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		List<String> coinTexts = new ArrayList<>(shaftCoins.stream().map(JournalScreen::coinText).toList());
 		if (!session.mining().isEmpty()) coinTexts.add(coinText(sessionMoney.outside()));
 		measured = tables.measured(measured, "coins", coinTexts);
-		// most sessions have no mined shaft, an all - column only takes room
+		// all - column only takes room
 		if (session.entries().stream().allMatch(e -> Efficiency.shown(e.mining()) == null)) {
 			measured = measured.stream().filter(c -> !c.key().equals("eff")).toList();
 		} else {
@@ -784,11 +812,10 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		detailScroll.surface(PANEL);
 		detailScroll.paddedWithBar(COLUMN_PADDING);
 		main.child(detailScroll);
-		// stack, so the open list takes no room from the table
+		// stack, open list takes no table room
 		StackLayout area = UIContainers.stack(Sizing.fill(100), Sizing.expand());
 		area.child(main);
 		if (!side && stripOpen) {
-			// click beside the open list closes it
 			BoxComponent dim = UIComponents.box(Sizing.fill(100), Sizing.fill(100));
 			dim.color(Color.ofArgb(0x66000000));
 			dim.fill(true);
@@ -806,7 +833,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		fillDetail();
 	}
 
-	// under the shafts, not sorted or clickable
+	// not sorted or clickable
 	private void outsideRow(FlowLayout rows, List<Column> columns, SessionSummary session, MoneyStats money) {
 		rows.child(divider());
 		FlowLayout row = tableRow();
@@ -851,7 +878,6 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		return Math.max(row + 3, back) + 2 * SIDE_PADDING;
 	}
 
-	// overview in short beside an open session
 	private int sideShaftsWidth() {
 		return sessions.stream().mapToInt(s -> font.width(String.valueOf(s.shafts()))).max().orElse(0);
 	}
@@ -865,7 +891,6 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		back.horizontalSizing(Sizing.fill(100));
 		panel.child(back);
 
-		boolean inSessionTab = !viewing && tab == Tab.SESSION;
 		int shaftsWidth = sideShaftsWidth();
 		FlowLayout rows = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
 		int selectedY = 0;
@@ -894,9 +919,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 			row.child(label(coinTexts.get(i)));
 			int index = i;
 			row.mouseDown().subscribe((event, doubleClick) -> {
-				if (inSessionTab && index == 0) return true;
 				keptSideOffset = sideScroll == null ? null : sideScroll.offset();
-				if (inSessionTab) tab = Tab.OVERVIEW;
 				showSession(index);
 				return true;
 			});
@@ -904,7 +927,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		}
 		KeptScroll scroll = scroll(Sizing.fill(100), Sizing.expand(), rows);
 		scroll.tag("side");
-		// a few rows of context above the open one, layout clamps it
+		// layout clamps it
 		double offset = keptSideOffset != null ? keptSideOffset : Math.max(0, (selectedY - 3) * ROW_HEIGHT);
 		keptSideOffset = null;
 		scroll.offset(offset);
@@ -913,7 +936,6 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		return panel;
 	}
 
-	// session list folded up, < goes back, the rest opens it
 	private FlowLayout strip() {
 		FlowLayout strip = UIContainers.verticalFlow(Sizing.fixed(STRIP_WIDTH), Sizing.fill(100));
 		strip.surface(PANEL);
@@ -958,8 +980,13 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		JournalEntry entry = shafts.get(selected);
 		ShaftValue value = Surveyor.MONEY.value(entry);
 
-		String id = entry.shaftId() == null ? "Unknown shaft" : entry.shaftId();
-		detail.child(wrapped("§b" + id + (ShaftNames.CRYSTAL.equals(entry.variant()) ? " §7(crystal)" : "")));
+		if (entry.shaftId() == null) {
+			detail.child(wrapped("§fUnknown shaft"));
+		} else {
+			detail.child(wrapped(shaftNames.coloredName(entry.shaftId())));
+			// scoreboard id, so u can match it
+			detail.child(wrapped("§8" + entry.shaftId()));
+		}
 		detail.child(spacer(4));
 		detail.child(keyValue("Entered", "§f" + time(entry.enteredAt())));
 		detail.child(keyValue("Exit", "§f" + SummaryText.exitName(entry.exitReason())));
@@ -970,7 +997,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		if (entry.corpsePowder() > 0 && entry.exitPowder() > 0) {
 			String corpses = "§8" + Format.number(entry.corpsePowder()) + " corpses";
 			String exit = "+ " + Format.number(entry.exitPowder()) + " exit";
-			// too wide: split at the +, not wherever the wrap lands
+			// split at the +, not mid wrap
 			if (font.width(corpses + " " + exit) <= detailInner) {
 				detail.child(wrapped(corpses + " " + exit));
 			} else {
@@ -1010,7 +1037,6 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 			detail.child(wrapped(ItemNames.current().styled(GemYield.fineName(entry.gems().gem()), Format.decimal(entry.gems().fineEquivalent()))));
 			if (entry.pristineProcs() > 0) detail.child(wrapped("§8" + entry.pristineProcs() + " pristine procs"));
 		} else if (entry.metal() == null) {
-			// metal shafts skip the empty gems section
 			detail.child(section("Gems mined"));
 			detail.child(wrapped("§8None"));
 		}
@@ -1022,7 +1048,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		if (mining != null) {
 			detail.child(section("Mining"));
 			String aside = mining.withSetup() == null ? "" : " §8(" + mining.withSetup() + " with setup)";
-			// narrow panel: the aside would wrap, so its own row
+			// else the aside wraps
 			boolean fits = font.width("Efficiency") + KEY_GAP + font.width("§f" + mining.value() + aside) <= detailInner;
 			List<Component> tooltip = new ArrayList<>();
 			for (String line : mining.tooltip()) tooltip.add(Component.literal(line));
@@ -1053,7 +1079,6 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		MoneySettings settings = Surveyor.MONEY.settings();
 		boolean ironman = settings.isIronman();
 		for (Part part : Part.values()) {
-			// biggest first, no price last
 			List<Line> lines = value.lines().stream().filter(l -> l.part() == part)
 					.sorted(Comparator.comparing((Line l) -> l.coins() == null).thenComparing(l -> l.coins() == null ? 0 : -Math.abs(l.coins())))
 					.toList();
@@ -1099,7 +1124,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		detail.child(wrapped("§8" + (saved ? "Prices from " + day(end) + " " + clock(end) : "Today's prices")));
 	}
 
-	// cold at use, count for shafts from before 0.22.0 or when some werent used
+	// count for pre 0.22.0 or some unused
 	private static String campfireCell(JournalEntry entry) {
 		int count = TableColumns.campfires(entry);
 		if (count == 0) return "§8-";
@@ -1119,7 +1144,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		return withTips(keyValue(key, value), ScreenParts.tips(tooltip));
 	}
 
-	// counts on the right, 1st letters when the full words dont fit
+	// 1st letters if words dont fit
 	private FlowLayout lootSection(List<CorpseLoot> loots) {
 		String title = "Corpse loot";
 		if (loots.isEmpty()) return section(title);
@@ -1168,7 +1193,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		}
 	}
 
-	// sessions newest first, a session counts on the day it started
+	// session counts on its start day
 	private List<Day> days(List<Double> sessionCoins) {
 		List<Day> days = new ArrayList<>();
 		for (int i = 0; i < sessions.size(); i++) {
@@ -1200,7 +1225,6 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		List<Day> days = days(sessionCoins);
 		List<String> coinTexts = new ArrayList<>(sessionCoins.stream().map(JournalScreen::coinText).toList());
 		List<String> rateTexts = new ArrayList<>(coinRates.stream().map(JournalScreen::rateText).toList());
-		// day rows only drawn by day
 		if (byDay) {
 			for (Day day : days) {
 				coinTexts.add(coinText(day.coins()));
@@ -1211,7 +1235,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 				"coins", coinTexts);
 		measured = tables.measured(measured, "coinRate", rateTexts);
 		measured = tables.measured(measured, "rate", sessions.stream().map(s -> shaftRate(s.shaftsPerHour())).toList());
-		// day rows count too, by day the sessions go indented under the date
+		// day rows count too
 		List<String> dates = new ArrayList<>(byDay ? days.stream().map(d -> "§f" + day(d.start())).toList()
 				: sessions.stream().map(s -> "§f" + day(s.start())).toList());
 		int indented = byDay ? INDENT + tables.widest(sessions.stream().map(s -> "§7" + clock(s.start())).toList()) : 0;
@@ -1306,8 +1330,9 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		return rateText(perHour) + (perHour == null ? "" : " §8(avg)");
 	}
 
-	// same range + snapshot = same numbers. last 7 days can lose a session while open
+	// last 7 days can lose a session while open
 	private StatsData statsData() {
+		StatsRange statsRange = statsRange();
 		List<SessionSummary> rangeSessions = statsRange.sessions(sessions, System.currentTimeMillis());
 		StatsData cached = statsCache.get(statsRange);
 		if (cached != null && sameItems(cached.sessions(), rangeSessions)) return cached;
@@ -1323,9 +1348,9 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		return data;
 	}
 
-	// prices or money settings moved = new changes count
 	private MoneyData moneyData(StatsData data) {
 		int changes = Surveyor.MONEY.changes();
+		StatsRange statsRange = statsRange();
 		MoneyData cached = moneyCache.get(statsRange);
 		if (cached != null && cached.of() == data && cached.changes() == changes) return cached;
 		MoneyStats money = MoneyStats.of(data.entries(), Surveyor.MONEY::value, data.mining(), Surveyor.MONEY::lines,
@@ -1345,15 +1370,15 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 	}
 
 	private void buildStatsTab(FlowLayout content) {
-		boolean all = statsRange == StatsRange.ALL_TIME;
+		boolean all = statsRange() == StatsRange.ALL_TIME;
 		StatsData data = statsData();
 		List<SessionSummary> rangeSessions = data.sessions();
 		List<JournalEntry> rangeEntries = data.entries();
 		statsShafts = rangeEntries.size();
-		FlowLayout columns = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.fill(100));
+		content.child(rangeBar());
+		FlowLayout columns = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.expand());
 		columns.gap(GAP);
 		FlowLayout totals = column();
-		totals.child(rangeHeader());
 		if (rangeEntries.isEmpty()) {
 			totals.child(wrapped("§8No shafts in this range"));
 			columns.child(scrollColumn(Sizing.fill(STATS_LEFT), totals));
@@ -1392,8 +1417,9 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		FlowLayout spawn = column();
 		spawn.child(header("Spawn time"));
 		if (all) {
+			// white, yellow = ur pick or ur number (ui-system-v1)
 			spawn.child(keyValue("All-time avg", stats.averageSearchMillis() == null ? "§8-"
-					: "§e" + Format.duration(stats.averageSearchMillis())));
+					: "§f" + Format.duration(stats.averageSearchMillis())));
 			Long recent = data.recentSpawn();
 			if (recent != null && stats.averageSearchMillis() != null && sessions.size() > RECENT_SESSIONS) {
 				spawn.child(keyValue("Last " + RECENT_SESSIONS + " sessions",
@@ -1403,7 +1429,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 			Long average = stats.averageSearchMillis();
 			Long allTime = data.allTimeSpawn();
 			spawn.child(keyValue("Avg", average == null ? "§8-"
-					: "§e" + Format.duration(average) + (allTime == null ? "" : change(average, allTime))));
+					: "§f" + Format.duration(average) + (allTime == null ? "" : change(average, allTime))));
 			spawn.child(keyValue("All-time avg", allTime == null ? "§8-" : "§f" + Format.duration(allTime)));
 		}
 		String legend = all ? "all-time avg" : "avg";
@@ -1435,7 +1461,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		FlowLayout odds = column();
 		odds.child(header("Shaft types seen"));
 		int typed = stats.typedShafts();
-		// both right column groups, so their bars line up
+		// so bars line up
 		List<String> rightNames = new ArrayList<>();
 		stats.types().keySet().forEach(code -> rightNames.add(shaftNames.name(code)));
 		money.types().keySet().forEach(code -> rightNames.add(shaftNames.name(code)));
@@ -1450,7 +1476,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 			List<Component> tooltip = new ArrayList<>();
 			tooltip.add(Component.literal("§f" + name + " shafts §7" + total));
 			type.getValue().forEach((variant, count) -> {
-				if (!variant.equals(ShaftNames.LITTLEFOOT)) tooltip.add(Component.literal("§7" + capitalized(ShaftNames.variantName(variant)) + " §f" + count));
+				if (!variant.equals(ShaftNames.LITTLEFOOT)) tooltip.add(Component.literal(shaftNames.coloredName(type.getKey(), variant) + " §f" + count));
 			});
 			row.tooltip(tooltip);
 			odds.child(row);
@@ -1472,7 +1498,6 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		return row;
 	}
 
-	// best first, bar = the efficiency itself
 	private void typeEfficiency(FlowLayout column, EfficiencyStats.Summary efficiency, int nameWidth) {
 		if (efficiency.types().isEmpty()) return;
 		column.child(section("Efficiency per shaft type"));
@@ -1488,7 +1513,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 					+ (all.shafts() == 1 ? " shaft" : " shafts")));
 			if (all.ticks() != null) tooltip.add(Component.literal("§7" + MiningText.ticks(all.ticks()) + " ticks a block"));
 			if (type.variants().size() > 1) {
-				type.variants().forEach((variant, group) -> tooltip.add(Component.literal("§7" + capitalized(ShaftNames.variantName(variant))
+				type.variants().forEach((variant, group) -> tooltip.add(Component.literal(shaftNames.coloredName(type.type(), variant)
 						+ " §f" + Format.percent(group.median()) + " §8" + group.shafts())));
 			}
 			row.tooltip(tooltip);
@@ -1505,7 +1530,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		return row;
 	}
 
-	// same entries valued w/o bazaar tax
+	// same entries w/o tax
 	private static double tax(List<JournalEntry> entries, List<MiningEntry> mining, MoneyStats money) {
 		if (!Surveyor.MONEY.taxed()) return 0;
 		MoneyStats untaxed = MoneyStats.of(entries, Surveyor.MONEY::untaxed, mining, Surveyor.MONEY::untaxedLines, money.ironman());
@@ -1521,7 +1546,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 				Surveyor.MONEY.settings().isIronman())));
 	}
 
-	// best avg first, bar = share of the coins all types made
+	// bar = share of all coins
 	private void typeCoins(FlowLayout column, MoneyStats money, int nameWidth) {
 		List<Map.Entry<String, MoneyStats.TypeCoins>> types = money.types().entrySet().stream()
 				.sorted(Comparator.comparingDouble((Map.Entry<String, MoneyStats.TypeCoins> e) -> -e.getValue().each())).toList();
@@ -1536,54 +1561,37 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 			FlowLayout row = barRow(name, share == null ? 0 : share, CoinBreakdown.coins(type.getValue().each()),
 					0xFF000000 | shaftNames.rgb(type.getKey()), sizes);
 			column.child(withTips(row, TooltipLines.of(CoinBreakdown.shaftType(name, type.getValue(), share,
-					v -> capitalized(ShaftNames.variantName(v))))));
+					v -> shaftNames.coloredName(type.getKey(), v)))));
 		}
 	}
 
-	private FlowLayout rangeHeader() {
-		FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-		row.verticalAlignment(VerticalAlignment.CENTER);
-		row.surface(Surface.flat(0x14FFFFFF));
-		row.padding(Insets.of(2, 2, 4, 1));
-		row.margins(Insets.bottom(4));
-		int count = StatsRange.values().length;
-		int widest = 0;
-		for (StatsRange range : StatsRange.values()) widest = Math.max(widest, font.width(range.displayName()));
-		// row padding 4 + 1
-		int room = statsLeftRoom() - 5;
-		RangeFit.Fit fit = RangeFit.fit(room, font.width("Range "), widest, dotsWidth(count), ARROWS_WIDTH);
-		LabelComponent name = label((fit == RangeFit.Fit.FULL ? "§7Range §e" : "§e") + statsRange.displayName());
-		name.horizontalSizing(Sizing.expand());
-		row.child(name);
-		row.child(cycler(statsRange.ordinal(), count, fit != RangeFit.Fit.NO_DOTS, step -> statsRange = statsRange.next(step)));
-		String title = fit == RangeFit.Fit.FULL ? "§fTime range" : "§fRange §e" + statsRange.displayName();
-		List<Component> tooltip = List.of(Component.literal(title),
-				Component.literal("§7Which sessions the whole Stats tab counts"),
-				Component.literal("§8Click the arrows to cycle"));
-		applyTooltip(row, tooltip);
-		return row;
+	// spans the tab like the calculator's, the left column is too narrow for 4 chips
+	private FlowLayout rangeBar() {
+		return RangeBar.build(font, width - 2 * PADDING, statsRange(), List.of("§f" + RangeBar.WORD, "§7Which sessions the whole Stats tab counts"),
+				range -> {
+					changeJournal(j -> j.withStatsRange(range));
+					rebuild(true);
+				}, null, 0);
 	}
 
-	// dots show where u are, arrows wrap around
+	// config.json since 0.27.0-alpha.39
+	private static StatsRange statsRange() {
+		return journalSettings().statsRange();
+	}
+
 	private FlowLayout cycler(int index, int count, IntConsumer step) {
-		return cycler(index, count, true, step);
-	}
-
-	private FlowLayout cycler(int index, int count, boolean withDots, IntConsumer step) {
 		FlowLayout cycler = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
 		cycler.verticalAlignment(VerticalAlignment.CENTER);
-		if (withDots) {
-			FlowLayout dots = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
-			dots.gap(DOT_GAP);
-			dots.margins(Insets.right(DOTS_MARGIN));
-			for (int i = 0; i < count; i++) {
-				BoxComponent dot = UIComponents.box(Sizing.fixed(DOT), Sizing.fixed(DOT));
-				dot.fill(true);
-				dot.color(Color.ofArgb(i == index ? 0xFFFFFF55 : 0xFF555555));
-				dots.child(dot);
-			}
-			cycler.child(dots);
+		FlowLayout dots = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
+		dots.gap(DOT_GAP);
+		dots.margins(Insets.right(DOTS_MARGIN));
+		for (int i = 0; i < count; i++) {
+			BoxComponent dot = UIComponents.box(Sizing.fixed(DOT), Sizing.fixed(DOT));
+			dot.fill(true);
+			dot.color(Color.ofArgb(i == index ? 0xFFFFFF55 : 0xFF555555));
+			dots.child(dot);
 		}
+		cycler.child(dots);
 		cycler.child(cyclerArrow(PREV_ARROW_LIGHT, () -> step.accept(-1)));
 		cycler.child(cyclerArrow(OPEN_ARROW_LIGHT, () -> step.accept(1)));
 		return cycler;
@@ -1626,7 +1634,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 				: " §7(§c" + Format.duration(difference) + " slower§7)";
 	}
 
-	// room for the tooltip's own border
+	// tooltip border
 	private int tooltipHeight() {
 		return height - 10;
 	}
@@ -1646,6 +1654,8 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		}
 		pbs.rehome();
 		super.extractRenderState(graphics, mouseX, mouseY, delta);
+		// after layout, its once per build
+		if (tab == Tab.GUIDE && !viewing) guide.rehome();
 		pbs.drawDrag(graphics);
 	}
 
@@ -1654,7 +1664,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		return MoneyStats.session(session, Surveyor.MONEY::value, Surveyor.MONEY::value);
 	}
 
-	// sessions before outside coins were saved (0.24.0-alpha.11) have none. none saved = nothing to say
+	// no outside coins before 0.24.0-alpha.11
 	private boolean beforeOutside(List<SessionSummary> range) {
 		if (mining.isEmpty()) return false;
 		long first = mining.getFirst().sessionId();
@@ -1674,14 +1684,13 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		return coinText(coins, "§7");
 	}
 
-	// color null = gold, red when negative
+	// null = gold
 	private static String coinText(Double coins, String color) {
 		if (coins == null) return "§8-";
 		if (Math.round(coins) == 0) return "§80";
 		return color == null ? CoinBreakdown.coins(coins) : color + Coins.signed(coins);
 	}
 
-	// drag a grip in pb edit mode
 	@Override
 	public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
 		if (pbs.grab(click)) return true;
@@ -1716,7 +1725,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 				"§eYellow line§7: " + legend, ChartTips.spawn(oldestFirst), "§8No timed spawns yet"));
 	}
 
-	// coins = per session, same order
+	// coinsEach in same order
 	private FlowLayout coinChart(List<SessionSummary> oldestFirst, List<Double> coinsEach, Double average, boolean priced, String legend,
 			long totalMillis) {
 		List<BarChart.Bar> bars = new ArrayList<>();
@@ -1745,13 +1754,12 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		return Coins.whole(coins);
 	}
 
-	// middle column inside its padding, a session per bar
 	private FlowLayout barChart(List<BarChart.Bar> bars, BarChart.Look look) {
 		int room = width - 2 * PADDING - 2 * GAP - width * STATS_LEFT / 100 - width * STATS_RIGHT / 100 - 2 * COLUMN_PADDING;
 		return BarChart.of(font, bars, look, room, height, this::openSession);
 	}
 
-	// name + value widths for one group of bar rows, room = the columns inner width
+	// room = column inner width
 	private record BarSizes(int name, int value, int room) {
 	}
 
@@ -1759,7 +1767,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		return new BarSizes(TableColumns.atLeast(BAR_NAME, tables.widest(names)), TableColumns.atLeast(BAR_VALUE, tables.widest(values)), room);
 	}
 
-	// track left out when too narrow to say anything, name left + value right stay
+	// track dropped when too narrow
 	private FlowLayout barRow(String name, double fraction, String value, int argb, BarSizes sizes) {
 		FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.fixed(ROW_HEIGHT));
 		row.verticalAlignment(VerticalAlignment.CENTER);
@@ -1786,7 +1794,6 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		return track;
 	}
 
-	// sortable = the shaft table, its headers sort it
 	private FlowLayout table(List<Column> columns, FlowLayout rows, boolean sortable) {
 		KeptScroll scroll = scroll(Sizing.fill(100), Sizing.expand(), rows);
 		tableScroll = scroll;
@@ -1804,12 +1811,12 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 
 	// stripes by position on screen, selection by entry
 	private Surface rowSurface(int position, int index, boolean hovered) {
-		if ((viewing || tab == Tab.SESSION) && index == selected) return ROW_SELECTED;
+		if (viewing && index == selected) return ROW_SELECTED;
 		if (hovered) return ROW_HOVER;
 		return position % 2 == 1 ? ROW_EVEN : Surface.BLANK;
 	}
 
-	// gem shafts in fine, metal shafts in the metal tier setting
+	// gems in fine, metal in its tier setting
 	private static LabelComponent minedCell(Column column, JournalEntry entry) {
 		LabelComponent cell = cell(column, minedText(entry));
 		int tier = Surveyor.MONEY.settings().metalTierUsed().tier();
@@ -1824,21 +1831,20 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		return "§8-";
 	}
 
-	// outside rows mined cell
 	private static String outsideMined(SessionSummary session) {
 		Map<String, Double> fine = OutsideMining.fineGems(session.mining(), TextPatterns.defaults());
 		return fine.isEmpty() ? "§8-" : "§f" + Format.decimal(fine.values().stream().mapToDouble(Double::doubleValue).sum());
 	}
 
 	private static String shaftCell(JournalEntry entry) {
-		return "§b" + (entry.shaftId() == null ? "?" : entry.shaftId());
+		return entry.shaftId() == null ? "§7?" : ShaftNames.defaults().coloredName(entry.shaftId());
 	}
 
 	static String spawnCell(Long millis) {
 		return millis == null ? "§8-" : "§f" + Format.duration(millis);
 	}
 
-	// the gem or metals hud colour, white if none
+	// hud colour, white if none
 	private static String minedColor(String name) {
 		return "§" + ShaftNames.defaults().minedColor(name);
 	}
@@ -1875,7 +1881,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		return scroll;
 	}
 
-	private static FlowLayout panelWith(UIComponent child, Sizing width, Sizing height) {
+	static FlowLayout panelWith(UIComponent child, Sizing width, Sizing height) {
 		FlowLayout panel = UIContainers.verticalFlow(width, height);
 		panel.surface(PANEL);
 		panel.padding(Insets.of(8));
@@ -1887,7 +1893,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		return UIComponents.box(Sizing.fill(100), Sizing.fixed(1)).color(Color.ofArgb(0x1FFFFFFF)).fill(true);
 	}
 
-	// gaps over Breaks.BREAK_MILLIS w/o mining, minus their 1st minutes. none = no tooltip
+	// none = no tooltip
 	private static <T extends UIComponent> T breakTooltip(T component, long breakMillis) {
 		if (breakMillis <= 0) return component;
 		component.tooltip(List.of(Component.literal("§7Breaks left out: §f" + Format.duration(breakMillis)),
@@ -1911,7 +1917,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		return label;
 	}
 
-	// title null = caller adds its own heading
+	// null = caller adds heading
 	private static FlowLayout section(String title) {
 		FlowLayout section = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
 		section.margins(Insets.vertical(4));
@@ -1933,10 +1939,6 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 			parts.add(color + count.looted() + "/" + count.total() + " " + e.getKey().charAt(0));
 		}
 		return parts.isEmpty() ? "§8-" : String.join(" ", parts);
-	}
-
-	private static String capitalized(String text) {
-		return text.isEmpty() ? text : Character.toUpperCase(text.charAt(0)) + text.substring(1);
 	}
 
 	private static String spawn(Long millis) {
@@ -1963,7 +1965,7 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		return (date.getYear() == today.getYear() ? DAY : DAY_YEAR).format(date);
 	}
 
-	// shorter at 480 wide, the full range ran under the tabs
+	// full range ran under tabs at 480
 	private String sessionRange(SessionSummary session, int room) {
 		String start = day(session.start()) + " " + clock(session.start());
 		String full = start + " to " + clock(session.end());
@@ -1971,7 +1973,6 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		return font.width(start) <= room ? start : day(session.start());
 	}
 
-	// room left for the date: top bar minus its items, gaps and the < > arrows
 	private int navRoom(List<UIComponent> items) {
 		// nav is one more bar item
 		int used = 2 * PADDING + 2 * BAR_PADDING + BAR_GAP * items.size() + 2 * ARROW_WIDTH + 2 * BAR_GAP;
@@ -1979,7 +1980,6 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 		return width - used;
 	}
 
-	// stats left column inside its padding
 	int statsLeftRoom() {
 		return (width - 2 * PADDING) * STATS_LEFT / 100 - 2 * COLUMN_PADDING;
 	}
@@ -1995,10 +1995,6 @@ public final class JournalScreen extends BaseOwoScreen<FlowLayout> implements Mo
 
 	private int statsRightRoom() {
 		return statsFill(STATS_RIGHT) - 2 * COLUMN_PADDING;
-	}
-
-	private static int dotsWidth(int count) {
-		return count * DOT + (count - 1) * DOT_GAP + DOTS_MARGIN;
 	}
 
 	// fixed sizing only

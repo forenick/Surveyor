@@ -19,7 +19,7 @@ import dev.skysurveyor.detection.TextPatterns;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-// the meter on real block_break lines (recording 8, alpha.16). numbers from Docs/research/calc-prototype/efficiency_gate.py
+// real block_break lines (rec 8, alpha.16), numbers from efficiency_gate.py
 class RecordedBreaksTest {
 	private record Left(String id, MiningStats stats) {
 	}
@@ -37,6 +37,8 @@ class RecordedBreaksTest {
 		assertEquals(4.0, stats.boostTicks());
 		// gate script: 60.3%, its boost ends at the expired line too
 		assertEquals(0.60, Efficiency.of(stats), 0.01);
+		// 373 in boost (calc-prototype count, same lines, 11-25)
+		assertEquals(373, stats.boostBlocks());
 	}
 
 	private static List<Left> replay(String name) throws IOException {

@@ -41,26 +41,26 @@ public final class HudData {
 	}
 
 	private final Map<Key, Object> values = new HashMap<>();
-	// real but empty (zeros before the first shaft), editor shows examples
+	// zeros before 1st shaft, editor shows examples
 	private final Set<Key> placeholders = new HashSet<>();
-	// private use chars, HudBoxText swaps them for § codes w/ the right styles
+	// private use char, HudBoxText swaps for § codes
 	static final char PAINT = '\uE003';
 	static final char BACK = '\uE002';
 
 	private long now;
 	private boolean inShaft;
-	// the shafts (or last ones) colour code, null = none
+	// null = none
 	private Character shaftColor;
 	private SessionTotals session = SessionTotals.NONE;
-	// a values max, f.e. the pity widgets 2nd number. values w/o a range
+	// f.e. pity widgets 2nd number
 	private final Map<HudValue, Long> maxes = new EnumMap<>(HudValue.class);
 	// oldest 1st, empty = none
 	private List<Spawn> recentSpawns = List.of();
 	private List<Double> efficiencyTrack = List.of();
 	private Double usualEfficiency;
-	// drops line per period, missing = not worked out (no line wants it)
+	// missing = not worked out (no line wants it)
 	private final Map<Range, DropList> drops = new EnumMap<>(Range.class);
-	// a line asked for a pb, LiveHud only works them out then. client thread
+	// LiveHud only works pbs out then. client thread
 	private boolean pbRead;
 
 	public long now() {
@@ -75,8 +75,10 @@ public final class HudData {
 		return shaftColor;
 	}
 
-	private HudData shaftType(ShaftNames names, String type) {
+	// variant null = type only
+	private HudData shaftType(ShaftNames names, String type, String variant) {
 		shaftColor = names.hudColor(type);
+		put(HudValue.SHAFT_NAME, paint(shaftColor, variant == null ? names.name(type) : names.shaftName(type, variant)));
 		return put(HudValue.SHAFT_TYPE, paint(shaftColor, names.name(type)));
 	}
 
@@ -145,7 +147,7 @@ public final class HudData {
 		return this;
 	}
 
-	// spawnMillis over timedSpawns shafts, for the avg. metal = shafts own metal in raw. looted = corpse type -> count
+	// spawnMillis / timedSpawns = avg. metal raw. looted = type -> count
 	public record Totals(long shafts, long powder, double fine, long spawnMillis, long timedSpawns, double metal,
 			Map<String, Long> looted, long essence) {
 		public static final Totals NONE = new Totals(0, 0, 0, 0, 0, 0, Map.of(), 0);
@@ -232,7 +234,7 @@ public final class HudData {
 		}
 	}
 
-	// now = same clock as the shafts times. metalTier = MetalYield tier
+	// now = same clock as shaft times. metalTier = MetalYield tier
 	public static HudData live(SessionTotals session, Totals allTime, Totals thisShaft, Long spawnTimer, Shaft shaft,
 			long now, ShaftNames names, int metalTier) {
 		double perTier = MetalYield.rawPer(metalTier);
@@ -245,7 +247,7 @@ public final class HudData {
 		data.put(HudValue.SESSION_CORPSE_FINE, totals.fine());
 		data.put(HudValue.MINED_METAL, totals.metal() / perTier);
 		data.put(HudValue.FOSSIL_ESSENCE, totals.essence());
-		// so the editor shows all examples, not mixed w/ zeros
+		// else examples mixed w/ zeros
 		if (session.summary() == null) data.placeholders(Range.SESSION);
 		data.put(HudValue.SESSION_SHAFTS, Range.ALL_TIME, allTime.shafts());
 		data.put(HudValue.SESSION_POWDER, Range.ALL_TIME, allTime.powder());
@@ -287,7 +289,7 @@ public final class HudData {
 		data.inShaft = shaft != null;
 		if (shaft != null) {
 			if (shaft.id() != null) {
-				data.shaftType(names, shaft.id().type());
+				data.shaftType(names, shaft.id().type(), shaft.id().variant());
 			}
 			data.put(HudValue.SHAFT_TIME, Math.max(0, now - shaft.enteredAt()));
 			data.put(HudValue.SHAFT_CORPSES, corpses(CorpseCounts.of(shaft)));
@@ -297,10 +299,10 @@ public final class HudData {
 		return data;
 	}
 
-	// net coins, null = no prices yet. shaft = live or the last one. session + allTime = shafts only
-	// outside = mined outside shafts, sessionStart = live session, null = none
-	// breakMillis = live sessions break time not counted per hour, up to now
-	// inside = the shaft ur in, not saved yet. counts in session + all-time coins, not per shaft
+	// net coins, null = no prices yet. session + allTime = shafts only
+	// outside = mined outside shafts. sessionStart null = none
+	// breakMillis = break time not counted per hour
+	// inside = unsaved shaft, in session + all-time, not per shaft
 	public record Money(Double shaft, Double session, Double allTime, long allTimeShafts, Double outsideSession,
 			Double outsideAllTime, Long sessionStart, long breakMillis, Double inside) {
 	}
@@ -331,17 +333,16 @@ public final class HudData {
 		return start == null ? null : JournalStats.perHour(amount, now - start - money.breakMillis());
 	}
 
-	// a session w/o shafts can still have coins, not an editor example then
+	// coins w/o shafts arent an example
 	private void real(HudValue value, Range range, Double v) {
 		put(value, range, v);
 		if (v != null) placeholders.remove(key(value, range, null));
 	}
 
-	// outside a shaft, the shaft values show the last one
 	public HudData lastShaft(JournalEntry last, ShaftNames names) {
 		if (inShaft || last == null) return this;
 		String type = last.shaftType();
-		if (type != null) shaftType(names, type);
+		if (type != null) shaftType(names, type, last.variant());
 		put(HudValue.SHAFT_TIME, last.durationMillis());
 		put(HudValue.SHAFT_CORPSES, corpses(CorpseCounts.of(last)));
 		if (last.coldAtExit() != null) cold(last.coldAtExit());
@@ -349,7 +350,7 @@ public final class HudData {
 		return put(HudValue.AVERAGE_SPAWN, Range.SHAFT, last.searchMillis());
 	}
 
-	// dry = shaft type tag -> shafts since. pbs = PersonalBests.key -> shown text. null = not known
+	// dry = type tag -> shafts since. pbs = key -> shown text. null = not known
 	public record Extra(Map<String, Long> dry, Long sessionMillis, Long sinceShaft, Long shaftsToday, Map<String, String> pbs) {
 	}
 
@@ -361,12 +362,32 @@ public final class HudData {
 		return put(HudValue.SHAFTS_TODAY, extra.shaftsToday());
 	}
 
+	// f.e. "Tungsten +0.4M", null = -
+	public HudData keyCorpses(String text) {
+		return put(HudValue.KEY_CORPSES, text);
+	}
+
+	// one more campfire over leaving, null = -
+	public HudData campfireGain(Double coins) {
+		return put(HudValue.CAMPFIRE_GAIN, coins);
+	}
+
+	// null = - (no gem shaft, nothing tracked)
+	public HudData shaftGain(Double coins) {
+		return put(HudValue.SHAFT_GAIN, coins);
+	}
+
+	// null = - (outside, or cant tell yet)
+	public HudData freezeIn(Long millis) {
+		return put(HudValue.FREEZE_IN, millis);
+	}
+
 	// whole percent, null = -
 	public HudData efficiency(Long percent) {
 		return put(HudValue.EFFICIENCY, percent);
 	}
 
-	// last minute every 10 s, oldest 1st. usual = median of this shaft type, null = none (tunnels, never mined)
+	// every 10 s, oldest 1st. usual = type median, null = none
 	public HudData efficiencyTrack(List<Double> points, Double usual) {
 		efficiencyTrack = List.copyOf(points);
 		usualEfficiency = usual;
@@ -403,7 +424,7 @@ public final class HudData {
 		return example ? EXAMPLE.maxes.get(value) : null;
 	}
 
-	// a timed shaft for the chart. type = shaft code, null = unknown
+	// type null = unknown
 	public record Spawn(long millis, String type) {
 	}
 
@@ -441,7 +462,7 @@ public final class HudData {
 		return this;
 	}
 
-	// editor shows the example while there are none. null = not worked out
+	// example while none. null = not worked out
 	public DropList drops(Range range, boolean example) {
 		DropList real = drops.get(range);
 		if (!example || real != null && !real.isEmpty()) return real;
@@ -507,7 +528,11 @@ public final class HudData {
 				.put(HudValue.DRYSTREAK, 12L)
 				.pity(new TabListParser.Pity(1_498, 2_000))
 				.efficiency(69L)
-				// recording 5, 2nd jasper shaft per minute from pristine msgs, own blocks (mockups/efficiency-v1.html)
+				.freezeIn(308_000L)
+				.shaftGain(1_500_000.0)
+				.campfireGain(-2_000_000.0)
+				.keyCorpses("§7Tungsten §a+400.0k")
+				// rec 5, 2nd jasper shaft per min (mockups/efficiency-v1.html)
 				.efficiencyTrack(List.of(0.74, 0.81, 0.78, 0.58, 0.70, 0.68, 0.69, 0.52, 0.62, 0.78, 0.62), 0.68)
 				// mockup hud-graphs-v1, real journal shafts
 				.recentSpawns(List.of(new Spawn(16_000, "UMBE"), new Spawn(4_000, "TITA"), new Spawn(79_000, "FAIR"),
@@ -529,7 +554,7 @@ public final class HudData {
 				.pb("shaft_coins", "+10.0M")
 				.pb("session_coin_rate", "+33.4M")
 				.pb("drystreak_jasp", "9 (longest 18)")
-				.shaftType(ShaftNames.defaults(), "JADE")
+				.shaftType(ShaftNames.defaults(), "JADE", "1")
 				.put(HudValue.SHAFT_TIME, 134_000L)
 				.put(HudValue.SHAFT_CORPSES, "2/4 " + paint('9', "Lapis") + ", " + paint('6', "Umber"))
 				.cold(-12)
@@ -563,7 +588,7 @@ public final class HudData {
 				.put(HudValue.TPS, 19.9);
 	}
 
-	// mockup hud-drops-v1, coins in M. other drops w/o items, the mockup names none
+	// mockup hud-drops-v1, coins in M
 	private static DropList exampleDrops(List<DropList.Row> items, List<DropList.Row> spent, List<DropList.Source> sources) {
 		return new DropList(items, spent, 0, false, false, sources);
 	}

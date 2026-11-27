@@ -1,0 +1,43 @@
+# corpse loot tables (Docs/research/16-corpse-loot-tables.md)
+# CW Frozen_Corpses, wikitext read 2026-11-25, page last edited 2026-11-22 09:21. the wiki marks parts stale
+# rolls <table> = least most, each as likely. loot <table> = ID, amount, weight, Name
+# umber + tungsten share one table. its rows add up to 6,640, the pages header says 6,540 (unconfirmed which)
+rolls umber_tungsten = 4 7
+loot umber_tungsten = CAGED_WISP, 1, 2, Caged Wisp
+loot umber_tungsten = FROZEN_SCUTE, 1, 4, Frozen Scute
+loot umber_tungsten = SKELETON_KEY, 1, 4, Skeleton Key
+loot umber_tungsten = TUNGSTEN_PLATE, 1, 5, Tungsten Plate
+loot umber_tungsten = UMBER_PLATE, 1, 5, Umber Plate
+loot umber_tungsten = MITHRIL_PLATE, 1, 10, Mithril Plate
+loot umber_tungsten = TUNGSTEN_KEY, 1, 10, Tungsten Key
+loot umber_tungsten = UMBER_KEY, 1, 10, Umber Key
+loot umber_tungsten = DWARVEN_OS_METALLIC_MINIS, 1, 20, Dwarven O's Metallic Minis
+loot umber_tungsten = GLACITE_AMALGAMATION, 1, 20, Glacite Amalgamation
+loot umber_tungsten = REFINED_TUNGSTEN, 1, 20, Refined Tungsten
+loot umber_tungsten = REFINED_UMBER, 1, 20, Refined Umber
+loot umber_tungsten = FLAWLESS_AQUAMARINE_GEM, 1, 25, Flawless Aquamarine Gemstone
+loot umber_tungsten = FLAWLESS_CITRINE_GEM, 1, 25, Flawless Citrine Gemstone
+loot umber_tungsten = FLAWLESS_ONYX_GEM, 1, 25, Flawless Onyx Gemstone
+loot umber_tungsten = FLAWLESS_PERIDOT_GEM, 1, 25, Flawless Peridot Gemstone
+loot umber_tungsten = AQUAMARINE_CRYSTAL, 1, 40, Aquamarine Crystal
+loot umber_tungsten = CITRINE_CRYSTAL, 1, 40, Citrine Crystal
+loot umber_tungsten = ONYX_CRYSTAL, 1, 40, Onyx Crystal
+loot umber_tungsten = OPAL_CRYSTAL, 1, 40, Opal Crystal
+loot umber_tungsten = PERIDOT_CRYSTAL, 1, 40, Peridot Crystal
+loot umber_tungsten = GOBLIN_EGG_BLUE, 1, 80, Blue Goblin Egg
+loot umber_tungsten = ENCHANTMENT_ICE_COLD_1, 1, 80, Enchanted Book (Ice Cold I)
+loot umber_tungsten = DEAD_MANS_CHESTPLATE, 1, 100, Dead Man's Chestplate
+loot umber_tungsten = FINE_AQUAMARINE_GEM, 16, 175, Fine Aquamarine Gemstone
+loot umber_tungsten = FINE_CITRINE_GEM, 16, 175, Fine Citrine Gemstone
+loot umber_tungsten = FINE_ONYX_GEM, 16, 175, Fine Onyx Gemstone
+loot umber_tungsten = FINE_PERIDOT_GEM, 16, 175, Fine Peridot Gemstone
+loot umber_tungsten = FINE_AQUAMARINE_GEM, 8, 350, Fine Aquamarine Gemstone
+loot umber_tungsten = FINE_CITRINE_GEM, 8, 350, Fine Citrine Gemstone
+loot umber_tungsten = FINE_ONYX_GEM, 8, 350, Fine Onyx Gemstone
+loot umber_tungsten = FINE_PERIDOT_GEM, 8, 350, Fine Peridot Gemstone
+loot umber_tungsten = SUSPICIOUS_SCRAP, 4, 350, Suspicious Scrap
+loot umber_tungsten = FINE_AQUAMARINE_GEM, 4, 700, Fine Aquamarine Gemstone
+loot umber_tungsten = FINE_CITRINE_GEM, 4, 700, Fine Citrine Gemstone
+loot umber_tungsten = FINE_ONYX_GEM, 4, 700, Fine Onyx Gemstone
+loot umber_tungsten = FINE_PERIDOT_GEM, 4, 700, Fine Peridot Gemstone
+loot umber_tungsten = SUSPICIOUS_SCRAP, 2, 700, Suspicious Scrap

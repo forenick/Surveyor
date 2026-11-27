@@ -19,9 +19,9 @@ import com.google.gson.JsonPrimitive;
 import dev.skysurveyor.detection.TextPatterns;
 import dev.skysurveyor.util.Resources;
 
-// anonymize recordings: player names -> Player1, Player2.., ur own -> You. same mask all file long
+// names -> Player1, Player2.., own -> You. same mask all file long
 public final class NameMask {
-	// valid mc names. hypixels fake tab entries (!A-a) + npcs w/ odd names fall out here
+	// valid mc names. hypixels fake tab entries (!A-a) + odd npc names fall out
 	private static final Pattern NAME = Pattern.compile("[A-Za-z0-9_]{3,16}");
 	private static final Pattern TOKEN = Pattern.compile("[A-Za-z0-9_]+");
 	// line structure, not game text. a player named "mark" would break replay
@@ -31,10 +31,10 @@ public final class NameMask {
 			"/skysurveyor/shaft_types.txt", "/skysurveyor/item_names.txt", "/skysurveyor/dev_watch.txt");
 
 	private final Set<String> vocabulary;
-	// recorder.ranked, w/ any patterns.txt override
+	// recorder.ranked, overrides too
 	private final TextPatterns patterns;
 	private final Map<String, String> masks = new HashMap<>();
-	// not names, so the online list check skips them fast
+	// not names, online list check skips them fast
 	private final Set<String> rejected = new HashSet<>();
 	private int next = 1;
 
@@ -47,7 +47,7 @@ public final class NameMask {
 		this.patterns = patterns;
 	}
 
-	// a player named like a game word (Jasper, Umber) keeps the word, else "Jasper Gemstone" would break
+	// player named like a game word (Jasper, Umber) keeps it, else "Jasper Gemstone" breaks
 	public static NameMask defaults() {
 		Set<String> words = new HashSet<>();
 		for (String file : VOCABULARY_FILES) {
@@ -68,7 +68,7 @@ public final class NameMask {
 		next = 1;
 	}
 
-	// own = null when unknown
+	// own null = unknown
 	public void update(String own, Collection<String> names) {
 		if (own != null && !masks.containsKey(own) && usable(own)) masks.put(own, "You");
 		for (String name : names) add(name);
@@ -106,7 +106,7 @@ public final class NameMask {
 		return out == null ? text : out.append(text, last, text.length()).toString();
 	}
 
-	// chars of a § code inside the token at i: "§b" = 1, "§#a1b2c3" = 6, else 0
+	// "§b" = 1, "§#a1b2c3" = 6, else 0
 	private static int codeLength(String text, int i) {
 		if (i >= 1 && text.charAt(i - 1) == '§' && "0123456789abcdefklmnorABCDEFKLMNOR".indexOf(text.charAt(i)) >= 0) return 1;
 		if (i >= 2 && text.charAt(i - 1) == '#' && text.charAt(i - 2) == '§' && text.length() >= i + 6
@@ -116,7 +116,7 @@ public final class NameMask {
 		return 0;
 	}
 
-	// every string in it, keys + line structure stay. ranked names learned 1st so the whole line gets them
+	// keys + structure stay. ranked names 1st so the whole line gets them
 	public void apply(JsonObject json) {
 		learn(json);
 		if (masks.isEmpty()) return;

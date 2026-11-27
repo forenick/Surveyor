@@ -22,7 +22,7 @@ class ToastTextTest {
 		JournalEntry entry = entry("BYE", List.of(new Corpse("Lapis", true), new Corpse("Lapis", true), new Corpse("Umber", true)));
 		ShaftValue value = new ShaftValue(List.of(new Line(Part.CORPSES, "Goblin Egg", 1, 1_240_000.0)), List.of());
 		ToastText toast = ToastText.of(entry, new Journal.Session(0, 5, 5, 450_000), value, false);
-		assertEquals("§eJASP_1  §f4m 12s", toast.title());
+		assertEquals("§dJasper 1  §f4m 12s", toast.title());
 		assertEquals(List.of(new ToastText.Row("Corpses", "§9Lapis 2/2§7, §fUmber 1/1"), new ToastText.Row("Coins", "§6+1.2M"),
 				new ToastText.Row("Session", "§f5 shafts§7, avg spawn §f1m 30s")), toast.rows());
 	}
@@ -30,7 +30,7 @@ class ToastTextTest {
 	@Test
 	void frozeNoCorpsesNoPrices() {
 		ToastText toast = ToastText.of(entry("DEATH", List.of()), new Journal.Session(0, 1, 0, 0), null, false);
-		assertEquals("§eJASP_1  §f4m 12s §c(froze)", toast.title());
+		assertEquals("§dJasper 1  §f4m 12s §c(froze)", toast.title());
 		assertEquals(List.of(new ToastText.Row("Coins", "§8no prices yet"), new ToastText.Row("Session", "§f1 shaft")), toast.rows());
 	}
 

@@ -8,7 +8,7 @@ import java.util.regex.Pattern;
 
 import dev.skysurveyor.util.Resources;
 
-// fossil_spots.txt, layout code -> box around its fossil
+// fossil_spots.txt: layout code -> fossil box
 public final class FossilSpots {
 	private static final Pattern LINE = Pattern.compile(
 			"^(?<code>[A-Z]{4}_\\w)\\s*=\\s*(-?\\d+)\\s+(-?\\d+)\\s+(-?\\d+)\\s+(-?\\d+)\\s+(-?\\d+)\\s+(-?\\d+)\\s*,\\s*(?<blocks>\\d+) blocks\\b");
@@ -50,7 +50,7 @@ public final class FossilSpots {
 		return defaults;
 	}
 
-	// null = no fossil known for that layout
+	// null = no fossil known
 	public Spot get(String code) {
 		return code == null ? null : spots.get(code);
 	}

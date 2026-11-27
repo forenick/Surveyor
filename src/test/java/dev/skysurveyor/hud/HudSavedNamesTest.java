@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-// names saved in hud.json or typed in {tags}. a rename drops players lines, so add here, never change
+// saved in hud.json or typed in {tags}, a rename drops players lines. add, never change
 class HudSavedNamesTest {
 	private static final Gson GSON = new Gson();
 
@@ -23,12 +23,12 @@ class HudSavedNamesTest {
 			"session_corpse_fine", "mined_metal", "spawn_timer", "drystreak", "pity", "since_last_shaft", "corpses_looted", "session_time",
 			"shafts_today", "efficiency", "personal_best", "shaft_type", "shaft_time", "shaft_corpses", "shaft_cold", "shaft_campfires", "coins",
 			"coins_per_shaft", "outside_coins", "drops", "fps", "ping", "tps", "clock", "mod_version", "minecraft_version",
-			"fossil_essence", "pristine_potato", "filet_o_fortune", "cold_resistance", "fiesta_flask");
+			"fossil_essence", "pristine_potato", "filet_o_fortune", "cold_resistance", "fiesta_flask", "freeze_in", "shaft_gain", "campfire_gain", "key_corpses", "shaft_name");
 
 	private static final List<String> TAGS = List.of("shafts", "shafts_per_hour", "avg_spawn", "shaft_powder", "corpse_fine",
 			"mined_metal", "spawn", "dry", "pity", "since_shaft", "looted", "session_time", "shafts_today", "efficiency", "pb", "shaft_type",
 			"time_inside", "corpses", "cold", "campfires", "coins", "coins_per_shaft", "outside_coins", "fps", "ping", "tps", "clock",
-			"version", "mc_version", "fossil_essence", "pristine_potato", "filet_o_fortune", "cold_resistance", "fiesta_flask");
+			"version", "mc_version", "fossil_essence", "pristine_potato", "filet_o_fortune", "cold_resistance", "fiesta_flask", "freeze_in", "shaft_gain", "campfire_gain", "key_corpses", "shaft_name");
 
 	@Test
 	void valueIds() {

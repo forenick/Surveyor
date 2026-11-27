@@ -9,11 +9,11 @@ import java.util.regex.Matcher;
 import dev.skysurveyor.detection.TextPatterns;
 import dev.skysurveyor.util.Resources;
 
-// item names like hypixel writes them: rarity colour, gem icon, name, §8x count
+// hypixel look: rarity colour, gem icon, name, §8x count
 public final class ItemNames {
 	private static final char COMMON = 'f';
 
-	// set on the client thread when hypixels pack (un)loads
+	// set on client thread when hypixels pack (un)loads
 	private static volatile boolean iconsLoaded;
 	private static Data data;
 
@@ -21,7 +21,7 @@ public final class ItemNames {
 			Map<String, Character> icons) {
 	}
 
-	// name -> rarity (COMMON, RARE..), null = unknown
+	// null = unknown
 	private final Function<String, String> rarity;
 
 	public ItemNames(Function<String, String> rarity) {
@@ -29,7 +29,7 @@ public final class ItemNames {
 	}
 
 	public static final ItemNames BUNDLED = new ItemNames(name -> null);
-	// w/ hypixels rarities once the item list loaded, any thread
+	// swapped once item list loads, any thread
 	private static volatile ItemNames current = BUNDLED;
 
 	public static ItemNames current() {
@@ -82,7 +82,6 @@ public final class ItemNames {
 		return data;
 	}
 
-	// § code char
 	public char color(String name) {
 		Data d = data();
 		Character fixed = d.colors().get(name);
@@ -97,7 +96,7 @@ public final class ItemNames {
 		return color == null ? COMMON : color;
 	}
 
-	// glyph + space, "" w/o hypixels pack or for non gems
+	// "" w/o hypixels pack or non gems
 	public String icon(String name) {
 		if (!iconsLoaded) return "";
 		Matcher gem = gem(name);

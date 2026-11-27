@@ -19,7 +19,7 @@ import com.google.gson.JsonObject;
 
 import dev.skysurveyor.util.DataFolder;
 
-// all file io on its own thread, the client thread only queues lines
+// all io on its own thread, client thread only queues lines
 final class RecordingWriter implements AutoCloseable {
 	private static final Gson GSON = new Gson();
 	// a crash loses at most this much
@@ -30,7 +30,7 @@ final class RecordingWriter implements AutoCloseable {
 		thread.setDaemon(true);
 		return thread;
 	});
-	// the name asked for till the file is open, then the real one
+	// asked name till the file is open, then the real one
 	private volatile Path file;
 	// recorder thread only, null = not open (yet or failed)
 	private BufferedWriter writer;
@@ -113,7 +113,7 @@ final class RecordingWriter implements AutoCloseable {
 		}
 	}
 
-	// returns right away, the recorder thread finishes the file
+	// returns right away, recorder thread finishes the file
 	@Override
 	public void close() {
 		executor.execute(() -> {
@@ -127,7 +127,7 @@ final class RecordingWriter implements AutoCloseable {
 		executor.shutdown();
 	}
 
-	// game closing only, its a daemon thread so the end of the gzip could be cut
+	// game closing only, daemon thread so the gzip end could be cut
 	void awaitClosed(long millis) {
 		try {
 			executor.awaitTermination(millis, TimeUnit.MILLISECONDS);

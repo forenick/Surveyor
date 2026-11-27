@@ -5,7 +5,7 @@ import com.google.gson.annotations.SerializedName;
 // "dev" in config.json, names never rename (docs/dev-tools-design.md)
 public record DevSettings(AutoRecord autoRecord, KeepRecordings keepRecordings, Boolean recordScreens, Boolean anonymize,
 		Boolean debugOverlay) {
-	// nicks picks 2026-11-21: auto record off. keep 30 days + anonymize on = claudes picks
+	// nick 11-21: auto record off. 30 days + anonymize = claudes picks
 	public static final DevSettings DEFAULTS = new DevSettings(AutoRecord.OFF, KeepRecordings.DAYS_30, true, true, false);
 
 	public enum AutoRecord {
@@ -37,7 +37,7 @@ public record DevSettings(AutoRecord autoRecord, KeepRecordings keepRecordings, 
 		}
 	}
 
-	// hand edited file, anything missing = default
+	// missing = default
 	public DevSettings repaired() {
 		return new DevSettings(autoRecord == null ? DEFAULTS.autoRecord : autoRecord,
 				keepRecordings == null ? DEFAULTS.keepRecordings : keepRecordings,

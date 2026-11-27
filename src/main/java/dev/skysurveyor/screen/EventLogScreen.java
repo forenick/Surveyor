@@ -26,7 +26,7 @@ import dev.skysurveyor.debug.EventLog;
 
 import static dev.skysurveyor.screen.ScreenParts.label;
 
-// /sv debug log: last events, unmatched chat + errors, newest on top. copy = clipboard on click only
+// copies on click only
 public final class EventLogScreen extends BaseOwoScreen<FlowLayout> implements ModScreen {
 	private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm:ss");
 	private static final int PADDING = 8;

@@ -14,7 +14,7 @@ class FossilSpotsTest {
 	void everyLayoutWithAFossil() {
 		FossilSpots spots = FossilSpots.defaults();
 		assertEquals(List.of("AQUA_2", "CITR_2", "JADE_1", "JASP_1", "PERI_1", "PERI_2", "TOPA_1", "TUNG_1"), spots.codes());
-		// every jade essence block in recordings 2026-11-17 + 11-21 sits in here
+		// every jade essence block of recs 11-17 + 11-21 is inside
 		assertEquals(new FossilSpots.Spot("JADE_1", -115, 18, -187, -106, 23, -175, 48), spots.get("JADE_1"));
 		assertEquals(-110, spots.get("JADE_1").centerX());
 		// wiki vs save disagree, left out

@@ -10,9 +10,9 @@ import dev.skysurveyor.hud.HudLayout.Box;
 import dev.skysurveyor.journal.ToastText;
 import dev.skysurveyor.settings.SummarySettings.Style;
 
-// shaft toast for all 3 styles, layouts from Docs/mockups/toast-v1.html
+// layouts from mockups/toast-v1.html
 public final class ToastRenderer {
-	// vanilla advancement toast, 160x32, no nine slice meta so we slice it ourselves
+	// 160x32, no nine slice meta so we slice it
 	private static final Identifier VANILLA = Identifier.withDefaultNamespace("toast/advancement");
 	private static final int SPRITE_WIDTH = 160;
 	private static final int SPRITE_HEIGHT = 32;
@@ -99,8 +99,10 @@ public final class ToastRenderer {
 	static String title(ToastText text, Style style) {
 		String title = text.title();
 		if (style == Style.VANILLA) return title;
-		// hud box titles are bold
-		if (title.startsWith("§e")) title = "§e§l" + title.substring(2);
+		// hud box titles are bold. gem colour first, a colour resets bold
+		if (title.length() >= 2 && title.charAt(0) == '§' && "0123456789abcdef".indexOf(title.charAt(1)) >= 0) {
+			title = title.substring(0, 2) + "§l" + title.substring(2);
+		}
 		int gap = title.indexOf("  ");
 		return gap < 0 ? title : title.substring(0, gap) + "§r" + title.substring(gap);
 	}

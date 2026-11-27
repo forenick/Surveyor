@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class LiveCheckTest {
-	// recording 4
+	// rec 4
 	private static final String PICKOBULUS = "{\"t\":%d,\"type\":\"chat\",\"legacy\":\"§aYou used your §6Pickobulus §aPickaxe Ability!\"}";
 
 	@Test
@@ -57,7 +57,7 @@ class LiveCheckTest {
 		assertEquals(0, check.firstDifference());
 	}
 
-	// /sv debug reload after the 1st ability, the 2nd line only matches w/ the override
+	// /sv debug reload after the 1st ability, 2nd line needs the override
 	@Test
 	void aReloadSwapsThePatternsFromThere() {
 		String reworded = "{\"t\":%d,\"type\":\"chat\",\"legacy\":\"§aYou activated §6Pickobulus§a!\"}";
@@ -72,7 +72,7 @@ class LiveCheckTest {
 		assertEquals(1, check.replayed().size());
 	}
 
-	// recording 6 at 0:55.9, made w/ alpha.13 before RareDrop existed
+	// rec 6 at 0:55.9, alpha.13, before RareDrop
 	private static final String RARE_DROP = "{\"t\":%d,\"type\":\"chat\","
 			+ "\"legacy\":\"§6§lRARE DROP! §9 Fine Citrine Gemstone §b(§b+103 Magic Find§b)\"}";
 	private static final String RARE_DROP_LIVE = "{\"t\":%d,\"type\":\"live\","
@@ -114,7 +114,7 @@ class LiveCheckTest {
 		assertFalse(RecordingReplay.liveCheck(records("{\"t\":0,\"type\":\"start\"}", "{\"t\":12,\"type\":\"world_change\"}")).hasLive());
 	}
 
-	// every recording made w/ live lines must replay the same
+	// every rec w/ live lines must replay the same
 	@Test
 	void recordingsMatchLive() throws IOException {
 		assumeTrue(Files.isDirectory(RecordingReplay.RECORDINGS), "No recordings");

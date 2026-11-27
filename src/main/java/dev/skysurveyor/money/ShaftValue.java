@@ -25,9 +25,9 @@ import dev.skysurveyor.settings.MoneySettings.OwnMetal;
 
 // rules in docs/money-design.md
 public record ShaftValue(List<Line> lines, List<CorpseValue> corpses) {
-	// mining fiesta drop, own row bc its worth so much
+	// fiesta drop, own row bc its worth so much
 	public static final String GLOSSY = "Glossy Gemstone";
-	// bazaar id (money-design.md), not in the item name lists
+	// bazaar id (money-design.md), not in the name lists
 	static final String FOSSIL_ESSENCE_ID = "ESSENCE_FOSSIL";
 	private static final String FLAWLESS = "Flawless ";
 	private static final String FINE = "Fine ";
@@ -61,7 +61,7 @@ public record ShaftValue(List<Line> lines, List<CorpseValue> corpses) {
 	public record Line(Part part, String item, double count, Double coins) {
 	}
 
-	// per looted corpse, key negative, unpriced = items w/o a price (counted as 0)
+	// key negative, unpriced = items w/o price (as 0)
 	public record CorpseValue(String type, double loot, double key, int unpriced, List<Line> items) {
 		public double net() {
 			return loot + key;
@@ -88,7 +88,7 @@ public record ShaftValue(List<Line> lines, List<CorpseValue> corpses) {
 		return lines.stream().filter(l -> l.coins == null).toList();
 	}
 
-	// saved prices first, todays for anything they miss
+	// saved first, todays for the rest
 	public static Prices layered(Map<String, ItemPrice> saved, Prices today) {
 		if (saved == null || saved.isEmpty()) return today;
 		return id -> {
@@ -133,7 +133,7 @@ public record ShaftValue(List<Line> lines, List<CorpseValue> corpses) {
 				if (line.coins() == null) unpriced++;
 				else lootCoins += line.coins();
 			}
-			// resourceful: key kept, costs nothing
+			// resourceful: key kept, free
 			String key = entry.keySaved(i) ? null : CorpseType.key(corpse.type());
 			Double keyCost = null;
 			if (key != null) {
@@ -172,13 +172,13 @@ public record ShaftValue(List<Line> lines, List<CorpseValue> corpses) {
 		return new ShaftValue(List.copyOf(lines), List.copyOf(corpses));
 	}
 
-	// every id the value could use, every gem + metal tier, so settings can change later
+	// every gem + metal tier, so settings can change later
 	public static Map<String, ItemPrice> snapshot(JournalEntry entry, Prices prices, MoneySettings settings, ItemIds ids,
 			TextPatterns patterns) {
 		return snapshot(prices, (recording, used) -> {
 			for (GemTier tier : GemTier.values()) {
 				for (OwnMetal own : OwnMetal.values()) {
-					// ironman uses a subset of these ids
+					// ironman uses a subset of these
 					of(entry, recording, settings.withGemTier(tier).withCrystals(Crystals.PERFECT_MINUS_FLAWLESS).withIronman(false)
 							.withOwnMetal(own), ids, patterns);
 				}
@@ -193,7 +193,7 @@ public record ShaftValue(List<Line> lines, List<CorpseValue> corpses) {
 		});
 	}
 
-	// runs the valuing w/ prices that note every id asked for, keeps the found ones
+	// records every id asked, keeps the found ones
 	static Map<String, ItemPrice> snapshot(Prices prices, BiConsumer<Prices, Set<String>> run) {
 		Set<String> used = new HashSet<>();
 		run.accept(id -> {
@@ -208,8 +208,8 @@ public record ShaftValue(List<Line> lines, List<CorpseValue> corpses) {
 		return saved;
 	}
 
-	// pre 0.14.0 entries didnt save it: sacks - all corpse loot (a bit low) - sacks removed
-	// supercrafts werent saved, removed = their inputs, so only the result counts
+	// pre 0.14.0: sacks - all corpse loot (bit low) - removed
+	// supercrafts not saved, removed = inputs, only the result counts
 	static Map<String, Long> otherDrops(JournalEntry entry, TextPatterns patterns) {
 		if (entry.otherDrops() != null) return entry.otherDrops();
 		Map<String, Long> drops = new LinkedHashMap<>(entry.sacksAdded());
@@ -222,7 +222,7 @@ public record ShaftValue(List<Line> lines, List<CorpseValue> corpses) {
 		return drops;
 	}
 
-	// fine gems (or flawless) as one line, like the setting says
+	// fine (or flawless) as one line, per the setting
 	static Line minedGem(PriceRules v, MoneySettings settings, String gem, double fine) {
 		boolean flawless = !settings.isIronman() && settings.gemTier() == GemTier.FLAWLESS;
 		Double perFine = v.gemPerFine(gem);
@@ -230,14 +230,14 @@ public record ShaftValue(List<Line> lines, List<CorpseValue> corpses) {
 				perFine == null ? null : perFine * fine);
 	}
 
-	// gem of a minedGem line, null = not one
+	// null = not one
 	public static String minedGemName(Line line) {
 		if (line.part != Part.MINED || !line.item.endsWith(GEMSTONE)) return null;
 		String tier = line.item.startsWith(FLAWLESS) ? FLAWLESS : line.item.startsWith(FINE) ? FINE : null;
 		return tier == null ? null : line.item.substring(tier.length(), line.item.length() - GEMSTONE.length());
 	}
 
-	// a minedGem lines count back in fine
+	// count back in fine
 	public static double minedFine(Line line) {
 		return line.item.startsWith(FLAWLESS) ? line.count * GemYield.RECIPE : line.count;
 	}

@@ -10,7 +10,7 @@ import dev.skysurveyor.journal.ToastText;
 import dev.skysurveyor.settings.SummarySettings.Style;
 import dev.skysurveyor.util.Guard;
 
-// vanilla toast slot, top right. manager does the slide + stacking
+// manager does the slide + stacking
 public final class ShaftToast implements Toast {
 	// hud styles keep the hud margin from the screen edge
 	private static final int HUD_INSET = HudLayout.MARGIN;
@@ -40,8 +40,8 @@ public final class ShaftToast implements Toast {
 		return wanted;
 	}
 
-	// own clock, not vanillas time: pauses on mod screens. notification time option stretches it like vanillas own
-	// vanilla calls these, guarded. a broken toast just goes away
+	// own clock, pauses on mod screens. notification time option still applies
+	// vanilla calls these, guarded
 	@Override
 	public void update(ToastManager manager, long time) {
 		if (!broken) broken = !Guard.run("toast", () -> {

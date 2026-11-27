@@ -5,16 +5,16 @@ import java.util.List;
 
 import dev.skysurveyor.util.Format;
 
-// the shaft details Mining part, § coded. plain java
+// § coded
 public final class MiningText {
-	// value = "66%", withSetup = "63%" (null = no setup), tooltip = the rows hover. "" = empty line
+	// "" = empty line
 	public record Lines(String value, String withSetup, List<String> tooltip) {
 	}
 
 	private MiningText() {
 	}
 
-	// null = nothing to show (skipped shaft, old entry)
+	// null = skipped or old entry
 	public static Lines of(MiningStats stats) {
 		Double efficiency = Efficiency.shown(stats);
 		if (efficiency == null) return null;
@@ -24,7 +24,7 @@ public final class MiningText {
 		tooltip.add("§7Blocks you broke §f" + Format.number(stats.blocks()));
 		tooltip.add("§7Nonstop mining would break §f" + Format.number(Math.round(Efficiency.nonstop(stats))));
 		tooltip.add("§8Over " + Format.duration(stats.millis()) + ", from your first gem block");
-		// same ticks as nonstop, so the hover adds up
+		// same ticks as nonstop or the hover wont add up
 		Double ticks = stats.ticks();
 		Double boostTicks = stats.boostTicks();
 		if (ticks != null || boostTicks != null) {
@@ -52,7 +52,7 @@ public final class MiningText {
 		return new Lines(value, withSetup == null ? null : Format.percent(withSetup), List.copyOf(tooltip));
 	}
 
-	// 13 or 12.4, an average over kinds can land between
+	// avg can land between ticks
 	public static String ticks(double ticks) {
 		return Math.abs(ticks - Math.rint(ticks)) < 0.05 ? String.valueOf((long) Math.rint(ticks)) : Format.decimal(ticks);
 	}

@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class StashTest {
-	// recording 5, 16:10:48
+	// rec 5, 16:10:48
 	private static final String REAL = "§r§f             §7You have §37,726,738 §7materials stashed away!";
 
 	private boolean inMines = true;

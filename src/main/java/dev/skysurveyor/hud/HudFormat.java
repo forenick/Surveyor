@@ -25,6 +25,11 @@ public final class HudFormat {
 	private static final List<List<String>> DECIMAL_EXAMPLES = List.of(List.of("19.4"), List.of("19"), List.of("19.42"));
 	private static final List<List<String>> COINS_EXAMPLES = List.of(List.of("43.4k", "1.2M"), List.of("1,204,310"),
 			List.of("1204310"));
+	// on the format buttons, one number per kind so they compare
+	private static final List<String> TIME_BUTTONS = List.of("1:42", "1m 42s", "102s", "42m");
+	private static final List<String> NUMBER_BUTTONS = List.of("43,436", "43.4k", "43436");
+	private static final List<String> DECIMAL_BUTTONS = List.of("19.4", "19", "19.42");
+	private static final List<String> COINS_BUTTONS = List.of("43.4k", "43,436", "43436");
 	// same order as the lists above
 	private static final List<String> TIME_NAMES = List.of("clock", "minutes", "seconds", "timer");
 	private static final List<String> INTEGER_NAMES = List.of("comma", "short", "plain");
@@ -60,6 +65,18 @@ public final class HudFormat {
 		};
 		if (format < 0 || format >= examples.size()) return "";
 		return String.join(", ", examples.get(format).stream().map(example -> example + suffix).toList());
+	}
+
+	// what a format button says, the pattern if none
+	public static String button(Kind kind, int format) {
+		List<String> buttons = switch (kind) {
+			case TIME -> TIME_BUTTONS;
+			case INTEGER -> NUMBER_BUTTONS;
+			case DECIMAL -> DECIMAL_BUTTONS;
+			case COINS -> COINS_BUTTONS;
+			case COLD, TEXT -> List.of();
+		};
+		return format >= 0 && format < buttons.size() ? buttons.get(format) : options(kind).get(format);
 	}
 
 	public static List<String> names(Kind kind) {
@@ -138,7 +155,7 @@ public final class HudFormat {
 	private static String time(long seconds, int format) {
 		// -0:13, not 0:-13
 		if (seconds < 0) return "-" + time(-seconds, format);
-		// whole minutes like the tab footer, clock under 10 min (consumables, Docs/consumables-design.md)
+		// whole minutes like the tab footer, clock under 10 min (consumables-design)
 		if (format == 3 && seconds >= 600) return seconds >= 3600 ? seconds / 3600 + "h " + seconds % 3600 / 60 + "m" : seconds / 60 + "m";
 		// hours for session length + time since last shaft
 		if (seconds >= 3600 && format != 2) {

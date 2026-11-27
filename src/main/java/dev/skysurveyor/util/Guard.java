@@ -13,10 +13,10 @@ import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-// every call from the game into us. a throw in a packet handler = vanilla disconnects, in a tick = crash
+// throw in packet handler = disconnect, in tick = crash
 // RuntimeException only, Errors still go up
 public final class Guard {
-	// display choice, a throw per tick or frame cant flood the log
+	// display choice, no log flood
 	static final int LOG_EVERY = 1000;
 	private static final Logger LOGGER = LoggerFactory.getLogger("Surveyor");
 	private static final List<Consumer<Failure>> LISTENERS = new CopyOnWriteArrayList<>();
@@ -34,7 +34,7 @@ public final class Guard {
 		}
 	});
 
-	// logged ones only (1st + every LOG_EVERY), any thread
+	// logged ones only, any thread
 	public record Failure(String what, long count, String error, String frame) {
 	}
 
@@ -50,7 +50,6 @@ public final class Guard {
 		this.report = report;
 	}
 
-	// every kind since start, w/ its count so far + its 1st error
 	public static List<Failure> failures() {
 		return SHARED.all();
 	}
@@ -62,7 +61,7 @@ public final class Guard {
 		return all;
 	}
 
-	// every error since start, listeners only see the logged ones
+	// listeners only get logged ones
 	public static long errorCount() {
 		return SHARED.total();
 	}
@@ -85,7 +84,7 @@ public final class Guard {
 		return SHARED.attemptGet(what, task, fallback);
 	}
 
-	// each on its own, one throwing doesnt skip the rest
+	// one throwing doesnt skip the rest
 	public static <T> void each(String what, List<? extends Consumer<? super T>> listeners, T value) {
 		SHARED.attemptEach(what, listeners, value);
 	}
@@ -117,7 +116,7 @@ public final class Guard {
 		for (Consumer<? super T> listener : listeners) attempt(what, () -> listener.accept(value));
 	}
 
-	// kind = where in our code it threw, so 2 bugs under one label both get their stack
+	// kind = where it threw, 2 bugs per label both get a stack
 	private void failed(String what, RuntimeException error) {
 		String key = what + "|" + error.getClass().getName() + "|" + ownFrame(error.getStackTrace());
 		long count = counts.computeIfAbsent(key, k -> new AtomicLong()).incrementAndGet();

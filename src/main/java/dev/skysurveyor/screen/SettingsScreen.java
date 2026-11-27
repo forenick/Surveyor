@@ -18,6 +18,7 @@ import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Color;
 import io.wispforest.owo.ui.core.CursorStyle;
+import io.wispforest.owo.ui.core.HorizontalAlignment;
 import io.wispforest.owo.ui.core.Insets;
 import io.wispforest.owo.ui.core.OwoUIAdapter;
 import io.wispforest.owo.ui.core.Sizing;
@@ -34,56 +35,63 @@ import net.minecraft.util.FormattedCharSequence;
 
 import dev.skysurveyor.Surveyor;
 import dev.skysurveyor.debug.LiveDebug;
+import dev.skysurveyor.hud.EditHudScreen;
 import dev.skysurveyor.money.LiveMoney;
 import dev.skysurveyor.money.PriceBook;
 import dev.skysurveyor.settings.Setting;
+import dev.skysurveyor.settings.Setting.Action;
 import dev.skysurveyor.settings.Setting.Choice;
 import dev.skysurveyor.settings.Setting.Option;
 import dev.skysurveyor.settings.Settings;
 import dev.skysurveyor.settings.SettingsList;
 import dev.skysurveyor.settings.SettingsList.Category;
+import dev.skysurveyor.settings.SettingsList.Preview;
 import dev.skysurveyor.settings.SettingsList.Section;
 import dev.skysurveyor.util.Format;
 
 import static dev.skysurveyor.screen.ScreenParts.label;
 import static dev.skysurveyor.screen.ScreenParts.wrapped;
 
-// mockup: docs/mockups/settings-v2.html. every change saves right away
+// mockup docs/mockups/settings-v3.html
 public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements ModScreen {
-	private static final Surface CARD = Surface.flat(0x0CFFFFFF);
-	private static final Surface CARD_HOVER = Surface.flat(0x16FFFFFF);
-	private static final Surface ROW_HOVER = Surface.flat(0x18FFFFFF);
-	private static final Surface ROW_SELECTED = Surface.flat(0x26FFFFFF);
+	private static final int ROW_FILL = 0x0CFFFFFF;
+	private static final int ROW_HOVER = 0x18FFFFFF;
+	private static final int CHANGED_EDGE = 0xFFFFFF55;
+	private static final Surface SIDE_HOVER = Surface.flat(0x18FFFFFF);
+	private static final Surface SIDE_SELECTED = Surface.flat(0x26FFFFFF);
 	private static final int PADDING = 8;
-	private static final int GAP = 5;
+	private static final int GAP = 4;
 	private static final int BAR_PADDING = 4;
 	private static final int BAR_GAP = 4;
 	private static final int SIDE_PADDING = 3;
 	private static final int MAIN_PADDING = 7;
 	private static final int SCROLLBAR = 3;
-	private static final int CARD_PADDING = 4;
-	private static final int CARD_GAP = 6;
+	private static final int HELP_PADDING = 7;
 	private static final int BUTTON = 16;
-	private static final int OPTION = 11;
 	private static final int FIELD = 44;
-	// colour swatch + picker, display choices
+	// display choices
+	private static final int ROW_TOP = 3;
+	private static final int ROW_LEFT = 6;
+	private static final int ROW_RIGHT = 5;
+	private static final int ROW_GAP = 6;
+	private static final int INDENT = 10;
+	private static final int EDGE = 2;
+	private static final int CHOICE_PAD = 10;
 	private static final int SWATCH = 12;
 	private static final int PICKER_WIDTH = 150;
 	private static final int PICKER_HEIGHT = 60;
-	// below this the control goes under the text
+	// text narrower = control under it
 	private static final int MIN_TEXT = 140;
-	// below this each card sizes its own control, display choice
-	private static final int NARROW = 560;
+	// at or below = every control under its text, like the mockup at scale 4
+	private static final int STACK_WIDTH = 480;
+	// above = help pane on the right
+	private static final int PANE_WIDTH = 640;
 	private static final int TIP_WIDTH = 200;
-	// typed number applies after this many quiet ticks or on click away
+	// quiet ticks before a typed number applies
 	private static final int TYPE_DELAY = 10;
 	private static final Identifier SEARCH_ICON = icon("search_icon");
 	private static final Identifier RESET_ICON = icon("reset_icon");
 	private static final Identifier RESET_ALL_ICON = icon("reset_red_icon");
-	private static final Identifier RADIO_ON = icon("radio_on_icon");
-	private static final Identifier RADIO_OFF = icon("radio_off_icon");
-	private static final Identifier CHECK_ICON = icon("check_icon");
-	private static final Identifier CROSS_ICON = icon("cross_icon");
 	private static final Map<Identifier, Integer> ICON_WIDTHS = new HashMap<>();
 
 	private final Screen parent;
@@ -92,11 +100,15 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 	private String category = SettingsList.MONEY;
 	private FlowLayout root;
 	private FlowLayout side;
+	private FlowLayout body;
 	private FlowLayout main;
 	private KeptScroll mainScroll;
+	// null = no pane at this size
+	private FlowLayout help;
+	private KeptScroll helpScroll;
 	private TextBoxComponent search;
-	private FlowLayout categoryHead;
-	private ButtonComponent resetCategory;
+	private FlowLayout resetHolder;
+	private ButtonComponent resetAll;
 	private boolean resetArmed;
 	private LabelComponent bazaarAge;
 	private LabelComponent binsAge;
@@ -104,15 +116,19 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 	private String binsText;
 	private LabelComponent saveNote;
 	private String saveText;
-	// shown ones, in page order
-	private final List<Card> cards = new ArrayList<>();
-	// built once per size, search only shows, hides + reorders them
-	private final Map<Setting, Card> built = new IdentityHashMap<>();
-	// widest control of all settings, per size
-	private int widestControl = -1;
+	private final List<Row> rows = new ArrayList<>();
+	// built once per size, a category or search only re-adds them
+	private final Map<Setting, Row> built = new IdentityHashMap<>();
+	// what the page lists now, folding changes it
+	private List<Setting> shown = List.of();
 	private final List<TextBoxComponent> homeFields = new ArrayList<>();
-	private final Map<String, UIComponent> sectionHeads = new HashMap<>();
 	private final Map<UIComponent, List<FormattedCharSequence>> tips = new IdentityHashMap<>();
+	// side count tips, rebuilt w/ the side
+	private final Map<UIComponent, List<FormattedCharSequence>> sideTips = new IdentityHashMap<>();
+	private String sideKey;
+	// row under the mouse, row the pane shows
+	private Row hovered;
+	private Setting hot;
 	private int builtWidth;
 	private int builtHeight;
 	private int ticks;
@@ -165,14 +181,15 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 		String typed = search.getValue();
 		if (!typed.equals(query)) {
 			query = typed;
+			hot = null;
 			fillBody();
 		}
-		for (Card card : List.copyOf(cards)) card.poll();
+		for (Row row : List.copyOf(rows)) row.poll();
 		// hand edit picked up on the io thread
 		Settings now = Surveyor.SETTINGS.get();
 		if (!now.equals(settings)) {
 			settings = now;
-			refreshCards();
+			changed();
 		}
 		if (++ticks % 10 == 0) updatePrices();
 		updateSaveNote();
@@ -182,6 +199,7 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
 		homeFields.forEach(ScreenParts::rehome);
 		homeFields.clear();
+		trackHover(mouseX, mouseY);
 		super.extractRenderState(graphics, mouseX, mouseY, delta);
 		drawTip(graphics, mouseX, mouseY);
 	}
@@ -189,14 +207,15 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 	private void rebuild() {
 		builtWidth = width;
 		builtHeight = height;
-		// card sizes come from the width
 		flushTyped();
 		built.clear();
-		cards.clear();
-		widestControl = -1;
+		rows.clear();
+		hot = null;
+		hovered = null;
+		sideKey = null;
 		root.clearChildren();
 		root.child(topBar());
-		FlowLayout body = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.expand());
+		body = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.expand());
 		body.gap(GAP);
 		side = UIContainers.verticalFlow(Sizing.fixed(sideWidth()), Sizing.fill(100));
 		side.surface(ScreenParts.PANEL);
@@ -210,6 +229,16 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 		mainScroll.scrollbarThiccness(SCROLLBAR);
 		body.child(side);
 		body.child(mainScroll);
+		help = null;
+		helpScroll = null;
+		if (pane()) {
+			help = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
+			help.gap(3);
+			helpScroll = new KeptScroll(Sizing.fixed(helpWidth()), Sizing.fill(100), help);
+			helpScroll.surface(ScreenParts.PANEL);
+			helpScroll.padding(Insets.of(HELP_PADDING - 1, HELP_PADDING, HELP_PADDING, HELP_PADDING));
+			body.child(helpScroll);
+		}
 		root.child(body);
 		FlowLayout footer = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
 		footer.gap(16);
@@ -217,7 +246,7 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 		saveText = null;
 		updateSaveNote();
 		footer.child(saveNote);
-		footer.child(label("§8Changes apply right away"));
+		if (!pane()) footer.child(label("§7Hover a setting for details"));
 		root.child(footer);
 		fillBody();
 	}
@@ -233,7 +262,7 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 		title.verticalAlignment(VerticalAlignment.CENTER);
 		title.margins(Insets.left(2));
 		title.child(UIComponents.texture(JournalScreen.SETTINGS_ICON, 0, 0, 8, 8, 8, 8));
-		title.child(label("§fSurveyor §7Settings"));
+		title.child(label(width <= STACK_WIDTH ? "§fSettings" : "§fSurveyor §7Settings"));
 		bar.child(title);
 		bar.child(UIContainers.horizontalFlow(Sizing.expand(), Sizing.content()));
 		bar.child(UIComponents.texture(SEARCH_ICON, 0, 0, 8, 8, 8, 8));
@@ -245,21 +274,37 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 		search.setHint(Component.literal("Search settings").setStyle(EditBox.SEARCH_HINT_STYLE));
 		homeFields.add(search);
 		bar.child(search);
-		ButtonComponent back = PackButton.button(Component.literal("Back"), b -> onClose());
+		// done = closes, like edit hud
+		ButtonComponent back = PackButton.button(Component.literal("Done"), b -> onClose());
 		// same as owo's content(6)
-		back.horizontalSizing(Sizing.fixed(font.width("Back") + 20));
+		back.horizontalSizing(Sizing.fixed(font.width("Done") + 20));
 		back.margins(Insets.left(2));
 		bar.child(back);
 		return bar;
 	}
 
+	// fits "Bug reports 1" in the vanilla font
 	private int sideWidth() {
-		return width <= 480 ? 78 : width <= 640 ? 96 : 116;
+		return width <= 640 ? 104 : 116;
 	}
 
-	// main panel minus padding + scrollbar
+	private boolean pane() {
+		return width > PANE_WIDTH;
+	}
+
+	// mockup 250 at 960
+	private int helpWidth() {
+		return Math.clamp(width * 26 / 100, 200, 340);
+	}
+
+	private int helpInner() {
+		return helpWidth() - 2 * HELP_PADDING - SCROLLBAR;
+	}
+
 	private int mainInner() {
-		return width - 2 * PADDING - sideWidth() - GAP - 2 * MAIN_PADDING - SCROLLBAR - 2;
+		int used = 2 * PADDING + sideWidth() + GAP + 2 * MAIN_PADDING + SCROLLBAR + 2;
+		if (pane()) used += helpWidth() + GAP;
+		return width - used;
 	}
 
 	private boolean searching() {
@@ -269,78 +314,94 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 	// added in one go, owo relayouts per child
 	private void fillBody() {
 		flushTyped();
-		cards.clear();
-		tips.clear();
-		sectionHeads.clear();
-		categoryHead = null;
-		resetCategory = null;
+		rows.clear();
+		resetHolder = null;
+		resetAll = null;
 		resetArmed = false;
 		bazaarAge = null;
 		binsAge = null;
 		bazaarText = null;
 		binsText = null;
-		side.clearChildren();
+		hovered = null;
 		main.clearChildren();
-		List<UIComponent> rows = new ArrayList<>();
-		fillSide(rows);
-		side.children(rows);
-		List<UIComponent> body = new ArrayList<>();
-		if (searching()) fillSearch(body);
-		else fillCategory(body, category(category));
-		for (Card card : cards) tips.putAll(card.tips);
-		main.children(body);
-		refreshCards();
+		List<UIComponent> list = new ArrayList<>();
+		if (searching()) fillSearch(list);
+		else fillCategory(list, category(category));
+		main.children(list);
+		shown = rows.stream().map(r -> r.setting).toList();
+		fillSide();
+		refreshRows();
 		updatePrices();
+		fillHelp();
 	}
 
 	private static Category category(String id) {
 		return SettingsList.CATEGORIES.stream().filter(c -> c.id().equals(id)).findFirst().orElse(SettingsList.CATEGORIES.getFirst());
 	}
 
-	private void fillSide(List<UIComponent> rows) {
+	// counts or hits change it, else kept
+	private void fillSide() {
+		StringBuilder key = new StringBuilder(category).append('|').append(query);
 		for (Category c : SettingsList.CATEGORIES) {
+			key.append('|').append(searching() ? c.matching(query).settings().size() : c.changed(settings));
+		}
+		if (key.toString().equals(sideKey)) return;
+		sideKey = key.toString();
+		sideTips.clear();
+		side.clearChildren();
+		List<UIComponent> entries = new ArrayList<>();
+		boolean lined = false;
+		for (Category c : SettingsList.CATEGORIES) {
+			if (c.apart() && !lined) {
+				lined = true;
+				entries.add(UIContainers.verticalFlow(Sizing.fill(100), Sizing.expand()));
+				FlowLayout line = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.fixed(1));
+				line.surface(Surface.flat(0x1CFFFFFF));
+				line.margins(Insets.of(3, 3, 2, 2));
+				entries.add(line);
+			}
 			int hits = searching() ? c.matching(query).settings().size() : 0;
+			int changed = c.changed(settings);
 			boolean on = !searching() && c.id().equals(category);
 			FlowLayout row = clickRow(16, on, () -> {
 				category = c.id();
 				query = "";
 				search.setValue("");
+				hot = null;
 				fillBody();
+				mainScroll.offset(0);
 			});
 			row.padding(Insets.horizontal(4));
 			row.gap(4);
-			// fixed 8 wide so names line up, icon drawn at its own width
+			// fixed 8 wide so names line up
 			FlowLayout iconBox = UIContainers.horizontalFlow(Sizing.fixed(8), Sizing.fixed(8));
 			Identifier icon = icon(c.icon());
 			int iconWidth = iconWidth(icon);
 			iconBox.child(UIComponents.texture(icon, 0, 0, iconWidth, 8, iconWidth, 8));
 			row.child(iconBox);
-			LabelComponent name = label((on ? "§e" : searching() && hits == 0 ? "§8" : "§f") + c.name());
-			name.horizontalSizing(Sizing.expand());
-			row.child(name);
-			if (hits > 0) row.child(label("§8" + hits));
-			rows.add(row);
-			// section jumps, no room at 480
-			if (!on || c.sections().size() < 2 || width <= 480) continue;
-			for (Section section : c.sections()) {
-				FlowLayout sub = clickRow(12, false, () -> {
-					UIComponent head = sectionHeads.get(section.name());
-					if (head != null) mainScroll.scrollTo(head);
-				});
-				sub.padding(Insets.left(16));
-				sub.child(label("§7" + section.name()));
-				rows.add(sub);
+			boolean dim = searching() ? hits == 0 : c.apart() && !on;
+			String number = searching() ? hits > 0 ? "§7" + hits : "" : changed > 0 ? "§e" + changed : "";
+			// one line, clipped if the count leaves no room
+			int room = sideWidth() - 2 * SIDE_PADDING - 8 - 8 - 4 - 4 - (number.isEmpty() ? 0 : 4 + font.width(number));
+			row.child(label((on ? "§e" : dim ? "§8" : "§f") + ScreenParts.clip(font, c.name(), room)));
+			row.child(UIContainers.horizontalFlow(Sizing.expand(), Sizing.fixed(1)));
+			if (!number.isEmpty()) {
+				LabelComponent count = label(number);
+				if (!searching()) sideTips.put(count, font.split(Component.literal("§f" + changed + " changed from the default"), TIP_WIDTH));
+				row.child(count);
 			}
+			entries.add(row);
 		}
+		side.children(entries);
 	}
 
 	private FlowLayout clickRow(int height, boolean selected, Runnable click) {
 		FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.fixed(height));
 		row.verticalAlignment(VerticalAlignment.CENTER);
-		row.surface(selected ? ROW_SELECTED : Surface.BLANK);
+		row.surface(selected ? SIDE_SELECTED : Surface.BLANK);
 		if (selected) return row;
 		row.cursorStyle(CursorStyle.HAND);
-		row.mouseEnter().subscribe(() -> row.surface(ROW_HOVER));
+		row.mouseEnter().subscribe(() -> row.surface(SIDE_HOVER));
 		row.mouseLeave().subscribe(() -> row.surface(Surface.BLANK));
 		row.mouseDown().subscribe((event, doubleClick) -> {
 			click.run();
@@ -349,58 +410,167 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 		return row;
 	}
 
-	private void fillSearch(List<UIComponent> body) {
+	private void fillSearch(List<UIComponent> list) {
 		boolean any = false;
 		for (Category c : SettingsList.CATEGORIES) {
 			Category hits = c.matching(query);
 			if (hits.sections().isEmpty()) continue;
 			LabelComponent head = label("§e" + c.name());
-			if (any) head.margins(Insets.top(10));
-			body.add(head);
-			sections(body, hits);
+			head.margins(Insets.of(any ? 10 : 2, 1, 0, 0));
+			list.add(head);
+			// folded ones show too, not indented
+			for (Setting setting : hits.settings()) addRow(list, setting, false);
 			any = true;
 		}
-		if (!any) body.add(wrapped("§8No settings match \"" + query.strip() + "\""));
+		if (!any) list.add(wrapped("§8No settings match \"" + query.strip() + "\""));
 	}
 
-	private void fillCategory(List<UIComponent> body, Category c) {
-		categoryHead = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.fixed(BUTTON));
-		categoryHead.verticalAlignment(VerticalAlignment.CENTER);
-		LabelComponent name = label("§e" + c.name());
-		name.horizontalSizing(Sizing.expand());
-		categoryHead.child(name);
-		body.add(categoryHead);
-		body.add(wrapped("§7" + c.description()));
-		sections(body, c);
-		if (c.id().equals(SettingsList.MONEY)) prices(body);
-		if (c.id().equals(SettingsList.DEV)) bugReports(body);
-		armReset(false);
-	}
-
-	// asks twice like edit hud. new button each time, owo doesnt re-measure a changed label
-	private void armReset(boolean armed) {
-		resetArmed = armed;
-		boolean shown = resetCategory != null && resetCategory.hasParent();
-		if (resetCategory != null) {
-			tips.remove(resetCategory);
-			if (shown) {
-				dropFocusIn(resetCategory);
-				categoryHead.removeChild(resetCategory);
+	private void fillCategory(List<UIComponent> list, Category c) {
+		if (!pane()) {
+			LabelComponent intro = label("§7" + c.description());
+			intro.horizontalSizing(Sizing.fixed(mainInner()));
+			intro.margins(Insets.bottom(2));
+			list.add(intro);
+		}
+		boolean first = true;
+		for (Section section : c.sections()) {
+			list.add(sectionHead(section.name(), first));
+			first = false;
+			for (Setting setting : section.settings()) {
+				if (!setting.folded(settings)) addRow(list, setting, setting.isChild());
 			}
 		}
+		if (c.id().equals(SettingsList.MONEY)) prices(list);
+		if (!pane()) {
+			resetHolder = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+			resetHolder.margins(Insets.top(8));
+			list.add(resetHolder);
+		}
+	}
+
+	private void addRow(List<UIComponent> list, Setting setting, boolean indented) {
+		Row row = built.computeIfAbsent(setting, Row::new);
+		row.place(indented);
+		list.add(row.box);
+		rows.add(row);
+	}
+
+	private FlowLayout sectionHead(String name, boolean first) {
+		FlowLayout head = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+		head.gap(4);
+		head.verticalAlignment(VerticalAlignment.CENTER);
+		head.margins(Insets.of(first ? 2 : 9, 1, 0, 0));
+		head.child(label("§f" + name));
+		head.child(UIComponents.box(Sizing.expand(), Sizing.fixed(1)).color(Color.ofArgb(0x1CFFFFFF)).fill(true));
+		return head;
+	}
+
+	private void prices(List<UIComponent> list) {
+		list.add(sectionHead("Prices", false));
+		FlowLayout box = UIContainers.verticalFlow(Sizing.fixed(mainInner()), Sizing.content());
+		box.surface(Surface.flat(ROW_FILL));
+		box.padding(Insets.of(ROW_TOP, ROW_TOP, ROW_LEFT, ROW_RIGHT));
+		box.gap(1);
+		box.margins(Insets.top(2));
+		FlowLayout ages = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
+		ages.gap(12);
+		bazaarAge = label("");
+		binsAge = label("");
+		ages.child(bazaarAge);
+		ages.child(binsAge);
+		box.child(ages);
+		LabelComponent note = label("§7Fetched when you enter a shaft or open the journal.");
+		note.horizontalSizing(Sizing.fixed(mainInner() - ROW_LEFT - ROW_RIGHT));
+		box.child(note);
+		list.add(box);
+	}
+
+	// pane: the hot setting, else the category w/ its reset all
+	private void fillHelp() {
+		if (help != null) {
+			resetHolder = null;
+			help.clearChildren();
+			List<UIComponent> parts = new ArrayList<>();
+			if (hot != null) settingHelp(parts, hot);
+			else categoryHelp(parts);
+			help.children(parts);
+			helpScroll.offset(0);
+		}
+		fillReset();
+	}
+
+	private void categoryHelp(List<UIComponent> parts) {
 		Category c = category(category);
-		resetCategory = new IconButton(Component.literal(armed ? "§cReally reset all?" : "§cReset all"), RESET_ALL_ICON, 8, 8, b -> {
+		parts.add(helpLine(searching() ? "§fSearch" : "§f" + c.name()));
+		parts.add(helpLine(searching() ? "§7Results from every category. Click a category to leave the search." : "§7" + c.description()));
+		parts.add(helpLine("§8Hover a setting to see what it does and what each choice means."));
+		if (searching()) return;
+		int changed = c.changed(settings);
+		if (changed == 0) return;
+		LabelComponent count = helpLine("§8" + changed + " changed here");
+		count.margins(Insets.top(6));
+		parts.add(count);
+		resetHolder = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+		parts.add(resetHolder);
+	}
+
+	private void settingHelp(List<UIComponent> parts, Setting setting) {
+		parts.add(helpLine("§f" + setting.name()));
+		parts.add(helpLine("§7" + setting.description()));
+		if (setting instanceof Choice<?> choice) options(parts, choice);
+		String unused = setting.unused(settings);
+		if (unused != null) parts.add(helpLine("§8" + unused + "."));
+		if (!(setting instanceof Action)) {
+			LabelComponent def = helpLine("§8Default: " + setting.defaultText());
+			def.margins(Insets.top(2));
+			parts.add(def);
+		}
+		Preview preview = SettingsList.preview(setting);
+		if (preview != null) parts.addAll(SettingsPreviews.of(preview, settings, font, helpInner()));
+	}
+
+	private <T> void options(List<UIComponent> parts, Choice<T> choice) {
+		T value = choice.get().apply(settings);
+		for (Option<T> option : choice.options()) {
+			FlowLayout block = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
+			block.margins(Insets.top(2));
+			block.child(helpLine((option.value().equals(value) ? "§e" : "§f") + option.label()));
+			block.child(helpLine("§7" + option.tip()));
+			parts.add(block);
+		}
+	}
+
+	private LabelComponent helpLine(String text) {
+		LabelComponent line = label(text);
+		line.horizontalSizing(Sizing.fixed(helpInner()));
+		return line;
+	}
+
+	// owo doesnt re-measure a changed label, idk why
+	private void fillReset() {
+		if (resetHolder == null) return;
+		resetHolder.clearChildren();
+		tips.remove(resetAll);
+		resetAll = null;
+		Category c = category(category);
+		if (searching() || c.isDefault(settings)) {
+			resetArmed = false;
+			return;
+		}
+		boolean armed = resetArmed;
+		resetAll = new IconButton(Component.literal(armed ? "§cReally reset all?" : "§cReset all"), RESET_ALL_ICON, 8, 8, b -> {
 			if (!resetArmed) {
-				armReset(true);
+				resetArmed = true;
+				fillReset();
 				return;
 			}
-			armReset(false);
+			resetArmed = false;
 			apply(c::reset);
 		});
-		resetCategory.verticalSizing(Sizing.fixed(BUTTON));
-		tip(resetCategory, armed ? "§fClick again to reset every " + c.name() + " setting to its default. This can't be undone."
+		resetAll.verticalSizing(Sizing.fixed(BUTTON));
+		tip(resetAll, armed ? "§fClick again to reset every " + c.name() + " setting to its default. This can't be undone."
 				: "§fReset every " + c.name() + " setting to its default");
-		if (shown) categoryHead.child(resetCategory);
+		resetHolder.child(resetAll);
 	}
 
 	private void dropFocusIn(UIComponent removed) {
@@ -412,70 +582,36 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 		}
 	}
 
-	// any click off the armed button disarms it, like edit hud
 	@Override
 	public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
-		if (resetArmed && !resetCategory.isInBoundingBox(click.x(), click.y())) armReset(false);
+		if (resetArmed && (resetAll == null || !resetAll.isInBoundingBox(click.x(), click.y()))) {
+			resetArmed = false;
+			if (resetAll != null) dropFocusIn(resetAll);
+			fillReset();
+		}
 		return super.mouseClicked(click, doubled);
 	}
 
-	private void sections(List<UIComponent> body, Category c) {
-		for (Section section : c.sections()) {
-			body.add(sectionHead(section.name()));
-			for (Setting setting : section.settings()) {
-				Card card = built.computeIfAbsent(setting, Card::new);
-				body.add(card.box);
-				cards.add(card);
+	// row under the mouse lights up and fills the pane. pane keeps it while the mouse is right of the side
+	private void trackHover(int mouseX, int mouseY) {
+		Row over = null;
+		if (mainScroll.isInBoundingBox(mouseX, mouseY)) {
+			for (Row row : rows) {
+				if (row.box.hasParent() && row.box.isInBoundingBox(mouseX, mouseY)) {
+					over = row;
+					break;
+				}
 			}
 		}
-	}
-
-	private FlowLayout sectionHead(String name) {
-		FlowLayout head = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
-		head.gap(4);
-		head.verticalAlignment(VerticalAlignment.CENTER);
-		head.margins(Insets.of(10, 1, 0, 0));
-		head.child(label("§f" + name));
-		head.child(UIComponents.box(Sizing.expand(), Sizing.fixed(1)).color(Color.ofArgb(0x1CFFFFFF)).fill(true));
-		sectionHeads.put(name, head);
-		return head;
-	}
-
-	private void prices(List<UIComponent> body) {
-		body.add(sectionHead("Prices"));
-		FlowLayout box = card();
-		FlowLayout ages = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
-		ages.gap(12);
-		bazaarAge = label("");
-		binsAge = label("");
-		ages.child(bazaarAge);
-		ages.child(binsAge);
-		box.child(ages);
-		LabelComponent note = label("§7Fetched when you enter a shaft or open the journal.");
-		note.horizontalSizing(Sizing.fixed(mainInner() - 2 * CARD_PADDING));
-		box.child(note);
-		body.add(box);
-	}
-
-	private void bugReports(List<UIComponent> body) {
-		body.add(sectionHead("Bug reports"));
-		FlowLayout box = card();
-		LabelComponent note = label("§7Copies versions, your mods, changed settings, errors and data file sizes, to paste into a "
-				+ "GitHub issue. No names, chat or coordinates.");
-		note.horizontalSizing(Sizing.fixed(mainInner() - 2 * CARD_PADDING));
-		box.child(note);
-		FlowLayout row = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
-		row.gap(6);
-		row.verticalAlignment(VerticalAlignment.CENTER);
-		LabelComponent done = label("");
-		ButtonComponent copy = PackButton.button(Component.literal("Copy debug info"),
-				b -> LiveDebug.copyDebugInfo(minecraft, () -> done.text(Component.literal("§aCopied"))));
-		copy.horizontalSizing(Sizing.fixed(font.width("Copy debug info") + 20));
-		copy.verticalSizing(Sizing.fixed(BUTTON));
-		row.child(copy);
-		row.child(done);
-		box.child(row);
-		body.add(box);
+		hovered = over;
+		if (help == null) return;
+		Setting want = hot;
+		if (over != null) want = over.setting;
+		else if (!(mouseX >= mainScroll.x() && mouseY >= body.y() && mouseY < body.y() + body.height())) want = null;
+		if (want != hot) {
+			hot = want;
+			fillHelp();
+		}
 	}
 
 	private void updatePrices() {
@@ -490,97 +626,67 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 	}
 
 	private void updateSaveNote() {
-		String text = Surveyor.SETTINGS.saveError() == null ? "§8Saved in config.json" : "§cCould not save config.json, see the log";
+		// same words as edit hud
+		String text = Surveyor.SETTINGS.saveError() == null ? "§7Changes save by themselves"
+				: "§cCouldn't save your settings (config.json). The log says why";
 		if (!text.equals(saveText)) saveNote.text(Component.literal(saveText = text));
 	}
 
-	// green = still fresh, gray = waits for the next shaft or journal open
+	// gray = waits for next shaft or journal open
 	private static String age(long at, long maxAge, long now) {
 		boolean fresh = at > 0 && now - at <= maxAge;
 		if (!fresh && Surveyor.MONEY.refreshing()) return "§7fetching";
 		if (at <= 0) return "§8never";
-		long minutes = Math.max(0, now - at) / 60_000;
-		String ago = minutes < 1 ? "just now" : minutes < 60 ? minutes + "m ago" : minutes < 24 * 60 ? minutes / 60 + "h ago"
-				: minutes / (24 * 60) + "d ago";
-		return (fresh ? "§a" : "§7") + ago;
+		return (fresh ? "§a" : "§7") + Format.ago(now - at);
 	}
 
-	private static FlowLayout card() {
-		FlowLayout box = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
-		box.surface(CARD);
-		box.padding(Insets.of(CARD_PADDING));
-		box.gap(2);
-		return box;
-	}
-
-	// built on memory now, not a stale copy. true = cards refreshed
+	// true = changed
 	private boolean apply(Function<Settings, Settings> change) {
-		// a click lands before the tick, keep a number typed right before it
+		// click lands before the tick
 		flushTyped();
 		Settings next = Surveyor.SETTINGS.change(change);
 		if (next.equals(settings)) return false;
 		settings = next;
-		refreshCards();
+		changed();
 		return true;
 	}
 
-	private void flushTyped() {
-		for (Card card : List.copyOf(cards)) card.flush();
+	// a fold opened or closed = new list, else refresh in place
+	private void changed() {
+		if (!searching() && !category(category).shown(settings).equals(shown)) {
+			fillBody();
+			return;
+		}
+		refreshRows();
+		fillSide();
+		fillHelp();
 	}
 
-	private void refreshCards() {
-		for (Card card : cards) card.refresh();
-		if (resetCategory == null) return;
-		// only there when something isnt default, like the per setting ones
-		boolean show = !category(category).isDefault(settings);
-		if (show && !resetCategory.hasParent()) categoryHead.child(resetCategory);
-		else if (!show && resetCategory.hasParent()) {
-			categoryHead.removeChild(resetCategory);
-			if (resetArmed) armReset(false);
-		}
+	private void flushTyped() {
+		for (Row row : List.copyOf(rows)) row.flush();
+	}
+
+	private void refreshRows() {
+		for (Row row : rows) row.refresh();
 	}
 
 	private void tip(UIComponent c, String text) {
-		tip(tips, c, text);
-	}
-
-	private void tip(Map<UIComponent, List<FormattedCharSequence>> target, UIComponent c, String text) {
-		target.put(c, font.split(Component.literal(text), TIP_WIDTH));
+		tips.put(c, font.split(Component.literal(text), TIP_WIDTH));
 	}
 
 	// removed parts keep their old bounds, so hasParent
 	private void drawTip(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
-		if (!mainScroll.isInBoundingBox(mouseX, mouseY)) return;
-		List<FormattedCharSequence> lines = ScreenParts.pick(tips, mouseX, mouseY, UIComponent::hasParent);
+		List<FormattedCharSequence> lines = null;
+		if (side.isInBoundingBox(mouseX, mouseY)) lines = ScreenParts.pick(sideTips, mouseX, mouseY, UIComponent::hasParent);
+		else if (mainScroll.isInBoundingBox(mouseX, mouseY) || helpScroll != null && helpScroll.isInBoundingBox(mouseX, mouseY)) {
+			Map<UIComponent, List<FormattedCharSequence>> all = new IdentityHashMap<>(tips);
+			for (Row row : rows) all.putAll(row.tips);
+			lines = ScreenParts.pick(all, mouseX, mouseY, UIComponent::hasParent);
+		}
 		if (lines != null) graphics.setTooltipForNextFrame(font, lines, ScreenParts.FIT, mouseX, mouseY, true);
 	}
 
-	// widest of all settings, so controls line up. narrow screens: own width, more room for text
-	private int controlWidth(Setting of) {
-		if (width < NARROW) return controlWidthOf(of);
-		if (widestControl < 0) {
-			int widest = toggleWidth();
-			for (Category c : SettingsList.CATEGORIES) {
-				for (Setting setting : c.settings()) widest = Math.max(widest, controlWidthOf(setting));
-			}
-			widestControl = widest;
-		}
-		return widestControl;
-	}
-
-	private int controlWidthOf(Setting setting) {
-		return switch (setting) {
-			case Choice<?> choice -> {
-				int text = 0;
-				for (Option<?> option : choice.options()) text = Math.max(text, font.width(option.label()));
-				yield 2 + 8 + 4 + text + 2;
-			}
-			case Setting.Number number -> FIELD + 3 + font.width(number.unit());
-			case Setting.Toggle toggle -> toggleWidth() + (toggle.swatch() == null ? 0 : SWATCH + 2);
-		};
-	}
-
-	// read once, f.e. journal_icon is 7 wide
+	// read once, journal_icon is 7 wide
 	private int iconWidth(Identifier icon) {
 		return ICON_WIDTHS.computeIfAbsent(icon, id -> {
 			try (var in = minecraft.getResourceManager().open(id); NativeImage image = NativeImage.read(in)) {
@@ -591,31 +697,55 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 		});
 	}
 
-	private int toggleWidth() {
-		return Math.max(font.width("On"), font.width("Off")) + 8 + 3 + 12;
+	private int controlWidth(Setting setting) {
+		return switch (setting) {
+			case Choice<?> choice -> {
+				int sum = 0;
+				for (Option<?> option : choice.options()) sum += font.width(option.label()) + CHOICE_PAD;
+				yield sum + choice.options().size() - 1;
+			}
+			case Setting.Number number -> FIELD + 3 + font.width(number.unit());
+			case Setting.Toggle toggle -> Switch.width(font, true) + (toggle.swatch() == null ? 0 : SWATCH + 4);
+			case Action action -> font.width(action.button()) + 20;
+		};
 	}
 
-	private final class Card {
+	private void runAction(Action action, Row row) {
+		switch (action.id()) {
+			case SettingsList.EDIT_HUD -> {
+				flushTyped();
+				minecraft.gui.setScreen(new EditHudScreen(this, Surveyor.HUD));
+			}
+			case SettingsList.COPY_DEBUG -> LiveDebug.copyDebugInfo(minecraft, () -> row.note("§aCopied. Paste it into your GitHub issue."));
+			default -> {
+			}
+		}
+	}
+
+	private final class Row {
 		private final Setting setting;
 		private final FlowLayout box;
-		// only while shown, fillBody hands them over
+		// only while shown, drawTip reads them
 		private final Map<UIComponent, List<FormattedCharSequence>> tips = new IdentityHashMap<>();
+		private int indent;
+		private final FlowLayout text;
 		private final FlowLayout nameRow;
-		private final LabelComponent description;
+		private final LabelComponent line;
+		private String lineText;
+		private String noteText;
 		private final FlowLayout extra;
-		private String descriptionText;
 		private final IconButton reset;
-		private final List<FlowLayout> options = new ArrayList<>();
-		private int picked = -1;
-		private IconButton toggle;
+		private boolean changed;
+		private final List<ButtonComponent> options = new ArrayList<>();
+		private Switch toggle;
 		private FlowLayout swatch;
-		// open picker, null = closed. not in extra, a refresh mid drag would rebuild it
+		// null = closed. not in extra, refresh mid drag rebuilds
 		private FlowLayout pickerBox;
 		private LabelComponent pickerHex;
 		private ColorPickerComponent picker;
 		// picker moved by us, not a drag
 		private boolean syncingPicker;
-		// dragged colour not saved yet, saved like a typed number
+		// unsaved drag colour
 		private Integer pendingColor;
 		private int colorAt;
 		private TextBoxComponent field;
@@ -624,31 +754,34 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 		private int typedAt;
 		private boolean wasFocused;
 
-		Card(Setting setting) {
+		Row(Setting setting) {
 			this.setting = setting;
-			int content = mainInner() - 2 * CARD_PADDING;
+			// text sized for the indented spot, search just has room to spare
+			int content = mainInner() - ROW_LEFT - ROW_RIGHT - (setting.isChild() ? INDENT : 0);
 			int controlWidth = controlWidth(setting);
-			boolean beside = content - controlWidth - CARD_GAP >= MIN_TEXT;
-			int textWidth = beside ? content - controlWidth - CARD_GAP : content;
+			boolean beside = builtWidth > STACK_WIDTH && content - controlWidth - ROW_GAP >= MIN_TEXT;
+			int textWidth = beside ? content - controlWidth - ROW_GAP : content;
 
-			box = beside ? UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content())
-					: UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
-			box.surface(CARD);
-			box.padding(Insets.of(CARD_PADDING));
-			box.gap(beside ? CARD_GAP : 3);
+			box = beside ? UIContainers.horizontalFlow(Sizing.fixed(mainInner()), Sizing.content())
+					: UIContainers.verticalFlow(Sizing.fixed(mainInner()), Sizing.content());
+			box.padding(Insets.of(ROW_TOP, ROW_TOP, ROW_LEFT, ROW_RIGHT));
+			box.gap(beside ? 0 : 3);
 			box.verticalAlignment(VerticalAlignment.CENTER);
-			box.mouseEnter().subscribe(() -> box.surface(CARD_HOVER));
-			box.mouseLeave().subscribe(() -> box.surface(CARD));
+			box.surface((graphics, c) -> {
+				int left = c.x() + indent;
+				graphics.fill(left, c.y(), c.x() + c.width(), c.y() + c.height(), hovered == this || hot == setting ? ROW_HOVER : ROW_FILL);
+				if (changed) graphics.fill(left, c.y(), left + EDGE, c.y() + c.height(), CHANGED_EDGE);
+			});
 
-			FlowLayout text = UIContainers.verticalFlow(Sizing.fixed(textWidth), Sizing.content());
+			text = UIContainers.verticalFlow(Sizing.fixed(textWidth), Sizing.content());
 			text.gap(1);
 			nameRow = UIContainers.horizontalFlow(Sizing.content(), Sizing.fixed(12));
 			nameRow.gap(3);
 			nameRow.verticalAlignment(VerticalAlignment.CENTER);
 			text.child(nameRow);
-			description = label(descriptionText = "§7" + setting.description());
-			description.horizontalSizing(Sizing.fixed(textWidth));
-			text.child(description);
+			line = label(lineText = "");
+			line.horizontalSizing(Sizing.fixed(textWidth));
+			text.child(line);
 			extra = UIContainers.verticalFlow(Sizing.fixed(textWidth), Sizing.content());
 			text.child(extra);
 			if (setting instanceof Setting.Toggle t && t.swatch() != null) {
@@ -657,20 +790,51 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 				text.child(pickerBox);
 			}
 			box.child(text);
-			box.child(control(controlWidth));
+			// only a row of choices wraps, ltr flow tops the rest
+			FlowLayout control = beside ? UIContainers.horizontalFlow(Sizing.fixed(controlWidth), Sizing.content())
+					: setting instanceof Choice ? UIContainers.ltrTextFlow(Sizing.fixed(textWidth), Sizing.content())
+							: UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
+			control.gap(beside || !(setting instanceof Choice) ? 2 : 1);
+			control.verticalAlignment(VerticalAlignment.CENTER);
+			if (beside) {
+				control.horizontalAlignment(HorizontalAlignment.RIGHT);
+				control.margins(Insets.left(ROW_GAP));
+				// search rows are wider, control stays right
+				box.child(UIContainers.horizontalFlow(Sizing.expand(), Sizing.fixed(1)));
+			}
+			control(control);
+			box.child(control);
 
 			reset = new IconButton(Component.empty(), RESET_ICON, 8, 8, b -> apply(setting::reset));
 			reset.horizontalSizing(Sizing.fixed(12));
 			reset.verticalSizing(Sizing.fixed(12));
-			tip(tips, reset, "§fReset to " + setting.defaultText());
+			tips.put(reset, split("§fReset to " + setting.defaultText()));
+			// no pane = the row's hover says it all
+			if (!pane()) tips.put(text, rowTip());
 		}
 
-		private FlowLayout control(int available) {
-			FlowLayout control = UIContainers.horizontalFlow(Sizing.fixed(available), Sizing.content());
-			control.gap(2);
-			control.verticalAlignment(VerticalAlignment.CENTER);
+		// indented under its parent or flush in search. padding, a resize didnt take
+		void place(boolean indented) {
+			indent = indented ? INDENT : 0;
+			box.padding(Insets.of(ROW_TOP, ROW_TOP, ROW_LEFT + indent, ROW_RIGHT));
+		}
+
+		private List<FormattedCharSequence> split(String text) {
+			return font.split(Component.literal(text), TIP_WIDTH);
+		}
+
+		private List<FormattedCharSequence> rowTip() {
+			StringBuilder tip = new StringBuilder("§f" + setting.name() + "\n§7" + setting.description());
+			if (setting instanceof Choice<?> choice) {
+				for (Option<?> option : choice.options()) tip.append("\n§f").append(option.label()).append("§7: ").append(option.tip());
+			}
+			if (!(setting instanceof Action)) tip.append("\n§8Default: ").append(setting.defaultText());
+			return split(tip.toString());
+		}
+
+		private void control(FlowLayout control) {
 			switch (setting) {
-				case Choice<?> choice -> choices(control, choice, available);
+				case Choice<?> choice -> choices(control, choice);
 				case Setting.Number number -> {
 					field = UIComponents.textBox(Sizing.fixed(FIELD));
 					field.verticalSizing(Sizing.fixed(BUTTON));
@@ -679,56 +843,47 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 					// box cuts past max length, compare w/ what it holds
 					lastText = field.getValue();
 					homeFields.add(field);
-					tip(tips, field, "§8Default: " + number.defaultText());
+					tips.put(field, split("§f" + setting.name() + "\n§8Default: " + number.defaultText()));
 					control.child(field);
 					LabelComponent unit = label("§f" + number.unit());
 					unit.margins(Insets.left(1));
 					control.child(unit);
 				}
 				case Setting.Toggle t -> {
-					toggle = new IconButton(Component.literal("§fOff"), CROSS_ICON, 8, 8, b -> apply(s -> t.set().apply(s, !t.get().test(s))));
-					toggle.horizontalSizing(Sizing.fixed(toggleWidth()));
-					toggle.verticalSizing(Sizing.fixed(BUTTON));
-					tip(tips, toggle, "§8Default: " + t.defaultText());
-					control.child(toggle);
 					if (t.swatch() != null) {
 						swatch = UIContainers.horizontalFlow(Sizing.fixed(SWATCH), Sizing.fixed(SWATCH));
 						swatch.cursorStyle(CursorStyle.HAND);
+						swatch.margins(Insets.right(2));
 						swatch.mouseDown().subscribe((event, doubleClick) -> {
 							togglePicker(t.swatch());
 							return true;
 						});
 						control.child(swatch);
 					}
+					toggle = new Switch(t.get().test(settings), true, on -> apply(s -> t.set().apply(s, on)));
+					tips.put(toggle, split("§f" + setting.name() + "\n§8Default: " + (t.get().test(Settings.DEFAULTS) ? "On" : "Off")));
+					control.child(toggle);
+				}
+				case Action action -> {
+					ButtonComponent button = PackButton.button(Component.literal(action.button()), b -> runAction(action, this));
+					button.horizontalSizing(Sizing.fixed(font.width(action.button()) + 20));
+					button.verticalSizing(Sizing.fixed(BUTTON));
+					control.child(button);
 				}
 			}
-			return control;
 		}
 
-		private <T> void choices(FlowLayout control, Choice<T> choice, int available) {
-			FlowLayout list = UIContainers.verticalFlow(Sizing.fixed(available), Sizing.content());
+		private <T> void choices(FlowLayout control, Choice<T> choice) {
 			for (Option<T> option : choice.options()) {
-				int index = options.size();
-				FlowLayout row = UIContainers.horizontalFlow(Sizing.fixed(available), Sizing.fixed(OPTION));
-				row.verticalAlignment(VerticalAlignment.CENTER);
-				row.padding(Insets.horizontal(2));
-				row.gap(4);
-				row.cursorStyle(CursorStyle.HAND);
-				row.mouseEnter().subscribe(() -> {
-					if (index != picked) row.surface(ROW_HOVER);
+				ButtonComponent button = PackButton.button(Component.literal("§f" + option.label()), b -> {
+					if (!option.value().equals(choice.get().apply(settings))) apply(s -> choice.set().apply(s, option.value()));
 				});
-				row.mouseLeave().subscribe(() -> row.surface(Surface.BLANK));
-				row.mouseDown().subscribe((event, doubleClick) -> {
-					if (index == picked) return false;
-					row.surface(Surface.BLANK);
-					apply(s -> choice.set().apply(s, option.value()));
-					return true;
-				});
-				tip(tips, row, "§e" + option.label() + "\n§7" + option.tip() + (choice.isDefault(option) ? "\n§8Default" : ""));
-				options.add(row);
-				list.child(row);
+				button.horizontalSizing(Sizing.fixed(font.width(option.label()) + CHOICE_PAD));
+				button.verticalSizing(Sizing.fixed(BUTTON));
+				if (!pane()) tips.put(button, split("§f" + option.label() + "\n§7" + option.tip() + (choice.isDefault(option) ? "\n§8Default" : "")));
+				options.add(button);
+				control.child(button);
 			}
-			control.child(list);
 		}
 
 		private void togglePicker(Setting.Swatch of) {
@@ -757,8 +912,8 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 		private void paintSwatch(int rgb) {
 			swatch.surface(Surface.flat(0xFF000000 | rgb).and(Surface.outline(0xFF000000)));
 			Setting.Swatch of = ((Setting.Toggle) setting).swatch();
-			tip(tips, swatch, "§f" + of.name() + " §7" + Format.hex(rgb) + "\n§7Click to pick\n§8Default: "
-					+ Format.hex(of.get().applyAsInt(Settings.DEFAULTS)));
+			tips.put(swatch, split("§f" + of.name() + " §7" + Format.hex(rgb) + "\n§7Click to pick\n§8Default: "
+					+ Format.hex(of.get().applyAsInt(Settings.DEFAULTS))));
 			if (pickerHex != null) pickerHex.text(Component.literal("§7" + of.name() + " §f" + Format.hex(rgb)));
 		}
 
@@ -767,6 +922,12 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 			int rgb = pendingColor;
 			pendingColor = null;
 			apply(s -> t.swatch().set().apply(s, rgb));
+		}
+
+		// copied and the like, till the page is rebuilt
+		void note(String text) {
+			noteText = text;
+			refresh();
 		}
 
 		// polled bc caxton cancels onValueChange
@@ -781,7 +942,7 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 				refresh();
 			}
 			if (pending && (!focused || ticks - typedAt >= TYPE_DELAY)) flush();
-			// clicked away from bad text, put the saved value back
+			// bad text, saved value back
 			else if (wasFocused && !focused) refresh();
 			wasFocused = focused;
 		}
@@ -796,18 +957,14 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 
 		void refresh() {
 			String unused = setting.unused(settings);
+			changed = !setting.isDefault(settings);
 			nameRow.clearChildren();
 			nameRow.child(label((unused == null ? "§f" : "§8") + setting.name()));
-			if (!setting.isDefault(settings)) nameRow.child(reset);
-			String text = (unused == null ? "§7" : "§8") + setting.description();
+			if (changed) nameRow.child(reset);
+			String text = noteText != null ? noteText : unused != null ? "§8" + unused : "§7" + setting.line(settings);
 			// .text() relayouts, only on a real change
-			if (!text.equals(descriptionText)) description.text(Component.literal(descriptionText = text));
+			if (!text.equals(lineText)) line.text(Component.literal(lineText = text));
 			extra.clearChildren();
-			if (unused != null) {
-				LabelComponent why = label("§7" + unused);
-				why.horizontalSizing(Sizing.fill(100));
-				extra.child(why);
-			}
 			switch (setting) {
 				case Choice<?> choice -> refreshChoice(choice);
 				case Setting.Number number -> {
@@ -828,9 +985,7 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 					}
 				}
 				case Setting.Toggle t -> {
-					boolean on = t.get().test(settings);
-					toggle.icon(on ? CHECK_ICON : CROSS_ICON);
-					toggle.setMessage(Component.literal(on ? "§fOn" : "§fOff"));
+					toggle.on(t.get().test(settings));
 					if (swatch != null && pendingColor == null) {
 						int rgb = t.swatch().get().applyAsInt(settings);
 						paintSwatch(rgb);
@@ -845,21 +1000,20 @@ public final class SettingsScreen extends BaseOwoScreen<FlowLayout> implements M
 						}
 					}
 				}
+				case Action action -> {
+				}
 			}
 		}
 
 		private <T> void refreshChoice(Choice<T> choice) {
 			T value = choice.get().apply(settings);
-			picked = -1;
 			for (int i = 0; i < options.size(); i++) {
 				Option<T> option = choice.options().get(i);
-				boolean selected = option.value().equals(value);
-				if (selected) picked = i;
-				FlowLayout row = options.get(i);
-				row.clearChildren();
-				row.cursorStyle(selected ? CursorStyle.POINTER : CursorStyle.HAND);
-				row.child(UIComponents.texture(selected ? RADIO_ON : RADIO_OFF, 0, 0, 8, 8, 8, 8));
-				row.child(label((selected ? "§e" : "§f") + option.label()));
+				boolean picked = option.value().equals(value);
+				ButtonComponent button = options.get(i);
+				String message = (picked ? "§e" : "§f") + option.label();
+				if (!message.equals(button.getMessage().getString())) button.setMessage(Component.literal(message));
+				button.cursorStyle(picked ? CursorStyle.POINTER : CursorStyle.HAND);
 			}
 		}
 	}

@@ -11,7 +11,7 @@ import dev.skysurveyor.journal.FossilYield;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-// action bar lines from recording 2026-11-21 (jade fossil, 2:17 to 2:26)
+// action bar, rec 11-21 (jade fossil, 2:17 to 2:26)
 class FossilEssenceTest {
 	private static final String MIDDLE = "§r§64,167/3,792     §d+4 Fossil Essence     §b811/919 §3400     §4120/132     ";
 	private static final String END = "§r§64,167/3,792     §250,498/100k Drill Fuel     §d+8 Fossil Essence";
@@ -64,7 +64,7 @@ class FossilEssenceTest {
 		assertEquals(18, FossilYield.of(shaft).essence());
 	}
 
-	// bar lands the tick before the break, then only same-text resends
+	// bar comes a tick before the break, then same-text resends
 	@Test
 	void resendSamplesABlockWhoseBarCameFirst() {
 		Shaft shaft = enter();

@@ -12,9 +12,9 @@ import dev.skysurveyor.journal.MiningEntry;
 import dev.skysurveyor.money.ShaftValue.CorpseValue;
 import dev.skysurveyor.money.ShaftValue.Part;
 
-// values null = no prices at all yet
-// parts = all-time total per part, in Part order, items = the same per item. ironman = only npc prices, for the wording
-// coins = shafts only, outside = mining outside shafts (null = none or no prices), outsideItems per part like items
+// values null = no prices yet
+// parts all-time in Part order, items per item. ironman = npc only, for wording
+// coins = shafts only, outside null = none or no prices
 public record MoneyStats(Double coins, int valued, Map<Part, Double> parts, Map<String, CorpseCoins> corpses,
 		Map<Part, Map<String, ItemCoins>> items, Map<String, TypeCoins> types, boolean ironman, Double outside,
 		Map<Part, Map<String, ItemCoins>> outsideItems) {
@@ -28,7 +28,7 @@ public record MoneyStats(Double coins, int valued, Map<Part, Double> parts, Map<
 		}
 	}
 
-	// per shaft type code, variants by variant letter
+	// variants by variant letter
 	public record TypeCoins(int shafts, double coins, double best, Map<Part, Double> parts, Map<String, Average> variants) {
 		public double each() {
 			return coins / shafts;
@@ -41,7 +41,7 @@ public record MoneyStats(Double coins, int valued, Map<Part, Double> parts, Map<
 		}
 	}
 
-	// coins null = never had a price
+	// coins null = never priced
 	public record ItemCoins(double count, Double coins) {
 		ItemCoins plus(ShaftValue.Line line) {
 			return new ItemCoins(count + line.count(), MoneyStats.plus(coins, line.coins()));
@@ -57,7 +57,7 @@ public record MoneyStats(Double coins, int valued, Map<Part, Double> parts, Map<
 		return plus(coins, outside);
 	}
 
-	// positive parts + outside, after tax
+	// after tax
 	public double income() {
 		double income = 0;
 		for (double part : parts.values()) if (part > 0) income += part;
@@ -72,7 +72,7 @@ public record MoneyStats(Double coins, int valued, Map<Part, Double> parts, Map<
 		return costs;
 	}
 
-	// same entries valued w/o tax, so income + tax = what hypixels sell screens show
+	// income + tax = hypixels sell screens
 	public static double tax(MoneyStats taxed, MoneyStats untaxed) {
 		return untaxed.income() - taxed.income();
 	}
@@ -81,7 +81,7 @@ public record MoneyStats(Double coins, int valued, Map<Part, Double> parts, Map<
 		return value == null ? null : value.net();
 	}
 
-	// null when none of them has a value
+	// null = none has a value
 	public static Double coins(List<JournalEntry> entries, Function<JournalEntry, ShaftValue> values) {
 		Double total = null;
 		for (JournalEntry entry : entries) total = plus(total, net(values.apply(entry)));
@@ -93,7 +93,7 @@ public record MoneyStats(Double coins, int valued, Map<Part, Double> parts, Map<
 		return b == null ? a : a + b;
 	}
 
-	// null when none of them has a value
+	// null = none has a value
 	public static Double outside(List<MiningEntry> mining, Function<MiningEntry, Double> values) {
 		Double total = null;
 		for (MiningEntry entry : mining) total = plus(total, values.apply(entry));

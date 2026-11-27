@@ -18,7 +18,7 @@ import org.slf4j.LoggerFactory;
 
 import dev.skysurveyor.util.SafeWrite;
 
-// hud.json. never overwrites a file it couldnt fully read w/o a backup first
+// unreadable file = backup before any write
 public final class HudFile {
 	private static final Logger LOGGER = LoggerFactory.getLogger("Surveyor");
 	private static final DateTimeFormatter BACKUP_TIME = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
@@ -60,7 +60,7 @@ public final class HudFile {
 		loaded = true;
 	}
 
-	// client thread. false = not written: still loading + nothing changed, defaults would overwrite the file
+	// client thread. false = still loading, defaults would overwrite the file
 	public boolean save(String json, BooleanSupplier unchanged) {
 		if (!loaded && unchanged.getAsBoolean()) return false;
 		Runnable write = () -> {
@@ -79,7 +79,7 @@ public final class HudFile {
 		return true;
 	}
 
-	// io thread. throwable on purpose: a hostile file can overflow the stack, fine to recover from here
+	// io thread. throwable on purpose, hostile file can overflow the stack
 	HudLayout read() {
 		String json;
 		try {

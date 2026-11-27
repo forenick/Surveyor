@@ -10,9 +10,9 @@ import dev.skysurveyor.data.Ladder;
 import dev.skysurveyor.detection.Shaft;
 import dev.skysurveyor.detection.TextPatterns;
 
-// sacks added - compaction - corpse loot - rare drops - supercrafts, tail estimated (research/06, 07)
-// silent gemstone spread in the tail is missing, slight undercount
-// mob drops of the same gem w/o a RARE DROP! line count as mined (research/07)
+// sacks - compaction - corpse loot - rare drops - supercrafts, tail estimated (research/06, 07)
+// misses silent spread in the tail, bit low
+// same gem mob drops w/o RARE DROP! count as mined (research/07)
 public record GemYield(String gem, long rough, long flawed, long fine, long tailRough, long tailFlawed) {
 	private static final int ROUGH = 0;
 	private static final int FLAWED = 1;
@@ -21,7 +21,7 @@ public record GemYield(String gem, long rough, long flawed, long fine, long tail
 	// 80:1 per step (research/05)
 	public static final int RECIPE = (int) Ladder.gem().per(FINE, FLAWLESS);
 
-	// incl estimated tail
+	// incl tail
 	public double fineEquivalent() {
 		return toFine(rough + tailRough, flawed + tailFlawed, fine);
 	}
@@ -34,17 +34,16 @@ public record GemYield(String gem, long rough, long flawed, long fine, long tail
 		return Ladder.gem().in(new long[] {rough, flawed, fine, 0}, FINE);
 	}
 
-	// quality from gem.item, anything else counts as fine
+	// anything else counts as fine
 	public static double toFine(String quality, long count) {
 		return count / countPerFine(quality);
 	}
 
-	// f.e. "Fine Jade Gemstone", name from ladders.txt
+	// name from ladders.txt
 	public static String fineName(String gem) {
 		return Ladder.gem().name(FINE, gem);
 	}
 
-	// how many of this quality make 1 fine
 	public static double countPerFine(String quality) {
 		return switch (quality) {
 			case "Rough" -> Ladder.gem().per(ROUGH, FINE);
@@ -65,21 +64,21 @@ public record GemYield(String gem, long rough, long flawed, long fine, long tail
 		String gem = mined.material() != null ? mined.material() : tail.material();
 		if (gem == null) return null;
 
-		// tail ratio from the mix as mined, compaction turns rough into flawed and would skew it
+		// tail ratio from gross mix, compaction would skew it
 		MinedCount gross = MinedCount.of(Ladder.gem(), gemOf, shaft.sacksBeforeCompacting(), shaft.notMinedInSacks());
 		long tailFlawed = tail.counts()[FLAWED];
 		GemYield yield = new GemYield(gem, mined.at(ROUGH), mined.at(FLAWED), mined.at(FINE),
 				tailRough(tailFlawed, gross.at(ROUGH), gross.at(FLAWED)), tailFlawed);
-		// own gem only from loot = none mined, not 0.0 fine
+		// loot only = none mined, not 0.0
 		return yield.rough + yield.flawed + yield.fine + yield.tailRough + yield.tailFlawed > 0 ? yield : null;
 	}
 
-	// tail is flawed only, rough in the same ratio as reported
+	// tail flawed only, rough in reported ratio
 	static long tailRough(long tailFlawed, long rough, long flawed) {
 		return flawed > 0 ? Math.round(tailFlawed * (double) rough / flawed) : 0;
 	}
 
-	// gem -> fine equivalent, in item order
+	// item order
 	public static Map<String, Double> fineByGem(Map<String, Long> items, TextPatterns patterns) {
 		Map<String, Double> gems = new LinkedHashMap<>();
 		items.forEach((item, count) -> {
@@ -93,7 +92,7 @@ public record GemYield(String gem, long rough, long flawed, long fine, long tail
 		return shaftGem(item, type, patterns) != null;
 	}
 
-	// ROOT bc turkish locale uppercases "Citrine" to "CİTRİNE"
+	// ROOT bc turkish locale gives "CİTRİNE" lol
 	private static Matcher shaftGem(String item, String type, TextPatterns patterns) {
 		if (type == null) return null;
 		Matcher m = patterns.match("gem.item", item);

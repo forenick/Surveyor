@@ -11,10 +11,10 @@ import com.google.gson.JsonObject;
 
 import dev.skysurveyor.util.Guard;
 
-// copy debug info: text for a github issue. never a player name, uuid, chat or coords
+// for a github issue. never a player name, uuid, chat or coords
 public record DebugInfo(Map<String, String> versions, List<String> mods, List<String> changedSettings, List<Guard.Failure> errors,
 		List<String> files, Map<String, Integer> skippedLines, String recording) {
-	// display choice, a whole stack per kind would bury the rest
+	// display choice, a stack per kind would bury the rest
 	static final int MAX_ERRORS = 10;
 
 	public String text() {
@@ -43,7 +43,7 @@ public record DebugInfo(Map<String, String> versions, List<String> mods, List<St
 		return colon < 0 ? error : error.substring(0, colon);
 	}
 
-	// "money.gemTier: fine", from config.json's own shape
+	// "money.gemTier: fine", config.jsons own shape
 	public static List<String> changedSettings(JsonObject now, JsonObject defaults) {
 		List<String> changed = new ArrayList<>();
 		for (Map.Entry<String, JsonElement> section : now.entrySet()) {
@@ -55,7 +55,7 @@ public record DebugInfo(Map<String, String> versions, List<String> mods, List<St
 					}
 				}
 			} else if (!Objects.equals(old, section.getValue())) {
-				// personal bests list etc, the whole thing
+				// f.e. pb list, the whole thing
 				changed.add(section.getKey() + ": changed");
 			}
 		}

@@ -2,6 +2,6 @@ package dev.skysurveyor.detection;
 
 import java.util.List;
 
-// powder line pulled out of items
+// powder pulled out of items
 public record CorpseLoot(String type, boolean bonusDrop, List<ItemCount> items, long powder) {
 }

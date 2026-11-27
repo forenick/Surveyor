@@ -11,7 +11,7 @@ import dev.skysurveyor.detection.CorpseLoot;
 import dev.skysurveyor.detection.ItemCount;
 import dev.skysurveyor.detection.TextPatterns;
 
-// rough/flawed/fine merged into one fine group, flawless+ stay normal items (nicks call, 2026-11-11)
+// rough to fine as one fine group, flawless+ normal (nick 11-11)
 public record LootSummary(GemGroup gems, List<ItemCount> items) {
 	public record GemGroup(double fine, List<ItemCount> parts) {
 	}

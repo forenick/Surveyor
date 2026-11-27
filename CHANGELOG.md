@@ -2,6 +2,40 @@
 
 [SemVer](https://semver.org). Betas are `X.Y.Z-beta.N` (GitHub pre-releases).
 
+## 0.27.0 (2026-11-27)
+
+- Calculator (WIP) tab in the journal: which gem shafts are worth mining, by Lapis corpses looted, against what leaving makes you. Green to mine, red to skip, yellow for your call. Hover a cell for the sum.
+- Calculator: Mine from and Campfire columns show from how many Lapis a shaft or a campfire pays, the Tungsten key and Umber key columns whether a key corpse pays for its key.
+- Calculator: tiles for what leaving is worth per hour, the share of shafts worth mining, Jasper only and the Mining Fiesta.
+- Calculator: Your numbers, every number the list works with, tracked from your own shafts. Click one to type your own, right-click it to go back to the tracked one.
+- Calculator: mining numbers come from your newest 5 mined shafts, so new gear shows after about 3. Newest 10 or the range in Settings.
+- Calculator: Efficiency and route length per layout under Per layout, Past shafts shows what your mined shafts made against what the list says.
+- Calculator: How it works explains the list, the colours and where your numbers come from.
+- Sell price setting: Insta-sell or NPC, whichever pays more.
+- Key corpse loot setting: the wiki's loot table, your own average or Pristine only.
+- Shafts are named like Jasper 1, Jasper 2 or Jasper crystal in the gem's colour: journal, toast, chat summary, entry title and Stats.
+- Entry title: the shaft's name, then mine, skip or your call once the corpses show, with what mining makes over leaving.
+- Freeze in, Shaft gain, Campfire gain, Key corpses and Shaft name HUD lines.
+- Default Shaft box shows Freeze in and Shaft gain, with the shaft's name as its title.
+- The Session tab is gone: the journal opens on your current session, Overview has the rest.
+- Every journal column has a hover that says what it counts.
+- A new install's Overview and Stats say what will show up there.
+- Stats: the range is picked with chips in a bar across the tab, and is remembered after a restart.
+- Stats: the range "Since 0.27.3" is called "Since patch 0.27.3", the average spawn time is white.
+- Personal bests: "Jasper drystreak" instead of "Jasper dry", a drystreak too long for its row shows the current count with the longest in its hover.
+- Reset under your personal bests is red and asks twice.
+- Shaft details: Exit says "Left by the exit".
+- New Settings page: Coins, In a shaft, Journal, HUD and Bug reports, each setting with a line on what your pick does.
+- Settings: a help pane on wide screens with every choice, the default and a preview of the toast, chat summary, entry title and waypoint.
+- Settings: choices are a row of buttons, on and off is a switch, changed settings get a yellow edge, search also finds categories and sections.
+- Edit HUD: switches like in Settings, a green tick on shown lines, format examples like 1:42, what each preset adds under + Preset.
+- Edit HUD: boxes that show where you stand sit on top, click a box again to pick the one under it.
+- Edit HUD: shorter help, hints keep off your boxes and the hotbar, Reset all is red.
+- Chat summary: (froze) is red and (warped out) grey, like on the toast.
+- The first chat line also says /sv hud moves the boxes.
+- Controls: the journal key is called Open the Shaft Journal, the mark key only shows once you turned Auto-record on or bound it.
+- The journal title steps aside on narrow screens so Settings and Edit HUD still fit.
+
 ## 0.26.0 (2026-11-25)
 
 - Eff. column in the shaft table: how efficiently you mined each shaft, click to sort.

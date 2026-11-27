@@ -13,20 +13,19 @@ import dev.skysurveyor.detection.ShaftEvent;
 import dev.skysurveyor.detection.ShaftEvent.AbilityExpired;
 import dev.skysurveyor.detection.ShaftEvent.PickaxeAbility;
 
-// blocks broken since the last world change + how long each kind takes. plain java
-// break time is measured, never worked out from mining speed (tab list is short for gems, research/11)
+// measured, never from mining speed (tab list off for gems)
 public final class MiningMeter {
 	// display choices, not game numbers
 	static final int MODE_MIN = 10;
 	static final long PAUSE_MILLIS = 5_000;
 	static final String BOOST = "Mining Speed Boost";
 	static final long TICK_MILLIS = 50;
-	// a look away doesnt make a block the main one
+	// a glance doesnt make it main
 	private static final int TIME_CAP = 40;
-	// game minimum, research/11 section 8
+	// game min, research/11 s8
 	static final int MIN_TICKS = 4;
 
-	// clean = hit w/o a break until it went, only those time a kind
+	// clean = no pause till it went
 	private record Break(long at, String block, int ticks, boolean clean, boolean boost, int spread) {
 	}
 
@@ -45,7 +44,7 @@ public final class MiningMeter {
 	private long boostSince = -1;
 	private long lastHitAt = -1;
 
-	// no expired msg ever comes after a warp (3 of 3 recordings), so boost ends here
+	// no expired msg after a warp (3/3 recs)
 	public void onWorldChange() {
 		breaks.clear();
 		boosts.clear();
@@ -57,7 +56,7 @@ public final class MiningMeter {
 	public void onEvent(ShaftEvent event, long now) {
 		switch (event) {
 			case PickaxeAbility used when BOOST.equals(used.ability()) -> {
-				// expired msg missed, cant be on twice
+				// missed the expired msg
 				endBoost(now);
 				boostSince = now;
 			}
@@ -78,14 +77,14 @@ public final class MiningMeter {
 		return boostSince >= 0;
 	}
 
-	// last block hit or break, -1 = none since the start
+	// -1 = none yet
 	public long lastAt() {
 		long last = lastHitAt;
 		if (!breaks.isEmpty()) last = Math.max(last, breaks.getLast().at());
 		return last;
 	}
 
-	// a new tunnel loop. a boost going on stays on
+	// boost stays on
 	public void startOver() {
 		breaks.clear();
 		boosts.clear();
@@ -93,7 +92,7 @@ public final class MiningMeter {
 		lastHitAt = -1;
 	}
 
-	// each new block hit + every tick still on one (BlockWatch.holding)
+	// + every held tick
 	public void onHit(long now) {
 		if (lastHitAt >= 0 && now - lastHitAt > PAUSE_MILLIS) pauses.add(new Span(lastHitAt, now));
 		lastHitAt = now;
@@ -104,12 +103,12 @@ public final class MiningMeter {
 		breaks.add(new Break(now, block, Math.max(0, ticks), clean, boosting(), Math.max(0, spread)));
 	}
 
-	// a gem is 2 vanilla blocks, f.e. green_stained_glass + green_stained_glass_pane (recording 7)
+	// gem = block + pane (rec 7)
 	static boolean sameKind(String a, String b) {
 		return a.equals(b) || a.equals(b + "_pane") || b.equals(a + "_pane");
 	}
 
-	// touching blocks of its own kind that went w/ it
+	// spread
 	public static int spread(String block, List<String> gone) {
 		int spread = 0;
 		for (String other : gone) {
@@ -118,15 +117,14 @@ public final class MiningMeter {
 		return spread;
 	}
 
-	// null = nothing broken since the world change, or only insta-broken blocks
+	// null = nothing or only insta breaks
 	public MiningStats stats(long entered, long now) {
 		String main = mainBlock();
-		// nothing yet, or only insta-broken blocks
 		if (main == null) return null;
 		long start = entered;
 		for (Break b : breaks) {
 			if (sameKind(b.block(), main)) {
-				// its 1st hit, not when it went. unclean ticks have the look away in them
+				// 1st hit, not when it went
 				double ticks = b.clean() ? b.ticks() : breakTime(new Kind(main, b.boost()), entered);
 				start = Math.max(entered, b.at() - Math.round(ticks * TICK_MILLIS));
 				break;
@@ -141,7 +139,7 @@ public final class MiningMeter {
 		int normal = 0;
 		int boosted = 0;
 		for (Break b : breaks) {
-			// the main block only. insta-mined hard stone was 5,400 blocks in one shaft (recording 8)
+			// main block only, hard stone was 5,400 in 1 shaft (rec 8)
 			if (b.at() < start || !sameKind(b.block(), main)) continue;
 			blocks++;
 			spread += b.spread();
@@ -160,10 +158,10 @@ public final class MiningMeter {
 				? times.computeIfAbsent(mainNormal, kind -> breakTime(kind, from)) : null;
 		return new MiningStats(Math.max(0, now - start), start - entered, blocks, spread, main,
 				normal == 0 ? null : normalTicks / normal, boosted == 0 ? null : boostTicks / boosted, boostMillis(start, now),
-				total(pauses, openPause, start, now), blockTicks);
+				total(pauses, openPause, start, now), blockTicks, boosted);
 	}
 
-	// own blocks in [from, to) against nonstop at the given break times. null = nothing to say
+	// [from, to)
 	public Double window(long from, long to, String main, Double ticks, Double boostTicks) {
 		if (to <= from) return null;
 		int blocks = 0;
@@ -178,20 +176,18 @@ public final class MiningMeter {
 		return total(boosts, boostSince >= 0 ? new Span(boostSince, now) : null, start, now);
 	}
 
-	// open = still going, null = none
+	// open = still going
 	private static long total(List<Span> closed, Span open, long start, long end) {
 		long sum = open == null ? 0 : open.inside(start, end);
 		for (Span span : closed) sum += span.inside(start, end);
 		return sum;
 	}
 
-	// most broken kind, ties = first seen
-	// the kind u spent most ticks on, block + pane together, then its most broken id. ties = first seen
-	// by time not count: hard stone goes in 1 tick, 821 stone against 554 peridot blocks in recording 8
+	// most ticks not count, hard stone goes in 1 (rec 8)
+	// block + pane together, ties = first seen
 	private String mainBlock() {
 		Map<String, Long> time = new LinkedHashMap<>();
-		// only a kind w/ a break over the game minimum: insta-mined stone + quartz go in 1 to 4 ticks (recording 9),
-		// gems in boost also take 4, so 4 itself says nothing
+		// over game min only, stone + quartz + boosted gems take 1-4 (rec 9)
 		Set<String> slow = new HashSet<>();
 		for (Break b : breaks) {
 			if (b.ticks() > MIN_TICKS) slow.add(base(b.block()));
@@ -217,7 +213,7 @@ public final class MiningMeter {
 		return block.endsWith("_pane") ? block.substring(0, block.length() - "_pane".length()) : block;
 	}
 
-	// MODE_MIN clean breaks = their most common time, fewer = the average, none = the shortest unclean one
+	// MODE_MIN+ clean = mode, fewer = avg, none = shortest unclean
 	private double breakTime(Kind kind, long start) {
 		List<Integer> clean = new ArrayList<>();
 		int shortest = Integer.MAX_VALUE;

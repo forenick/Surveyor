@@ -15,18 +15,20 @@ import net.fabricmc.loader.api.ModContainer;
 import net.minecraft.client.Minecraft;
 
 import dev.skysurveyor.Surveyor;
+import dev.skysurveyor.calc.FiestaText;
+import dev.skysurveyor.effects.Consumable;
 import dev.skysurveyor.recorder.ShaftRecorder;
 import dev.skysurveyor.settings.LiveSettings;
 import dev.skysurveyor.settings.Settings;
 import dev.skysurveyor.util.DataFolder;
 import dev.skysurveyor.util.Guard;
 
-// copy debug info. clipboard only on a click or the command
+// clipboard only on a click or the command
 public final class LiveDebug {
 	private LiveDebug() {
 	}
 
-	// file reads on the io thread, clipboard back on the client thread
+	// file reads on io thread, clipboard back on client thread
 	public static void copyDebugInfo(Minecraft client, Runnable copied) {
 		Map<String, String> versions = new LinkedHashMap<>();
 		versions.put("Surveyor", version(Surveyor.MOD_ID));
@@ -36,6 +38,9 @@ public final class LiveDebug {
 		versions.put("owo-lib", version("owo"));
 		versions.put("Java", System.getProperty("java.version"));
 		versions.put("OS", System.getProperty("os.name") + " " + System.getProperty("os.version") + " " + System.getProperty("os.arch"));
+		long now = System.currentTimeMillis();
+		versions.put("Mining Fiesta", FiestaText.debug(Surveyor.FIESTA.reading(now),
+				Surveyor.flaskRunning() ? Surveyor.EFFECTS.left().get(Consumable.FIESTA_FLASK) : null, now));
 		List<String> mods = mods();
 		List<String> changed = DebugInfo.changedSettings(LiveSettings.toJson(Surveyor.SETTINGS.get()), LiveSettings.toJson(Settings.DEFAULTS));
 		List<Guard.Failure> errors = Guard.failures();
@@ -60,7 +65,7 @@ public final class LiveDebug {
 		return FabricLoader.getInstance().getModContainer(id).map(m -> m.getMetadata().getVersion().getFriendlyString()).orElse("none");
 	}
 
-	// top level mods only, fabric apis own modules + jars inside jars left out
+	// top level only, fabric api modules + jar in jar left out
 	private static List<String> mods() {
 		List<String> mods = new ArrayList<>();
 		for (ModContainer mod : FabricLoader.getInstance().getAllMods()) {
@@ -75,7 +80,7 @@ public final class LiveDebug {
 		return mods;
 	}
 
-	// the data folders own files, not recordings or caches
+	// own files, not recordings or caches
 	private static List<String> files(Path folder) {
 		List<String> files = new ArrayList<>();
 		if (!Files.isDirectory(folder)) return files;

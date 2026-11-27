@@ -23,7 +23,7 @@ import dev.skysurveyor.Surveyor;
 
 import static dev.skysurveyor.screen.ScreenParts.label;
 
-// quick mark hotkey. only writes a line to the recording, nothing sent
+// only writes to the recording, sends nothing
 public final class QuickMarkScreen extends BaseOwoScreen<FlowLayout> implements ModScreen {
 	private static final int WIDTH = 220;
 	private static final int BUTTON = 16;

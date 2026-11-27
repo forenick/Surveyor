@@ -9,9 +9,9 @@ import java.util.regex.Matcher;
 import dev.skysurveyor.detection.ShaftEvent;
 import dev.skysurveyor.detection.TextPatterns;
 
-// full sack = items go to the material stash, no sacks msg for them (research/09)
-// stash msg comes ~once a minute while it holds items. no item names, so only a count
-// 1st msg of a session = baseline, a pickup (drop) is never negative
+// full sack = items to stash, no sacks msg (research/09)
+// msg ~once a min while it holds items, no names so count only
+// 1st msg of a session = baseline, pickups never negative
 // not a ShaftEvent: recordings w/ live lines never had it
 public final class Stash {
 	private final TextPatterns patterns;
@@ -19,7 +19,7 @@ public final class Stash {
 	private final LongFunction<Journal.Session> session;
 	private final Consumer<StashEntry> listener;
 	private long lastCount = -1;
-	// session of lastCount, -1 = none
+	// -1 = none
 	private long countSession = -1;
 	private long lastMessageAt = -1;
 

@@ -11,7 +11,7 @@ import dev.skysurveyor.money.ShaftValue.Line;
 import dev.skysurveyor.settings.MoneySettings;
 import dev.skysurveyor.settings.MoneySettings.GemTier;
 
-// mining outside shafts, same item prices as a shafts other drops. unpriced items count 0
+// same prices as a shafts other drops, unpriced = 0
 public final class MiningValue {
 	private MiningValue() {
 	}
@@ -25,7 +25,7 @@ public final class MiningValue {
 		return ShaftValue.net(lines);
 	}
 
-	// gems merged per gem in fine (or flawless) like a shafts mined gems, rest per item
+	// gems merged in fine (or flawless), rest per item
 	public static List<Line> lines(MiningEntry entry, ShaftValue.Prices prices, MoneySettings settings, ItemIds ids,
 			TextPatterns patterns) {
 		PriceRules rules = new PriceRules(prices, settings, ids, patterns);
@@ -37,7 +37,7 @@ public final class MiningValue {
 		return List.copyOf(lines);
 	}
 
-	// every id any gem tier could use, so settings can change later
+	// every gem tier id, so settings can change later
 	public static Map<String, ItemPrice> snapshot(MiningEntry entry, ShaftValue.Prices prices, MoneySettings settings,
 			ItemIds ids, TextPatterns patterns) {
 		return ShaftValue.snapshot(prices, (recording, used) -> {

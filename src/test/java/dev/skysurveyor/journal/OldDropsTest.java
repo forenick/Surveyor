@@ -28,11 +28,11 @@ import dev.skysurveyor.settings.MoneySettings.GemTier;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-// hud drops line over real journals, saved prices only
+// real journals, saved prices only
 class OldDropsTest {
 	private static final TextPatterns PATTERNS = TextPatterns.defaults();
 
-	// the test that matters: rows (folded ones too) + spent = the coins line, every old session
+	// the one that matters: rows (folded too) + spent = coins line, every old session
 	@TestFactory
 	Stream<DynamicTest> rowsAddUpToTheCoinsLine() {
 		ItemIds ids = ItemIds.bundled(Map.of());
@@ -71,7 +71,7 @@ class OldDropsTest {
 				}
 			}
 			assertTrue(sessions > 0);
-			// all-time like LiveHud: summed lines, = the all-time coins line
+			// all-time like LiveHud: summed = all-time coins line
 			for (MoneySettings money : settings) {
 				DropList.Lines in = new DropList.Lines();
 				for (JournalEntry entry : entries) in.shaft(ShaftValue.of(entry, ShaftValue.layered(entry.prices(), id -> null), money, ids, PATTERNS));
@@ -87,8 +87,8 @@ class OldDropsTest {
 		}));
 	}
 
-	// money-tracker-design.md section 1: 25 recorded shafts of this 29 shaft session
-	// corpse loot there leaves out the 4 shafts before the recording, outside entries were replayed w/o prices
+	// money-tracker-design.md s1: 25 recorded of this 29 shaft session
+	// its corpse loot skips the 4 unrecorded, outside replayed w/o prices
 	@Test
 	void recordingFiveSources() throws Exception {
 		Path dir = OldSaves.ROOT.resolve("0.24.0-alpha.13");

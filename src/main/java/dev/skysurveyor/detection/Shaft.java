@@ -44,18 +44,20 @@ public final class Shaft {
 	private ExitReason pendingExit;
 	private long exitPowder;
 	private Integer cold;
+	// for the freeze timer, ~150 a shaft
+	private final List<ColdStep> coldSteps = new ArrayList<>();
 	private List<Corpse> corpses = List.of();
 	private int extraCorpses;
 	private final List<CorpseLoot> loots = new ArrayList<>();
-	// loot indexes whose key resourceful saved
+	// loot indexes resourceful saved a key on
 	private final List<Integer> keysSaved = new ArrayList<>();
-	// msg before its loot block, -1 = none
+	// -1 = none
 	private long keySavedAt = -1;
 	private long lastKeyLootAt = -1;
 	private int lastKeyLoot = -1;
 	private final List<String> mayhemBuffs = new ArrayList<>();
 	private final List<Long> campfiresPlaced = new ArrayList<>();
-	// scoreboard still shows the cold from before the -50 (recording 1)
+	// scoreboard still shows the cold before the -50 (rec 1)
 	private final List<Integer> campfireColds = new ArrayList<>();
 	private long caveInAt = -1;
 	private int scrapFound;
@@ -70,17 +72,17 @@ public final class Shaft {
 	private final Map<String, Long> pristineSinceSacks = new LinkedHashMap<>();
 	// counted from chat, like corpse loot
 	private final Map<String, Long> rareDrops = new LinkedHashMap<>();
-	// corpse loot, rare drops + supercrafts wait here until a sacks msg reports them
+	// corpse loot, rare drops + supercrafts wait for a sacks msg
 	private final Map<String, Long> notMinedPending = new LinkedHashMap<>();
 	private final Map<String, Long> notMinedInSacks = new LinkedHashMap<>();
-	// display choice, unconfirmed. loot block + msg come in the same click
+	// display choice, unconfirmed. loot + msg same click i think
 	static final long KEY_SAVED_WINDOW = 3_000;
-	// fossil blocks u broke, the bar only shows the last ones essence: essence = blocks x avg of the bars after a break
+	// bar only shows the last ones essence: essence = blocks x avg bar after a break
 	private int fossilBlocks;
 	private int essenceSamples;
 	private long essenceShown;
 	private boolean essencePending;
-	// goes up on every change but cold, so callers can cache
+	// bumps on every change but cold, so callers can cache
 	private int version;
 
 	Shaft(long enteredAt) {
@@ -112,7 +114,7 @@ public final class Shaft {
 				}
 			}
 			case KeySaved saved -> {
-				// msg order vs the loot block unrecorded, so either way
+				// msg order vs loot block unrecorded, so either way
 				if (lastKeyLootAt >= 0 && now - lastKeyLootAt <= KEY_SAVED_WINDOW && !keysSaved.contains(lastKeyLoot)) {
 					keySaved();
 				} else {
@@ -130,11 +132,11 @@ public final class Shaft {
 			case CampfirePlaced placed -> campfiresPlaced.add(now);
 			case CampfireUsed used -> campfireColds.add(cold);
 			case ScrapFound scrap -> scrapFound++;
-			// ShaftTracker samples it, not here
+			// ShaftTracker samples it
 			case FossilEssence essence -> {
 			}
 			case CrystalFound crystal -> crystals.add(crystal.item());
-			// each click runs twice: find = FOUND + 1 owned, owned crystal = 2 owned (recordings)
+			// each click runs twice: find = FOUND + 1 owned, owned crystal = 2 owned (recs)
 			case CrystalOwned owned -> {
 			}
 			case Pristine pristine -> {
@@ -166,7 +168,7 @@ public final class Shaft {
 		return essencePending;
 	}
 
-	// 1st bar after a new block, lingering bars would weigh the last block twice. version only on a sample
+	// 1st bar after a new block, else the last block counts twice. version only on a sample
 	void sampleEssence(int amount) {
 		if (!essencePending) return;
 		version++;
@@ -180,9 +182,10 @@ public final class Shaft {
 		this.id = id;
 	}
 
-	// no version bump, cold changes every few secs and never changes coins
-	void setCold(Integer cold) {
+	// no version bump, cold changes every few secs + never changes coins
+	void setCold(long now, Integer cold) {
 		this.cold = cold;
+		if (cold != null) coldSteps.add(new ColdStep(now - enteredAt, cold));
 	}
 
 	void setCorpses(List<Corpse> corpses) {
@@ -196,7 +199,7 @@ public final class Shaft {
 		exitReason = pendingExit == null ? ExitReason.UNKNOWN : pendingExit;
 	}
 
-	// capped hover ends in "+N other items", loot in there never reached sacksAdded so it isnt taken off (recording 8 PERI_C)
+	// capped hover ends in "+N other items", that loot never hit sacksAdded so stays (rec 8 PERI_C)
 	private void reported(SacksChanged sacks) {
 		if (sacks.otherAdded() > 0) {
 			Map<String, Long> listed = new LinkedHashMap<>();
@@ -252,7 +255,16 @@ public final class Shaft {
 		return cold;
 	}
 
-	// last non empty widget state
+	// millis since entry, cold as the scoreboard shows it (-12)
+	public record ColdStep(long millis, int cold) {
+	}
+
+	// oldest 1st
+	public List<ColdStep> coldSteps() {
+		return Collections.unmodifiableList(coldSteps);
+	}
+
+	// last non empty widget
 	public List<Corpse> corpses() {
 		return corpses;
 	}
@@ -278,7 +290,7 @@ public final class Shaft {
 		return Collections.unmodifiableList(campfiresPlaced);
 	}
 
-	// null = cold line wasnt there
+	// null = no cold line
 	public List<Integer> campfireColds() {
 		return Collections.unmodifiableList(campfireColds);
 	}
@@ -312,12 +324,12 @@ public final class Shaft {
 		return pristineProcs;
 	}
 
-	// misses silent gemstone spread procs, sacksAdded() has real totals
+	// misses silent spread procs, sacksAdded() has real totals
 	public Map<String, Long> pristineItems() {
 		return Collections.unmodifiableMap(pristineItems);
 	}
 
-	// last few secs before leaving never get reported. gross, compaction not taken off
+	// last few secs before leaving never get reported. gross, compaction not off
 	public Map<String, Long> sacksAdded() {
 		return Collections.unmodifiableMap(sacksAdded);
 	}
@@ -326,24 +338,24 @@ public final class Shaft {
 		return Collections.unmodifiableMap(sacksRemoved);
 	}
 
-	// sacksAdded - compaction, over the whole shaft so a shortfall in one msg is paid by the others
+	// whole shaft, so one msgs shortfall is paid by the others
 	public Map<String, Long> sacksNet() {
 		return new Compaction().net(sacksAdded, sacksCompacted);
 	}
 
-	// compacted here but added before the shaft, outside mining pays it (OutsideMining)
+	// compacted here but added before the shaft, OutsideMining pays it
 	public Map<String, Long> compactionOwed() {
 		Compaction compaction = new Compaction();
 		compaction.net(sacksAdded, sacksCompacted);
 		return compaction.owed();
 	}
 
-	// gross w/o what compaction made, the tier mix as mined
+	// gross w/o what compaction made, tier mix as mined
 	public Map<String, Long> sacksBeforeCompacting() {
 		return Compaction.beforeCompacting(sacksAdded, sacksCompacted);
 	}
 
-	// start of the unreported tail, everything if no sacks msg yet
+	// unreported tail start, everything if no sacks msg yet
 	public Map<String, Long> pristineSinceSacks() {
 		return Collections.unmodifiableMap(pristineSinceSacks);
 	}

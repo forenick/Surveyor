@@ -36,7 +36,7 @@ public final class PriceBook {
 		return new ItemPrice(bz == null ? null : bz.buyOrder(), bz == null ? null : bz.sellOffer(), bin, npcSell);
 	}
 
-	// npc prices alone dont count, theyre only a fallback
+	// npc alone doesnt count, only a fallback
 	public boolean isEmpty() {
 		return bazaar.isEmpty() && bins.isEmpty();
 	}
@@ -61,7 +61,7 @@ public final class PriceBook {
 		return new PriceBook(bazaar, bazaarAt, Map.copyOf(prices), at, npc);
 	}
 
-	// cached w/ the item names, not in prices.json
+	// cached w/ item names, not in prices.json
 	public PriceBook withNpc(Map<String, Double> prices) {
 		return new PriceBook(bazaar, bazaarAt, bins, binsAt, Map.copyOf(prices));
 	}
@@ -85,7 +85,7 @@ public final class PriceBook {
 		return price > 0 ? price : null;
 	}
 
-	// {"ID": price}, elite + hysky both
+	// {"ID": price}, elite + hysky
 	public static Map<String, Double> parseBins(JsonObject json) {
 		Map<String, Double> prices = new HashMap<>();
 		for (Map.Entry<String, JsonElement> entry : json.entrySet()) {

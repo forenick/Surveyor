@@ -7,19 +7,18 @@ import java.util.List;
 import java.util.Map;
 
 import dev.skysurveyor.journal.JournalEntry;
+import dev.skysurveyor.util.Stats;
 
-// the Stats tabs efficiency: median over mined shafts, per shaft type + variant. plain java
-// median not mean, a shaft w/ a break inside (research/11: 0.44 on 11-18) would drag a mean down
+// median bc 1 shaft w/ a break drags a mean (0.44 on 11-18)
 public final class EfficiencyStats {
-	// a few shafts w/ a number, by median
 	public record Group(double median, int shafts, Double ticks) {
 	}
 
-	// type = shaft code, f.e. JASP. variants by their code letter, f.e. C
+	// f.e. JASP, variants by letter
 	public record Type(String type, Group all, Map<String, Group> variants) {
 	}
 
-	// all = null when no shaft in the range has a number. types best first
+	// all null = no numbers. best first
 	public record Summary(Group all, List<Type> types) {
 		public static final Summary NONE = new Summary(null, List.of());
 	}
@@ -49,12 +48,7 @@ public final class EfficiencyStats {
 	private static Group group(List<JournalEntry> entries) {
 		List<Double> efficiencies = entries.stream().map(e -> Efficiency.shown(e.mining())).toList();
 		List<Double> ticks = entries.stream().map(e -> e.mining().shownTicks()).filter(t -> t != null).toList();
-		return new Group(median(efficiencies), entries.size(), ticks.isEmpty() ? null : median(ticks));
+		return new Group(Stats.median(efficiencies), entries.size(), ticks.isEmpty() ? null : Stats.median(ticks));
 	}
 
-	static double median(List<Double> values) {
-		List<Double> sorted = values.stream().sorted().toList();
-		int n = sorted.size();
-		return n % 2 == 1 ? sorted.get(n / 2) : (sorted.get(n / 2 - 1) + sorted.get(n / 2)) / 2;
-	}
 }

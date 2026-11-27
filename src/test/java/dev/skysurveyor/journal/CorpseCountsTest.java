@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CorpseCountsTest {
-	// nicks journal.jsonl, recording 6 at 9:51. looted lapis 9:53.3, tab still not looted 9:53.5, left 9:56.3, exit bonus counted it
+	// nicks journal.jsonl, rec 6 at 9:51. lapis looted 9:53.3, tab still not 9:53.5, left 9:56.3, exit bonus counted it
 	static final String AQUA_2 = "{\"version\":1,\"sessionId\":1794939351699,\"shaftId\":\"AQUA_2\",\"enteredAt\":1794939967690,"
 			+ "\"durationMillis\":6190,\"exit\":\"BYE\",\"exitPowder\":1250,\"searchMillis\":149557,\"corpses\":[{\"type\":\"Lapis\","
 			+ "\"looted\":false},{\"type\":\"Umber\",\"looted\":false},{\"type\":\"Tungsten\",\"looted\":false},{\"type\":\"Tungsten\","
@@ -62,7 +62,7 @@ class CorpseCountsTest {
 		assertEquals(1.0, PersonalBests.shaftValue(Stat.SHAFT_CORPSES, aqua, null));
 	}
 
-	// same shaft live, lines from recording 6: loot msg 9:53.3, tab list still not looted 9:53.5
+	// same shaft live, rec 6: loot 9:53.3, tab still not looted 9:53.5
 	@Test
 	void liveShaftCountsTheLootBeforeTheTabListFlips() {
 		ShaftTracker tracker = new ShaftTracker(TextPatterns.defaults(), e -> {
@@ -88,7 +88,7 @@ class CorpseCountsTest {
 				"§r §7Tungsten§f: §c§lNOT LOOTED", "");
 	}
 
-	// real 0.2.0 line w/ its loots taken off, as if the loot msg wasnt parsed
+	// real 0.2.0 line, loots taken off like an unparsed loot msg
 	@Test
 	void tabListAheadOfChatStillCounts() throws Exception {
 		JournalEntry titanium = EntryBuilder.from(realJournal().get(3)).loots(List.of()).build();

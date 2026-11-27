@@ -9,15 +9,16 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
 
-// time left per consumable, counts down only while on skyblock (effects pause offline, nick 2026-11-22). client thread
+// only counts on skyblock (effects pause offline, nick 11-22). client thread
 public final class EffectTimers {
-	// footer lags the eat by ~2.5s, its old time would undo a reset (recording 2026-11-08). display choice
+	// footer lags the eat ~2.5s, old time would undo a reset (rec 2026-11-08). display choice
 	static final long FOOTER_IGNORE_MILLIS = 5_000;
-	// a count drop clears timers this close to 0. ours runs fast, so only our overshoot (half a footer step, save gap). display choice
+	// count drop clears timers this close to 0. display choice
+	// = our overshoot only (half a footer step + save gap)
 	static final long ENDING_MILLIS = 30_000;
-	// splash msg comes after the potion left ur hand. display choice
+	// splash msg comes after the potion left ur hand. display choice, first guess
 	static final long BUFF_ITEM_MILLIS = 10_000;
-	// smaller fixes ride along w/ the next timed save
+	// smaller fixes ride w/ the next timed save
 	static final long SAVE_CHANGE_MILLIS = 2_000;
 	// suspend or a hang shouldnt eat the timers
 	static final long MAX_STEP_MILLIS = 10_000;
@@ -34,7 +35,7 @@ public final class EffectTimers {
 	private record Held(int slot, Consumable consumable, int count, EffectTime duration) {
 	}
 
-	// at = last time it was in hand
+	// at = last in hand
 	private record Seen(EffectTime duration, long at) {
 	}
 
@@ -42,7 +43,7 @@ public final class EffectTimers {
 		this.text = text;
 	}
 
-	// bumps on every change but the countdown, for saving
+	// every change but the countdown, for saving
 	public int version() {
 		return version;
 	}
@@ -68,12 +69,12 @@ public final class EffectTimers {
 		lastTick = now;
 	}
 
-	// selected slot every tick. name null = empty. used = use key or a right-click just now
+	// every tick. name null = empty. used = use key or right-click just now
 	public void onHeld(long now, int slot, String legacyName, int count, Supplier<List<String>> lore, boolean used) {
 		Consumable consumable = text.item(legacyName);
 		if (held != null && held.consumable() != null && held.slot() == slot && used && held.duration() != null) {
 			boolean gone = consumable == held.consumable() && count == held.count() - 1 || legacyName == null && held.count() == 1;
-			// eating again resets to the full length (nick, 2026-11-22)
+			// eating again resets to full (nick 11-22)
 			if (gone) start(held.consumable(), held.duration().millis(), now);
 		}
 		if (held != null && held.consumable() != null && held.duration() != null) {
@@ -85,7 +86,7 @@ public final class EffectTimers {
 		held = new Held(slot, consumable, count, duration);
 	}
 
-	// splash backup, f.e. the count drop came too late for the use window
+	// splash backup, f.e. count drop missed the use window
 	public void onChat(long now, String legacy) {
 		Consumable consumable = text.buff(legacy);
 		if (consumable == null) return;
@@ -107,7 +108,7 @@ public final class EffectTimers {
 		if (count != null) footerCount = count;
 	}
 
-	// /effects, opened by the player
+	// /effects opened by the player
 	public void onScreen(Map<Consumable, EffectTime> shown) {
 		if (shown == null) return;
 		// polled while open, so clamp or it never counts down
@@ -123,7 +124,7 @@ public final class EffectTimers {
 		if (ms == null || fixed != ms) set(consumable, fixed);
 	}
 
-	// fewer effects in the footer: the ones about to end are gone
+	// fewer in the footer = the ones about to end are gone
 	private void ended(int howMany, Set<Consumable> stillShown) {
 		List<Consumable> ending = new ArrayList<>();
 		left.forEach((c, ms) -> {

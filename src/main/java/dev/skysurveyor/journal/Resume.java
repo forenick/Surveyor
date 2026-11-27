@@ -2,8 +2,8 @@ package dev.skysurveyor.journal;
 
 import java.util.List;
 
-// after a restart: the newest shafts session goes on, from its last saved activity
-// a restart mid session is a gap too. each file calls this once it loaded, in any order
+// after a restart the newest session goes on from its last activity
+// restart mid session = gap too. files call this in any order
 public final class Resume {
 	private Resume() {
 	}
@@ -22,8 +22,8 @@ public final class Resume {
 		breaks.resume(session.id(), last);
 	}
 
-	// -1 = none. sessions are saved in order, so only the last line of each file
-	// a break ends in mining, so a break saved after the last shaft or mining line moves it too
+	// -1 = none. saved in order, so last line per file
+	// breaks end in mining, so a later break moves it too
 	static long lastActivity(long sessionId, List<JournalEntry> entries, List<MiningEntry> mining, List<BreakEntry> paused) {
 		long last = -1;
 		if (!entries.isEmpty() && entries.getLast().sessionId() == sessionId) last = entries.getLast().endedAt();

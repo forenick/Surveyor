@@ -7,11 +7,11 @@ import java.util.regex.Pattern;
 import dev.skysurveyor.detection.TextPatterns;
 import dev.skysurveyor.util.Resources;
 
-// chat w/ a watch word no pattern matched, so new game text shows up in recordings
+// watch word chat no pattern matched, so new text shows up in recordings
 public final class ChatWatch {
 	private static final String RESOURCE = "/skysurveyor/dev_watch.txt";
 	private static final Pattern DIGITS = Pattern.compile("\\d[\\d,.]*");
-	// not chat: scoreboard, tab list, footer, screens, lore, action bar, the recorders rank finder.
+	// not chat: scoreboard, tab, footer, screens, lore, action bar, recorders rank finder
 	// effect.screen_name alone matches any line ending in II
 	private static final List<String> NOT_CHAT = List.of("scoreboard.", "tab.", "effect.", "fossil.", "consumable.duration", "recorder.");
 
@@ -29,7 +29,7 @@ public final class ChatWatch {
 		return new ChatWatch(lines.stream().map(String::strip).filter(l -> !l.isEmpty() && !l.startsWith("#")).toList(), patterns);
 	}
 
-	// null = nothing to note, else the clean text
+	// null = nothing to note, else clean text
 	public String unmatched(String legacy) {
 		String text = TextPatterns.clean(legacy);
 		if (text.isBlank()) return null;

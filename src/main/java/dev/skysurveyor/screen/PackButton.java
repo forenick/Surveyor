@@ -14,7 +14,7 @@ public class PackButton extends ButtonComponent {
 	private static final WidgetSprites SPRITES = new WidgetSprites(Identifier.withDefaultNamespace("widget/button"),
 			Identifier.withDefaultNamespace("widget/button_disabled"), Identifier.withDefaultNamespace("widget/button_highlighted"));
 
-	// focus only lit after keyboard input, else it sticks after a click
+	// else focus sticks after a click
 	public static final ButtonComponent.Renderer RENDERER = (graphics, b, delta) -> graphics.blitSprite(RenderPipelines.GUI_TEXTURED,
 			SPRITES.get(b.active, b.isHovered() || b.isFocused() && Minecraft.getInstance().getLastInputType().isKeyboard()), b.getX(),
 			b.getY(), b.getWidth(), b.getHeight());

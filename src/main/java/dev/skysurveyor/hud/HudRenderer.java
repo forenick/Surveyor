@@ -34,7 +34,7 @@ public final class HudRenderer {
 		}
 	}
 
-	// a box measured once: text + right column widths per row, inner size w/ padding + hint, unscaled.
+	// unscaled, w/ padding + hint
 	// rim here so bounds + draw use the same one after a pack reload
 	public record Measured(List<HudRow> rows, int[] textWidths, int[] rightWidths, int width, int height, float hintScale,
 			int hintWidth, FrameRim.Rim rim) {
@@ -74,7 +74,7 @@ public final class HudRenderer {
 				box.anchorY.start(box.offsetY, size.height(), screenHeight), size.width(), size.height());
 	}
 
-	// on screen, w/ scale + frame rim. in bounds, so snap + margin use it
+	// w/ scale + frame rim, so snap + margin use it
 	public static HudPlace.Size size(Measured measured, Box box) {
 		FrameRim.Rim rim = measured.rim();
 		return new HudPlace.Size(Math.round((measured.width() + rim.width()) * box.scale),

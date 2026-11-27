@@ -14,7 +14,7 @@ import dev.skysurveyor.money.ChartTips.SessionCoins;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-// made up spawns and coins
+// made up
 class ChartTipsTest {
 	private static JournalEntry entry(long session, long entered, long search) {
 		return EntryBuilder.entry().sessionId(session).enteredAt(entered).searchMillis(search).build();

@@ -1,4 +1,4 @@
-# fossil per shaft layout: quartz block, stairs, slab (wiki Fossil_Essence), same spot every time (Nick, 2026-11-21)
+# fossil per layout: quartz block, stairs, slab (wiki Fossil_Essence), same spot every time (nick 11-21)
 # format: CODE = minX minY minZ maxX maxY maxZ, N blocks  # sources
 # built by Docs/research/calc-prototype/fossil_spots.py from worlds/Mineshaft World Saves.zip, change the script
 AQUA_2 = -126 27 -190 -117 33 -180, 38 blocks  # save, wiki

@@ -8,16 +8,16 @@ import dev.skysurveyor.journal.JournalStats;
 import dev.skysurveyor.journal.JournalStats.SessionSummary;
 import dev.skysurveyor.util.Format;
 
-// tooltips for the stats charts' avg lines, "" = small gap
+// "" = small gap
 public final class ChartTips {
 	private ChartTips() {
 	}
 
-	// coins null = no prices, perHour null = under the rate minimum
+	// coins null = no prices, perHour null = under rate min
 	public record SessionCoins(Double coins, Double perHour) {
 	}
 
-	// avg = every timed shaft, not the avg of the session avgs
+	// avg of every timed shaft, not of session avgs
 	public static List<String> spawn(List<SessionSummary> oldestFirst) {
 		List<SessionSummary> timed = oldestFirst.stream().filter(s -> s.averageSearchMillis() != null).toList();
 		List<Long> shafts = timed.stream().flatMap(s -> s.entries().stream()).map(JournalEntry::searchMillis)
@@ -43,7 +43,7 @@ public final class ChartTips {
 		if (timed.size() > 1) {
 			lines.add("§7Fastest session §a" + Format.duration(fastest) + "§7, slowest §c" + Format.duration(slowest));
 		}
-		// latest only if it has a spawn time, else it'd be an older one
+		// else itd show an older one
 		if (timed.size() > 1 && average > 0 && timed.getLast() == oldestFirst.getLast()) {
 			long latest = timed.getLast().averageSearchMillis();
 			double change = (average - latest) / (double) average;
@@ -84,7 +84,7 @@ public final class ChartTips {
 			double best = oldestFirst.stream().filter(s -> s.coins() != null).mapToDouble(SessionCoins::coins).max().orElse(0);
 			if (best > 0) lines.add("§7Best session made §f" + Format.percent(best / total) + " §7of all coins");
 		}
-		// latest only if it has a rate, else it'd be an older one
+		// else itd show an older one
 		if (rates.size() > 1 && average > 0 && rated.getLast() == oldestFirst.getLast()) {
 			double latest = rated.getLast().perHour();
 			double change = (latest - average) / average;
@@ -95,7 +95,7 @@ public final class ChartTips {
 		return lines;
 	}
 
-	// sorted, even count = avg of the 2 middle ones
+	// even count = avg of middle 2
 	private static double median(List<? extends Number> sorted) {
 		int middle = sorted.size() / 2;
 		double upper = sorted.get(middle).doubleValue();

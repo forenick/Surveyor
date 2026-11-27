@@ -28,6 +28,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import dev.skysurveyor.Surveyor;
+import dev.skysurveyor.calc.ColdModel;
+import dev.skysurveyor.calc.FreezeClock;
+import dev.skysurveyor.calc.GuideText;
+import dev.skysurveyor.calc.NumberId;
+import dev.skysurveyor.calc.ShaftModel;
+import dev.skysurveyor.calc.Verdict;
+import dev.skysurveyor.calc.YourNumbers;
+import dev.skysurveyor.data.CorpseType;
 import dev.skysurveyor.data.ItemNames;
 import dev.skysurveyor.data.ShaftNames;
 import dev.skysurveyor.detection.LiveTracker;
@@ -40,15 +48,18 @@ import dev.skysurveyor.hud.HudData.Totals;
 import dev.skysurveyor.hud.HudLayout.Box;
 import dev.skysurveyor.journal.BreakEntry;
 import dev.skysurveyor.journal.Breaks;
+import dev.skysurveyor.journal.CorpseCounts;
 import dev.skysurveyor.journal.Journal;
 import dev.skysurveyor.journal.JournalEntry;
 import dev.skysurveyor.journal.JournalStats;
+import dev.skysurveyor.journal.JournalStats.CorpseCount;
 import dev.skysurveyor.journal.LiveJournal;
 import dev.skysurveyor.journal.MetalYield;
 import dev.skysurveyor.journal.MiningEntry;
 import dev.skysurveyor.journal.PersonalBests;
 import dev.skysurveyor.journal.ToastText;
 import dev.skysurveyor.mining.EfficiencyStats;
+import dev.skysurveyor.money.Coins;
 import dev.skysurveyor.money.DropList;
 import dev.skysurveyor.money.LiveMoney;
 import dev.skysurveyor.money.MoneyStats;
@@ -62,7 +73,7 @@ public final class LiveHud {
 	private static final Logger LOGGER = LoggerFactory.getLogger("Surveyor");
 	private static final int REFRESH_TICKS = 4;
 	private static final Identifier HYPIXEL_GEM = Identifier.parse("hypixel_skyblock:item/collections/gemstone/jasper/fine_jasper_gem");
-	// shafts today never get near this, keeps the scan short
+	// shafts today never get near this lol
 	private static final int TODAY_LOOKBACK = 2000;
 	// display choice
 	private static final long TOAST_FADE = 300;
@@ -94,7 +105,6 @@ public final class LiveHud {
 	private List<JournalEntry> sessionEntries = List.of();
 	private Double sessionCoins;
 	private Double lastShaftCoins;
-	// mining outside shafts
 	private Double outsideSession;
 	private int outsideCount = -1;
 	private MiningEntry outsideFirst;
@@ -102,15 +112,15 @@ public final class LiveHud {
 	private Shaft totalsShaft;
 	private int totalsVersion;
 	private Totals shaftTotals;
-	// type code -> shafts since, from saved shafts. redone when one is saved
+	// type code -> shafts since. redone on save
 	private Map<String, Long> savedDry = Map.of();
 	private int dryEntries = -1;
 	private JournalEntry dryFirst;
-	// avg spawn chart, redone when a shaft is saved
+	// redone when a shaft is saved
 	private List<HudData.Spawn> recentSpawns = List.of();
 	private int spawnEntries = -1;
 	private JournalEntry spawnFirst;
-	// all-time coins, drops + pbs, summed on sumsIo
+	// summed on sumsIo
 	private final HudSums sums;
 	// a drawn box read a pb at the last prepare, pbs only redone then
 	private boolean pbsDrawn;
@@ -120,11 +130,12 @@ public final class LiveHud {
 	private List<Prepared> prepared;
 	private int preparedWidth;
 	private int preparedHeight;
-	// single thread = read before first save, saves stay in order. own thread so a save never waits behind sums
+	// own single thread, saves in order + never wait behind sums
 	private final ExecutorService fileIo = thread("Surveyor HUD file");
 	private final ExecutorService sumsIo = thread("Surveyor HUD");
 	private boolean inMines;
 	private boolean inShaft;
+	private volatile boolean[] testPlace;
 	private HudFile file;
 	private int tick;
 	private final TickRate tickRate = new TickRate();
@@ -132,6 +143,10 @@ public final class LiveHud {
 	// client thread. null = no widget, or a new world till the next tab list
 	private TabListParser.Pity pity;
 	private Map<String, Double> usual = Map.of();
+	// exposure per cold from the journals freezes, redone when entries change
+	private Double freezePrior;
+	private int priorCount = -1;
+	private JournalEntry priorFirst;
 	private int usualCount = -1;
 	private JournalEntry usualFirst;
 	private final PingTimer pingTimer = new PingTimer();
@@ -229,6 +244,23 @@ public final class LiveHud {
 		return box.visible(inMines, inShaft);
 	}
 
+	public boolean inMines() {
+		return inMines;
+	}
+
+	public boolean inShaft() {
+		return inShaft;
+	}
+
+	// screenshot test only, null = where u really are
+	public void testPlace(Boolean mines, Boolean shaft) {
+		testPlace = mines == null ? null : new boolean[] {mines, shaft};
+		if (testPlace != null) {
+			inMines = mines;
+			inShaft = shaft;
+		}
+	}
+
 	// mixins, client thread
 	public void onServerPing(int id) {
 		tickRate.onPing(id, System.currentTimeMillis());
@@ -249,7 +281,7 @@ public final class LiveHud {
 
 	public void onTick(Minecraft client) {
 		if (++tick % REFRESH_TICKS != 0) return;
-		// gem icon glyphs come w/ hypixels pack, its models say if its loaded. models null until the loading overlay is gone
+		// hypixel pack check via models, kinda hacky. null till the loading overlay is gone
 		if (client.gui.overlay() == null) {
 			ItemNames.iconsLoaded(!(client.getModelManager().getItemModel(HYPIXEL_GEM) instanceof MissingItemModel));
 		}
@@ -257,9 +289,14 @@ public final class LiveHud {
 		Shaft shaft = tracker.currentShaft();
 		inShaft = shaft != null;
 		inMines = tracker.inMiningArea();
+		boolean[] place = testPlace;
+		if (place != null) {
+			inMines = place[0];
+			inShaft = place[1];
+		}
 		Journal.Session session = journal.activeSession(now);
 		TextPatterns patterns = TextPatterns.defaults();
-		// read once, the io thread bumps it. new prices or settings = coins again, totals stay
+		// read once, io thread bumps it
 		int changes = money.changes();
 		boolean revalue = changes != moneyChanges;
 		moneyChanges = changes;
@@ -301,6 +338,11 @@ public final class LiveHud {
 		HudSums.AllTime coins = sums.allTime();
 		// editor shows every pb in its value list
 		boolean wantPbs = pbsDrawn || client.gui.screen() instanceof EditHudScreen;
+		// one change check per refresh, so the next shaft's title has a fresh guide
+		Surveyor.GUIDE.refresh();
+		ShaftModel.Guide guide = shaft == null || shaft.id() == null ? null : Surveyor.GUIDE.cachedGuide();
+		YourNumbers numbers = guide == null ? null : Surveyor.GUIDE.cachedNumbers();
+		if (Surveyor.GUIDE.cachedNumbers() != null) HudRules.closeCall(Surveyor.GUIDE.cachedNumbers().get(NumberId.CLOSE_CALL));
 		data = HudData.live(totals.withBreaks(breaks), allTime, thisShaft, journal.spawnTimerMillis(now), shaft, now, ShaftNames.defaults(),
 				metalTier)
 				.lastShaft(lastEntry, ShaftNames.defaults())
@@ -309,6 +351,10 @@ public final class LiveHud {
 				.extra(extra(session, shaft, now, changes, wantPbs, metalTier))
 				.pity(pity)
 				.efficiency(journal.efficiency(now))
+				.freezeIn(freezeIn(shaft, now))
+				.shaftGain(shaftGain(shaft, guide, numbers))
+				.campfireGain(campfireGain(shaft, guide, numbers))
+				.keyCorpses(keyCorpses(shaft, now, guide, numbers))
 				.efficiencyTrack(journal.efficiencyTrack(now), shaft == null || shaft.id() == null ? null : usualEfficiency().get(shaft.id().type()))
 				.recentSpawns(recentSpawns())
 				.consumables(consumables.get())
@@ -317,7 +363,55 @@ public final class LiveHud {
 		prepared = null;
 	}
 
-	// shaft type -> median efficiency, the line charts dashes. redone when entries change
+	// only not looted ones, once per type
+	private static String keyCorpses(Shaft shaft, long now, ShaftModel.Guide guide, YourNumbers numbers) {
+		if (shaft == null || shaft.id() == null || guide == null) return null;
+		double left = Verdict.left(guide, numbers, shaft.id(), now - shaft.enteredAt(), shaft.campfiresPlaced().size());
+		List<String> parts = new ArrayList<>();
+		Map<String, CorpseCount> counts = CorpseCounts.of(shaft);
+		for (CorpseType type : CorpseType.KEY_LOOT) {
+			CorpseCount count = counts.get(type.label());
+			if (count == null || count.looted() >= count.total()) continue;
+			Double gain = Verdict.key(guide, numbers, shaft.id(), shaft.corpses(), type.label(), left);
+			if (gain == null) continue;
+			String color = GuideText.colour(gain, guide.keyBand());
+			parts.add(CorpseType.color(type.label()) + type.label() + " " + color + Coins.signed(gain));
+		}
+		return parts.isEmpty() ? null : String.join(" ", parts);
+	}
+
+	private static Double campfireGain(Shaft shaft, ShaftModel.Guide guide, YourNumbers numbers) {
+		if (shaft == null) return null;
+		return Verdict.campfire(guide, numbers, shaft.id(), shaft.corpses(), shaft.campfiresPlaced().size());
+	}
+
+	private static Double shaftGain(Shaft shaft, ShaftModel.Guide guide, YourNumbers numbers) {
+		if (shaft == null) return null;
+		Verdict verdict = Verdict.of(guide, numbers, shaft.id(), shaft.corpses());
+		return verdict == null ? null : verdict.gain();
+	}
+
+	// calculators freeze (typed or tracked) per cold, so it matches the verdicts. journal deaths till its built
+	private static Double guideFreeze(Double journal) {
+		YourNumbers numbers = Surveyor.GUIDE.cachedNumbers();
+		YourNumbers.Num freeze = numbers == null ? null : numbers.num(NumberId.FREEZE);
+		if (freeze == null || freeze.source() == YourNumbers.Source.START) return journal;
+		return ColdModel.exposure(freeze.value()) / ColdModel.FREEZE_COLD;
+	}
+
+	// null = not in a shaft, or too few cold changes to tell
+	private Long freezeIn(Shaft shaft, long now) {
+		if (shaft == null) return null;
+		if (journal.entryCount() != priorCount || journal.firstEntry() != priorFirst) {
+			freezePrior = FreezeClock.prior(journal.entries());
+			priorCount = journal.entryCount();
+			priorFirst = journal.firstEntry();
+		}
+		Long at = FreezeClock.freezeAt(shaft.coldSteps(), guideFreeze(freezePrior));
+		return at == null ? null : Math.max(0, shaft.enteredAt() + at - now);
+	}
+
+	// type -> median, the line charts dashes. redone when entries change
 	private Map<String, Double> usualEfficiency() {
 		if (journal.entryCount() != usualCount || journal.firstEntry() != usualFirst) {
 			Map<String, Double> map = new HashMap<>();

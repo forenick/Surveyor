@@ -35,7 +35,7 @@ class FossilWaypointTest {
 		assertNull(FossilWaypoint.spot(null, FossilSpots.defaults()));
 	}
 
-	// tung fossil 13 blocks: 11 broken (recording 2026-11-21 23:03) hides it, 10 doesnt
+	// tung fossil 13 blocks: 11 broken hides it (rec 11-21 23:03), 10 doesnt
 	@Test
 	void goneOnceMostlyMined() {
 		Spot tung = FossilSpots.defaults().get("TUNG_1");
@@ -43,7 +43,7 @@ class FossilWaypointTest {
 		assertTrue(FossilWaypoint.mined(11, tung));
 	}
 
-	// fake box: 1st 13 blocks of the x, y, z walk are fossil, gone = removed from the set
+	// fake box: 1st 13 of the x, y, z walk are fossil
 	@Test
 	void minedCountsBoxBlocksSeenThenGone() {
 		Spot tung = FossilSpots.defaults().get("TUNG_1");

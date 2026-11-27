@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-// made up widths, every shaft column 10 wide so each one costs 10 + gap
+// made up widths, shaft columns 10 + gap each
 class TableColumnsTest {
 	private static final int GAP = 6;
 	private static final List<Column> EVEN = TableColumns.SHAFTS.stream().map(c -> c.withWidth(10)).toList();
@@ -130,13 +130,23 @@ class TableColumnsTest {
 		assertArrayEquals(new int[] {0, 3, 2, 1}, order("spawn", true));
 	}
 
+	// FAIR_1 is Vanguard, so after Jade
+	@Test
+	void shaftByShownName() {
+		List<JournalEntry> shafts = List.of(entry().shaftId("JASP_C").build(), entry().shaftId("FAIR_1").build(), entry().shaftId(null).build(),
+				entry().shaftId("JADE_1").build(), entry().shaftId("JASP_1").build());
+		List<Double> coins = Arrays.asList(null, null, null, null, null);
+		assertArrayEquals(new int[] {3, 4, 0, 1, 2}, TableColumns.shaftOrder(shafts, coins, "shaft", false, 1));
+		assertArrayEquals(new int[] {1, 0, 4, 3, 2}, TableColumns.shaftOrder(shafts, coins, "shaft", true, 1));
+	}
+
 	@Test
 	void coinsBiggestFirst() {
 		assertArrayEquals(new int[] {2, 0, 3, 1}, order("coins", false));
 		assertArrayEquals(new int[] {0, 3, 2, 1}, order("coins", true));
 	}
 
-	// 1,000 blocks at 13 ticks: 650 s nonstop. 100% in 650 s, 50% in 1,300 s, 99 blocks shows nothing, old entry has none
+	// 1,000 blocks at 13 ticks = 650 s nonstop. 99 blocks shows nothing, old entry has none
 	private static MiningStats mined(int blocks, long millis) {
 		return new MiningStats(millis, 0, blocks, 0, "magenta_stained_glass", 13.0, null, 0, 0);
 	}

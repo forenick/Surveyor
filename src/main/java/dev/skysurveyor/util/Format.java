@@ -20,7 +20,7 @@ public final class Format {
 		return Integer.parseInt(hex.substring(1), 16);
 	}
 
-	// 75 min = "1h 15m", hud time differs on purpose
+	// hud time differs on purpose
 	public static String duration(long millis) {
 		long seconds = Math.max(0, millis) / 1000;
 		if (seconds < 60) return seconds + "s";
@@ -34,6 +34,12 @@ public final class Format {
 
 	public static String decimal(double value) {
 		return String.format(Locale.ROOT, "%.1f", value);
+	}
+
+	// "just now", "5m ago", "3h ago", "2d ago"
+	public static String ago(long millis) {
+		long minutes = Math.max(0, millis) / 60_000;
+		return minutes < 1 ? "just now" : minutes < 60 ? minutes + "m ago" : minutes < 24 * 60 ? minutes / 60 + "h ago" : minutes / (24 * 60) + "d ago";
 	}
 
 	// 0.69 = "69%"

@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-// held items, chat + footer from recordings 2026-11-08 (potato 284s, filet 287s, splash 293s) and 2026-11-15
+// held items, chat + footer: recs 11-08 (potato 284s, filet 287s, splash 293s) + 11-15
 class EffectTimersTest {
 	private static final String POTATO = "§5Chilled Pristine Potato";
 	private static final List<String> POTATO_LORE = List.of("§8Consumable", "", "§7Grants §5+0.1 Pristine §7while in §bGlacite",
@@ -142,7 +142,7 @@ class EffectTimersTest {
 		timers.restore(Map.of("pristine_potato", 20_000L, "filet_o_fortune", 90_000L));
 		timers.onFooter(1000, text.footer(footer(3, "§6Fiesta Flask I§r §f54m")));
 		assertNull(timers.left(Consumable.PRISTINE_POTATO));
-		// ours runs fast, 1:30 left can still be minutes in game
+		// ours runs fast, 1:30 can still be minutes in game. close enough
 		assertEquals(90_000L, timers.left(Consumable.FILET_O_FORTUNE));
 	}
 
@@ -170,7 +170,7 @@ class EffectTimersTest {
 		assertEquals(Map.of(Consumable.COLD_RESISTANCE, new EffectTime(754_000, 1000)), shown);
 		timers.onScreen(shown);
 		assertEquals(754_500L, timers.left(Consumable.COLD_RESISTANCE));
-		// polled while open: counts down inside the shown second, not reset each poll
+		// counts down inside the shown second, no reset per poll
 		timers.tick(0, true);
 		timers.tick(400, true);
 		timers.onScreen(shown);

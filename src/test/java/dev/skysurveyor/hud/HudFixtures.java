@@ -6,7 +6,7 @@ import dev.skysurveyor.hud.HudData.SessionTotals;
 import dev.skysurveyor.hud.HudData.Totals;
 import dev.skysurveyor.journal.MetalYield;
 
-// tests only. metal in enchanted, the default
+// metal in enchanted, the default
 final class HudFixtures {
 	private HudFixtures() {
 	}

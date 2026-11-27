@@ -4,10 +4,10 @@ import dev.skysurveyor.util.Format;
 
 // "waypoints" in config.json, names never rename. color = "#RRGGBB"
 public record WaypointSettings(Boolean fossil, String color) {
-	// on, nick 2026-11-21. essence purple, display choice
+	// on, nick 11-21. purple = display choice
 	public static final WaypointSettings DEFAULTS = new WaypointSettings(true, "#FF55FF");
 
-	// hand edited file, anything missing or weird = default
+	// missing or weird = default
 	public WaypointSettings repaired() {
 		return new WaypointSettings(fossil == null ? DEFAULTS.fossil : fossil, Format.rgb(color) == null ? DEFAULTS.color : color);
 	}

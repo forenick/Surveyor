@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-// fixtures = real snapshots from recordings
+// fixtures = real snapshots from recs
 class HudParserTest {
 	private static final List<String> SHAFT_SCOREBOARD = List.of(
 			"§e§lSKYBLOCK",
@@ -97,7 +97,7 @@ class HudParserTest {
 		assertEquals(List.of(), tabList.corpses(List.of("§b§lArea: §7Mineshaft", "§r Scrap: §b0")));
 	}
 
-	// real lines, recordings 1-5
+	// real lines, recs 1-5
 	@Test
 	void pityWidget() {
 		assertEquals(new TabListParser.Pity(388, 2_000),

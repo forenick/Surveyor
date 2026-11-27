@@ -20,10 +20,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-// where mining counts, per user of MiningClock. "both" = tab list still says dwarven mines in a shaft
+// "both" = tab says dwarven mines in a shaft
 class MiningRulesTest {
 	private static final long MINUTE = 60_000;
-	// recording 5
+	// rec 5
 	private static final List<String> TUNG_1 = List.of("§8§711/15/26 §8m10§8§u§8§88A TUNG_1", "§b §7 §bGlacite M§b§p§b§bineshafts");
 	private static final String STASH = "§r§f             §7You have §37,726,738 §7materials stashed away!";
 

@@ -9,8 +9,8 @@ import dev.skysurveyor.detection.CorpseLoot;
 import dev.skysurveyor.detection.Shaft;
 import dev.skysurveyor.journal.JournalStats.CorpseCount;
 
-// tab list flips to LOOTED 0.7 to 3 s after the loot msg, loot + leave = saved not looted
-// looted = max(tab, chat loots), total = max(tab, looted)
+// tab flips to LOOTED 0.7-3 s after loot msg, loot + leave = saved
+// looted = max(tab, chat), total = max(tab, looted)
 public final class CorpseCounts {
 	private CorpseCounts() {
 	}
@@ -23,7 +23,7 @@ public final class CorpseCounts {
 		return of(shaft.corpses(), shaft.loots());
 	}
 
-	// corpse type order, a type only in chat gets a row too
+	// type order, chat-only types get a row too
 	public static Map<String, CorpseCount> of(List<Corpse> corpses, List<CorpseLoot> loots) {
 		Map<String, int[]> counts = new LinkedHashMap<>();
 		for (Corpse corpse : corpses) {
@@ -41,7 +41,7 @@ public final class CorpseCounts {
 		return result;
 	}
 
-	// like of(entry).get(type).looted(), w/o building every type
+	// w/o building every type
 	public static int looted(JournalEntry entry, String type) {
 		int tab = 0;
 		for (Corpse corpse : entry.corpses()) {

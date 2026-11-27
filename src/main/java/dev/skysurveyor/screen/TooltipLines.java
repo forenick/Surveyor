@@ -43,7 +43,7 @@ final class TooltipLines {
 		}
 	}
 
-	// icon has its shadow baked in
+	// shadow baked in
 	private record IconLine(Identifier icon, String text) implements ClientTooltipComponent {
 		@Override
 		public int getHeight(Font font) {

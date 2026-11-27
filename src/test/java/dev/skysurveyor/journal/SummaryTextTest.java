@@ -16,7 +16,7 @@ import dev.skysurveyor.settings.MoneySettings;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-// made-up shaft, every line the chat summary can have
+// made up, every summary line
 class SummaryTextTest {
 	private static final String RULE = "§8§m                                                  ";
 
@@ -34,7 +34,7 @@ class SummaryTextTest {
 				new Line(Part.CORPSES, "Yellow Goblin Egg", 2, 300_000.0), new Line(Part.KEYS, "Umber Key", 1, -121_000.0),
 				new Line(Part.CRYSTALS, "Jasper Crystal", 1, null)), List.of());
 		assertEquals(List.of(RULE,
-				" §b§lJASP_1  §7inside §f4m 12s §8(warped out)",
+				" §d§lJasper 1  §7inside §f4m 12s §7(warped out)",
 				" §7Spawned in §f1m 30s",
 				" §7Corpses §9Lapis 2/2§7, §fUmber 0/1",
 				// 160 flawed + 2 fine
@@ -49,7 +49,7 @@ class SummaryTextTest {
 	@Test
 	void bareShaft() {
 		JournalEntry entry = EntryBuilder.entry().shaftId(null).exit("DEATH").build();
-		assertEquals(List.of(RULE, " §b§lMineshaft  §7inside §f1m 0s §8(froze)", " §7Spawned in §8not timed", " §7Coins §8no prices yet", RULE),
+		assertEquals(List.of(RULE, " §b§lMineshaft  §7inside §f1m 0s §c(froze)", " §7Spawned in §8not timed", " §7Coins §8no prices yet", RULE),
 				SummaryText.lines(entry, null, null, MoneySettings.DEFAULTS));
 	}
 
@@ -72,7 +72,7 @@ class SummaryTextTest {
 
 	@Test
 	void exitNames() {
-		assertEquals("Took the exit", SummaryText.exitName(ExitReason.BYE));
+		assertEquals("Left by the exit", SummaryText.exitName(ExitReason.BYE));
 		assertEquals("Unknown", SummaryText.exitName(ExitReason.UNKNOWN));
 	}
 }

@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-// what LiveJournal does once each file loaded
+// like LiveJournal after loading each file
 class ResumeTest {
 	private static final long MINUTE = 60_000;
 	private static final long GAP = Journal.SESSION_GAP_MILLIS;
@@ -62,7 +62,7 @@ class ResumeTest {
 		assertEquals(10 * MINUTE, Resume.lastActivity(0, entries, List.of(mining(0, 5 * MINUTE)), breaks), "older mining doesnt move it back");
 	}
 
-	// review 2.8, current rule: outside mining w/o a shaft in its session isnt resumed
+	// review 2.8: outside mining w/o a shaft in its session isnt resumed
 	@Test
 	void miningWithoutAShaftIsntResumed() {
 		Resume.shafts(journal, tracker, List.of(), List.of(mining(0, 20 * MINUTE)), breaks);
@@ -77,7 +77,7 @@ class ResumeTest {
 		assertEquals(List.of(new BreakEntry(BreakEntry.VERSION, 0, 20 * MINUTE, 25 * MINUTE)), breaks);
 	}
 
-	// break 1 saved, then a quit before the next mining line. break 2 starts at break 1s end, not the last mining
+	// break 1 saved, quit before the next mining line. break 2 starts at break 1s end
 	@Test
 	void savedBreakMovesTheLastActivity() {
 		breaks.add(new BreakEntry(BreakEntry.VERSION, 0, 20 * MINUTE, 27 * MINUTE));

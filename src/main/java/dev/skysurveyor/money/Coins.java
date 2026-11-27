@@ -6,7 +6,7 @@ public final class Coins {
 	private Coins() {
 	}
 
-	// 999,950 and up = 1.0M, not 1000.0k
+	// 999,950+ = 1.0M, not 1000.0k
 	public static String format(double coins) {
 		double abs = Math.abs(coins);
 		if (abs >= 999_950_000) return one(coins / 1e9) + "B";
@@ -15,7 +15,7 @@ public final class Coins {
 		return Long.toString(Math.round(coins));
 	}
 
-	// no .0, f.e. 1.0M = 1M on chart axes
+	// no .0 on chart axes
 	public static String whole(double coins) {
 		String text = format(coins);
 		int suffix = text.length() - 1;

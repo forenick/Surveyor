@@ -24,7 +24,7 @@ public enum HudValue {
 	MINED_METAL("mined_metal", "Mined metal", Group.SESSION, Kind.DECIMAL, "Mined metal: ", Range.values()),
 	FOSSIL_ESSENCE("fossil_essence", "Fossil Essence", Group.SESSION, Kind.INTEGER, "Fossil Essence: ", Range.values()),
 	SPAWN_TIMER("spawn_timer", "Spawn timer", Group.SPAWN, Kind.TIME, "Spawn: "),
-	// shafts since the last one of the lines shaft type
+	// shafts since the lines type
 	DRYSTREAK("drystreak", "Drystreak", Group.SPAWN, Kind.INTEGER, "Jasper drystreak: "),
 	// tab list pity widget, shows now/max
 	PITY("pity", "Shaft pity", Group.SPAWN, Kind.INTEGER, "Pity: "),
@@ -32,7 +32,7 @@ public enum HudValue {
 	CORPSES_LOOTED("corpses_looted", "Corpses looted", Group.SESSION, Kind.INTEGER, "Lapis corpses: ", Range.values()),
 	SESSION_TIME("session_time", "Session length", Group.OTHER, Kind.TIME, "Session: "),
 	SHAFTS_TODAY("shafts_today", "Shafts today", Group.SESSION, Kind.INTEGER, "Shafts today: "),
-	// this shaft from the 1st gem block, or this tunnel loop. whole percent (Docs/efficiency-design.md)
+	// from the 1st gem block, or this tunnel loop (efficiency-design)
 	EFFICIENCY("efficiency", "Efficiency", Group.OTHER, Kind.INTEGER, "Efficiency: ", "%"),
 	// one of the Stats tabs personal bests, all-time
 	PERSONAL_BEST("personal_best", "Personal best", Group.OTHER, Kind.TEXT, "PB: "),
@@ -41,16 +41,24 @@ public enum HudValue {
 	SHAFT_CORPSES("shaft_corpses", "Corpses", Group.SHAFT, Kind.TEXT, "Corpses: "),
 	SHAFT_COLD("shaft_cold", "Cold", Group.SHAFT, Kind.COLD, "Cold: "),
 	SHAFT_CAMPFIRES("shaft_campfires", "Campfires", Group.SHAFT, Kind.INTEGER, "Campfires: "),
+	// - outside a shaft (calculator-design slice 1)
+	FREEZE_IN("freeze_in", "Freeze in", Group.GUIDE, Kind.TIME, "Freeze in: "),
+	// vs leaving, from the guide tab. - outside a gem shaft
+	SHAFT_GAIN("shaft_gain", "Shaft gain", Group.GUIDE, Kind.COINS, "Shaft gain: "),
+	// one more campfire against leaving. - outside a gem shaft
+	CAMPFIRE_GAIN("campfire_gain", "Campfire gain", Group.GUIDE, Kind.COINS, "Campfire: "),
+	// each key corpse not looted yet against its key. - w/o one
+	KEY_CORPSES("key_corpses", "Key corpses", Group.GUIDE, Kind.TEXT, "Keys: "),
 	// net, shaft = live while inside
 	COINS("coins", "Coins", Group.MONEY, Kind.COINS, "Coins: ", Range.values()),
 	COINS_PER_SHAFT("coins_per_shaft", "Coins per shaft", Group.MONEY, Kind.COINS, "Coins/shaft: ", Range.SESSION,
 			Range.ALL_TIME),
-	// sacks msgs while mining in the mines, not in a shaft. nicks name pick (2026-11-14)
+	// sacks msgs outside shafts. nicks name pick (2026-11-14)
 	OUTSIDE_COINS("outside_coins", "Coins outside shafts", Group.MONEY, Kind.COINS, "Outside coins: ", Range.SESSION,
 			Range.PER_HOUR, Range.ALL_TIME),
 	// several rows, not a tag. label stays empty
 	DROPS("drops", "Drops", Group.MONEY, Kind.TEXT, "", Range.SHAFT, Range.SESSION, Range.ALL_TIME),
-	// time left, line hides while its effect is off (Docs/consumables-design.md)
+	// line hides while its off (consumables-design)
 	PRISTINE_POTATO("pristine_potato", "Pristine Potato", Group.CONSUMABLES, Kind.TIME, "Pristine Potato: "),
 	FILET_O_FORTUNE("filet_o_fortune", "Filet O' Fortune", Group.CONSUMABLES, Kind.TIME, "Filet O' Fortune: "),
 	COLD_RESISTANCE("cold_resistance", "Cold Resistance potion", Group.CONSUMABLES, Kind.TIME, "Cold Resistance: "),
@@ -60,13 +68,17 @@ public enum HudValue {
 	TPS("tps", "TPS", Group.GAME, Kind.DECIMAL, "TPS: "),
 	CLOCK("clock", "Clock", Group.GAME, Kind.TEXT, "Clock: "),
 	MOD_VERSION("mod_version", "Surveyor version", Group.GAME, Kind.TEXT, "Surveyor "),
-	MINECRAFT_VERSION("minecraft_version", "Minecraft version", Group.GAME, Kind.TEXT, "Minecraft ");
+	MINECRAFT_VERSION("minecraft_version", "Minecraft version", Group.GAME, Kind.TEXT, "Minecraft "),
+	// type + layout, f.e. Jade 1
+	SHAFT_NAME("shaft_name", "Shaft name", Group.SHAFT, Kind.TEXT, "Shaft: ");
 
-	// picker headings, display only. SHAFT = followsShaft, keep its 5
+	// picker headings, display only. SHAFT = followsShaft
 	public enum Group {
 		SPAWN("Spawn"),
 		SESSION("Shafts and loot"),
 		SHAFT("Current shaft"),
+		// this shaft only, nothing after it
+		GUIDE("Calculator (WIP)"),
 		MONEY("Coins"),
 		CONSUMABLES("Consumables"),
 		OTHER("Other"),
@@ -137,7 +149,6 @@ public enum HudValue {
 		}
 	}
 
-	// what a line can draw under or instead of its number
 	public enum Graph {
 		NONE,
 		BAR,
@@ -156,7 +167,7 @@ public enum HudValue {
 		PERSONAL_BEST
 	}
 
-	// the players list + its keys, set by LiveHud. defaults till settings load
+	// set by LiveHud, defaults till settings load
 	private record PbList(List<PersonalBests.Def> list, List<String> keys) {
 		static PbList of(List<PersonalBests.Def> list) {
 			return new PbList(list, list.stream().map(PersonalBests::key).distinct().toList());
@@ -175,10 +186,10 @@ public enum HudValue {
 		static final List<String> SHAFTS = shafts();
 		static final List<String> CORPSES = CorpseType.ORDER.stream().map(HudValue::targetTag).toList();
 		// Add line order, docs/hud-rethink.md
-		static final List<HudValue> LISTED = List.of(SPAWN_TIMER, AVERAGE_SPAWN, SINCE_LAST_SHAFT, DRYSTREAK, PITY, SESSION_SHAFTS,
-				SHAFTS_PER_HOUR, SHAFTS_TODAY, SESSION_POWDER, SESSION_CORPSE_FINE, MINED_METAL, FOSSIL_ESSENCE, CORPSES_LOOTED, SHAFT_TYPE,
-				SHAFT_TIME, SHAFT_CORPSES, SHAFT_COLD, SHAFT_CAMPFIRES, COINS, COINS_PER_SHAFT, OUTSIDE_COINS, DROPS, PRISTINE_POTATO, FILET_O_FORTUNE,
-				COLD_RESISTANCE, FIESTA_FLASK, EFFICIENCY, SESSION_TIME,
+		static final List<HudValue> LISTED = List.of(SPAWN_TIMER, AVERAGE_SPAWN, EFFICIENCY, SINCE_LAST_SHAFT, DRYSTREAK, PITY, SESSION_SHAFTS,
+				SHAFTS_PER_HOUR, SHAFTS_TODAY, SESSION_POWDER, SESSION_CORPSE_FINE, MINED_METAL, FOSSIL_ESSENCE, CORPSES_LOOTED, SHAFT_NAME, SHAFT_TYPE,
+				SHAFT_TIME, SHAFT_CORPSES, SHAFT_COLD, SHAFT_CAMPFIRES, FREEZE_IN, SHAFT_GAIN, CAMPFIRE_GAIN, KEY_CORPSES, COINS, COINS_PER_SHAFT, OUTSIDE_COINS, DROPS, PRISTINE_POTATO, FILET_O_FORTUNE,
+				COLD_RESISTANCE, FIESTA_FLASK, SESSION_TIME,
 				PERSONAL_BEST, FPS, PING, TPS, CLOCK, MOD_VERSION, MINECRAFT_VERSION);
 
 		private static List<String> shafts() {
@@ -257,12 +268,23 @@ public enum HudValue {
 		return displayName;
 	}
 
+	// where Add line + the value list put it. group() keeps its meaning (followsShaft)
+	public Group listGroup() {
+		// in both default boxes, a player looks next to the spawn timer
+		return this == EFFICIENCY ? Group.SPAWN : group;
+	}
+
 	public Group group() {
 		return group;
 	}
 
 	public Kind kind() {
 		return kind;
+	}
+
+	// shown w/ a + when above 0
+	public boolean signed() {
+		return this == SHAFT_GAIN || this == CAMPFIRE_GAIN;
 	}
 
 	public String defaultPrefix() {
@@ -294,14 +316,19 @@ public enum HudValue {
 				case SHAFT_TYPE -> prefix.equals(name + " dry: ");
 				case CORPSE_TYPE -> prefix.equals(name + " looted: ") || prefix.equals("All-time " + name + " looted: ")
 						|| prefix.equals(name + " looted this shaft: ");
-				case PERSONAL_BEST, NONE -> false;
+				case PERSONAL_BEST -> {
+					PersonalBests.Def def = personalBest(target);
+					String was = def == null ? null : PersonalBests.oldName(def, ShaftNames.defaults());
+					yield was != null && prefix.equals("PB " + was + ": ");
+				}
+				case NONE -> false;
 			};
 			if (had) return true;
 		}
 		return false;
 	}
 
-	// a label nobody typed: any default this value has or had, any range + target
+	// any default this value has or had
 	public boolean isDefaultPrefix(String prefix) {
 		if (prefix == null || oldDefaultPrefix(prefix) || prefix.equals(defaultPrefix)) return true;
 		List<String> targets = target() == Target.NONE ? Collections.singletonList(null) : targets();
@@ -318,7 +345,7 @@ public enum HudValue {
 		return defaultPrefix(range, defaultTarget());
 	}
 
-	// noun 1st, period after. session = the short one. /h in the label, HudBoxText drops the values
+	// noun 1st, period after. /h in the label, HudBoxText drops the values
 	public String defaultPrefix(Range range, String target) {
 		if (target() == Target.NONE && ranges.isEmpty() || multiRow()) return defaultPrefix;
 		String name = targetName(target == null ? defaultTarget() : target);
@@ -364,7 +391,7 @@ public enum HudValue {
 		return switch (this) {
 			case COINS, COINS_PER_SHAFT, OUTSIDE_COINS, SHAFT_CAMPFIRES -> "6";
 			// game's glacite powder + cold colour
-			case SESSION_POWDER, SHAFT_COLD -> "b";
+			case SESSION_POWDER, SHAFT_COLD, FREEZE_IN -> "b";
 			// fine = rare
 			case SESSION_CORPSE_FINE -> "9";
 			// games essence colour
@@ -441,7 +468,7 @@ public enum HudValue {
 		return target != null && targets().contains(target);
 	}
 
-	// a pb removed from the list stays on its line + shows -. still has to look like a key, so typos error
+	// removed pb stays + shows -, typos still error
 	public boolean acceptsTarget(String target) {
 		if (target() != Target.PERSONAL_BEST) return hasTarget(target);
 		if (target == null) return false;
@@ -451,7 +478,7 @@ public enum HudValue {
 		return false;
 	}
 
-	// pbs: the default is just the 1st in the list, so lines + tags always save theirs
+	// pbs: default is just the 1st in the list, so always saved
 	public boolean pinsTarget() {
 		return target() == Target.PERSONAL_BEST;
 	}
@@ -510,23 +537,32 @@ public enum HudValue {
 					+ "the fossil blocks you broke times the average shown.";
 			case SPAWN_TIMER -> "Mining time since your last shaft. Block hits and pickaxe abilities in the Dwarven Mines "
 					+ "count, gaps over 40 s count as 40 s.";
-			case DRYSTREAK -> "Shafts since your last shaft of one type, f.e. Jasper. Any variant counts. 0 while you're in one.";
+			case DRYSTREAK -> "Shafts since your last shaft of one type, like Jasper. Any variant counts. 0 while you're in one.";
 			case PITY -> "The game's shaft pity from the tab list: a shaft is guaranteed when it reaches the second number. "
 					+ "Needs the Pity widget in your tab list, else it shows -.";
 			case SINCE_LAST_SHAFT -> "Time since you left your last shaft. - while you're in one.";
-			case CORPSES_LOOTED -> "Corpses you looted of one type, f.e. Lapis.";
+			case CORPSES_LOOTED -> "Corpses you looted of one type, like Lapis.";
 			case SESSION_TIME -> "How long this session has been going.";
 			case SHAFTS_TODAY -> "Shafts you finished today.";
 			case EFFICIENCY -> "Blocks you broke against the blocks nonstop mining at your speed would break. In a shaft from "
 					+ "your first gem block, in the tunnels since you left the last shaft. Starts over after 2 min without mining. "
 					+ "Gemstone Spread doesn't count.";
 			case PERSONAL_BEST -> "One of your personal bests from the Stats tab, over all your shafts.";
-			case SHAFT_TYPE -> "The shaft you're in, or the last one, f.e. Jade, in its own colour.";
+			case SHAFT_TYPE -> "The type of the shaft you're in, or the last one, like Jade, in its own colour.";
+			case SHAFT_NAME -> "The shaft you're in, or the last one, with its layout, like Jade 1, in its own colour.";
 			case SHAFT_TIME -> "How long you've been in this shaft, or how long you were in the last one.";
 			case SHAFT_CORPSES -> "Corpses looted out of all corpses in this shaft (or the last one), each type in its own colour. From the "
 					+ "tab list.";
 			case SHAFT_COLD -> "Your Cold in this shaft, from the scoreboard. After leaving, the Cold you left with.";
 			case SHAFT_CAMPFIRES -> "Portable Campfires you placed in this shaft, or in the last one.";
+			case KEY_CORPSES -> "Each Umber and Tungsten corpse you haven't looted: what looting it makes, key paid. Worth less "
+					+ "the later you loot it.";
+			case CAMPFIRE_GAIN -> "What one more campfire makes over leaving: its extra minutes of mining, minus its cost. A 2nd "
+					+ "adds less.";
+			case SHAFT_GAIN -> "What mining this shaft makes over leaving, by its gem and Lapis corpses, like the Calculator tab. "
+					+ "- outside a gem shaft and until your mining is tracked.";
+			case FREEZE_IN -> "Time until you freeze in this shaft, from how fast your Cold builds here. Starts from your earlier "
+					+ "freezes and moves when a campfire warms you. - outside a shaft.";
 			case COINS -> "Net coins from shafts: everything they gave, minus keys and campfires, at your price settings. "
 					+ "Session, per hour and all-time also count what you mine outside shafts. Coins this shaft are "
 					+ "live while you're inside.";
@@ -549,7 +585,7 @@ public enum HudValue {
 		return ranges;
 	}
 
-	// shafts today + per hour are periods of shafts, add line + line page only. ids + tags stay
+	// periods of shafts, add line + line page only. ids + tags stay
 	public HudValue family() {
 		return this == SHAFTS_TODAY || this == SHAFTS_PER_HOUR ? SESSION_SHAFTS : this;
 	}

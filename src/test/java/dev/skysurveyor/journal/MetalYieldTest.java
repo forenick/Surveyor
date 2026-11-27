@@ -26,7 +26,7 @@ class MetalYieldTest {
 	private long now;
 	private final ShaftTracker tracker = new ShaftTracker(TextPatterns.defaults(), event -> journal.onEvent(event, now));
 
-	// nicks TUNG_1 (journal 2026-11-11): 92 tungsten + 1 enchanted from a lapis corpse, iron ingot source unknown
+	// nicks TUNG_1 (journal 11-11): 92 tungsten + 1 enchanted from a lapis corpse, iron ingot source unknown
 	@Test
 	void nicksTungstenShaft() {
 		enter("TUNG_1");

@@ -40,7 +40,7 @@ public sealed interface ShaftEvent {
 	record CorpseLooted(CorpseLoot loot) implements ShaftEvent {
 	}
 
-	// resourceful, unconfirmed text
+	// resourceful, text unconfirmed
 	record KeySaved() implements ShaftEvent {
 	}
 
@@ -54,7 +54,7 @@ public sealed interface ShaftEvent {
 	record CampfireUsed(int amount) implements ShaftEvent {
 	}
 
-	// gemstone spread procs w/o a msg, undercounts
+	// spread procs w/o a msg, undercounts
 	record Pristine(ItemCount gems) implements ShaftEvent {
 	}
 
@@ -66,14 +66,13 @@ public sealed interface ShaftEvent {
 	record PickaxeAbility(String ability) implements ShaftEvent {
 	}
 
-	// mining speed boost ran out
 	record AbilityExpired(String ability) implements ShaftEvent {
 	}
 
 	record ScrapFound() implements ShaftEvent {
 	}
 
-	// action bar, the last fossil blocks amount only. sent when the bar changes
+	// action bar, last fossil blocks amount only. sent on change
 	record FossilEssence(int amount) implements ShaftEvent {
 	}
 

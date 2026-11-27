@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-// colour buttons in the dev client, vanilla font: "Box" 45, "Same as box" 89
+// dev client, vanilla font: "Box" 45, "Same as box" 89
 class EditorFitTest {
 	@Test
 	void columnNeverShrinks() {

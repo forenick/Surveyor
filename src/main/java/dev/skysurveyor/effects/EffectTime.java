@@ -4,7 +4,7 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-// "60m", "1h 11m", "51:12", "1:02:03", "4 hours", "6 days, 18 hours". step = the smallest unit shown
+// "60m", "1h 11m", "51:12", "1:02:03", "4 hours", "6 days, 18 hours". step = smallest unit shown
 public record EffectTime(long millis, long step) {
 	private static final Pattern CLOCK = Pattern.compile("^(\\d+)(?::(\\d\\d))(?::(\\d\\d))?$");
 	private static final Pattern UNIT = Pattern.compile("(\\d+)\\s*(days?|d|hours?|h|minutes?|mins?|m|seconds?|secs?|s)(?![a-z])");
@@ -24,7 +24,7 @@ public record EffectTime(long millis, long step) {
 		long step = 0;
 		int end = 0;
 		while (unit.find()) {
-			// only units w/ nothing else between them
+			// only units back to back
 			if (!t.substring(end, unit.start()).replace(",", "").isBlank()) return null;
 			end = unit.end();
 			long size = switch (unit.group(2).charAt(0)) {

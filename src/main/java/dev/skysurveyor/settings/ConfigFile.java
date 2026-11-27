@@ -17,7 +17,7 @@ import org.slf4j.LoggerFactory;
 
 import dev.skysurveyor.util.SafeWrite;
 
-// config.json, a ConfigSection per object in it. memory set from any thread, file io thread only, hand edits picked up by mtime
+// memory any thread, file io thread only. hand edits by mtime
 final class ConfigFile {
 	private static final Logger LOGGER = LoggerFactory.getLogger("Surveyor");
 	static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -35,7 +35,7 @@ final class ConfigFile {
 		return memory.get();
 	}
 
-	// any thread, so the page + journal see it before the save ran. one section only, the others keep what another thread just set
+	// any thread. one section only, else another threads set is lost
 	<T> void set(ConfigSection<T> section, T value) {
 		memory.updateAndGet(settings -> section.in(settings, value));
 	}
@@ -45,8 +45,8 @@ final class ConfigFile {
 		return saveError;
 	}
 
-	// changed keys only, hand edits not loaded yet (or broken) + unknown keys stay.
-	// never sets memory, a queued older save would undo a newer one
+	// changed keys only, unknown + unloaded hand edits stay
+	// never sets memory, older queued save would undo a newer
 	<T> void save(ConfigSection<T> section, T before, T after) {
 		String key = section.key();
 		if (section.whole()) {
@@ -67,15 +67,15 @@ final class ConfigFile {
 		});
 	}
 
-	// rewrites the file, other values kept but json comments + layout arent
+	// json comments + layout lost
 	private void save(Consumer<JsonObject> edit) {
 		try {
 			JsonObject json = Files.exists(file)
 					? JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8)).getAsJsonObject()
-					// memory, so a first save keeps page changes made before it
+					// memory, keeps page changes from before 1st save
 					: json(memory.get());
 			edit.accept(json);
-			// loadedMtime stays, so the next reload picks up other edits made before this
+			// loadedMtime stays, next reload sees older edits
 			SafeWrite.write(file, GSON.toJson(json));
 			saveError = null;
 		} catch (IOException | RuntimeException e) {
@@ -105,12 +105,12 @@ final class ConfigFile {
 			if (mtime == loadedMtime) return;
 			loadedMtime = mtime;
 			JsonObject json = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8)).getAsJsonObject();
-			// one by one, a broken section keeps its last values, the others still load
+			// broken section keeps last values
 			for (ConfigSection<?> section : ConfigSection.ALL) load(section, json);
 			// fixed by hand, next save should work
 			saveError = null;
 		} catch (IOException | RuntimeException e) {
-			// broken hand edit, keep the last good settings + never overwrite their file
+			// broken hand edit, keep last good + never overwrite
 			LOGGER.warn("Could not read {}: {}", file, e.toString());
 		}
 	}

@@ -24,6 +24,17 @@ class ValueListingTest {
 	}
 
 	@Test
+	void efficiencyListedUnderSpawn() {
+		assertEquals(List.of(HudValue.SPAWN_TIMER, HudValue.AVERAGE_SPAWN, HudValue.EFFICIENCY),
+				ValueListing.addLine(Group.SPAWN).subList(0, 3), "next to the spawn timer");
+		assertFalse(ValueListing.addLine(Group.OTHER).contains(HudValue.EFFICIENCY));
+		assertTrue(ValueListing.tags(Group.SPAWN, "").contains(HudValue.EFFICIENCY), "value list too");
+		// only the list moves, not what it does
+		assertEquals(Group.OTHER, HudValue.EFFICIENCY.group());
+		assertFalse(HudValue.EFFICIENCY.followsShaft(Range.SESSION));
+	}
+
+	@Test
 	void valueListHasTagsOnly() {
 		assertFalse(ValueListing.tags(Group.MONEY, "").contains(HudValue.DROPS));
 		assertTrue(ValueListing.tags(Group.MONEY, "").contains(HudValue.COINS));

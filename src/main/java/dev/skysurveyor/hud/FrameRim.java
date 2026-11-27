@@ -9,7 +9,7 @@ import net.minecraft.client.resources.metadata.gui.GuiSpriteScaling;
 import net.minecraft.data.AtlasIds;
 import net.minecraft.resources.Identifier;
 
-// how far the tooltip sprites show past a box. packs retexture them, so read from the loaded sprite
+// packs retexture, read the loaded sprite
 final class FrameRim {
 	record Rim(int left, int top, int right, int bottom) {
 		int width() {
@@ -26,7 +26,7 @@ final class FrameRim {
 	static final Rim VANILLA = new Rim(1, 1, 1, 1);
 	static final Identifier BACKGROUND = Identifier.withDefaultNamespace("tooltip/background");
 	static final Identifier BORDER = Identifier.withDefaultNamespace("tooltip/frame");
-	// client thread. new sprite objects after a pack reload
+	// client thread. new sprites after a pack reload
 	private static TextureAtlasSprite seenBackground;
 	private static TextureAtlasSprite seenBorder;
 	private static Rim seen = VANILLA;

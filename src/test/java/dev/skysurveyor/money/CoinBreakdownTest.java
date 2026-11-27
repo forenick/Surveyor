@@ -17,7 +17,7 @@ import dev.skysurveyor.money.ShaftValue.Part;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-// made up coins, not real ones
+// made up coins
 class CoinBreakdownTest {
 	private static JournalEntry entry(long entered) {
 		return EntryBuilder.entry().enteredAt(entered).build();

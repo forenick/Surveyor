@@ -18,12 +18,12 @@ import dev.skysurveyor.settings.MoneySettings.SellPrice;
 public record PriceRules(ShaftValue.Prices prices, MoneySettings settings, ItemIds ids, TextPatterns patterns) {
 	// portable campfire recipe (research/01)
 	private static final int CAMPFIRE_MATCH_STICKS = 16;
-	// tungsten/umber key = 192 enchanted + 1 bejeweled handle, forge (NEU TUNGSTEN_KEY, UMBER_KEY)
+	// tungsten/umber key = 192 enchanted + bejeweled handle (NEU TUNGSTEN_KEY, UMBER_KEY)
 	private static final int KEY_ENCHANTED = 192;
 	// perfect = 5 flawless + crystal (research/01)
 	private static final int PERFECT_FLAWLESS = 5;
 
-	// per item, by chat name
+	// by chat name
 	public Double each(String item) {
 		Matcher m = patterns.match("gem.item", item);
 		if (m != null) {
@@ -58,14 +58,18 @@ public record PriceRules(ShaftValue.Prices prices, MoneySettings settings, ItemI
 		return Math.max(0, perfect - PERFECT_FLAWLESS * flawless);
 	}
 
-	// bazaar w/ tax, else lowest bin, else npc (soulbound mob drops, empty order books). ironman = npc only
+	// bazaar w/ tax, else bin, else npc (soulbound drops, empty books). ironman = npc only
 	public Double sell(String id) {
 		if (id == null) return null;
 		ItemPrice price = prices.get(id);
 		if (price == null) return null;
 		if (settings.isIronman()) return price.npcSell();
-		Double side = settings.sellPrice() == SellPrice.INSTA_SELL ? price.buyOrder() : price.sellOffer();
-		if (side != null) return side * settings.taxFactor();
+		Double side = settings.sellPrice() == SellPrice.SELL_OFFER ? price.sellOffer() : price.buyOrder();
+		if (side != null) {
+			double bazaar = side * settings.taxFactor();
+			Double npc = price.npcSell();
+			return settings.sellPrice() == SellPrice.BEST && npc != null ? Math.max(bazaar, npc) : bazaar;
+		}
 		if (!price.onBazaar() && price.lowestBin() != null) return price.lowestBin();
 		return price.npcSell();
 	}
@@ -79,11 +83,11 @@ public record PriceRules(ShaftValue.Prices prices, MoneySettings settings, ItemI
 		return price.onBazaar() ? price.sellOffer() : price.lowestBin();
 	}
 
-	// by key item name. craft = enchanted u could have sold + a bought handle
+	// craft = enchanted u could sell + bought handle
 	public Double key(String key) {
 		String id = ids.id(key);
 		String metal = "TUNGSTEN_KEY".equals(id) ? "ENCHANTED_TUNGSTEN" : "UMBER_KEY".equals(id) ? "ENCHANTED_UMBER" : null;
-		// skeleton key isnt from ur metal, always bought
+		// skeleton key isnt ur metal, always bought
 		if (metal == null) return buy(id);
 		if (settings.ownMetal() == OwnMetal.DONT_COUNT) return 0.0;
 		if (!crafts()) return buy(id);
@@ -107,7 +111,7 @@ public record PriceRules(ShaftValue.Prices prices, MoneySettings settings, ItemI
 				|| item.equals(CorpseType.key(CorpseType.TUNGSTEN.label())) || item.equals(CorpseType.key(CorpseType.UMBER.label())));
 	}
 
-	// ironman keeps no cost
+	// ironman: no cost
 	private boolean crafts() {
 		return settings.ownMetal() == OwnMetal.CRAFT && !settings.isIronman();
 	}

@@ -2,7 +2,7 @@ package dev.skysurveyor.effects;
 
 import dev.skysurveyor.detection.TextPatterns;
 
-// ids saved in effects.json + used as pattern keys, never rename
+// ids saved in effects.json + pattern keys, never rename
 public enum Consumable {
 	PRISTINE_POTATO("pristine_potato"),
 	FILET_O_FORTUNE("filet_o_fortune"),
@@ -26,7 +26,7 @@ public enum Consumable {
 		return null;
 	}
 
-	// held item name, codes stripped
+	// codes stripped
 	public static Consumable ofItem(TextPatterns patterns, String name) {
 		for (Consumable c : values()) {
 			if (patterns.matches("consumable." + c.id, name)) return c;
@@ -34,7 +34,7 @@ public enum Consumable {
 		return null;
 	}
 
-	// effect name w/o its level
+	// w/o level
 	public static Consumable ofEffect(TextPatterns patterns, String effect) {
 		for (Consumable c : values()) {
 			if (patterns.matches("effect." + c.id, effect)) return c;

@@ -30,6 +30,8 @@ import net.minecraft.world.InteractionResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import dev.skysurveyor.calc.Fiesta;
+import dev.skysurveyor.calc.LiveGuide;
 import dev.skysurveyor.debug.ChatWatch;
 import dev.skysurveyor.debug.DebugOverlay;
 import dev.skysurveyor.debug.EventLog;
@@ -37,7 +39,9 @@ import dev.skysurveyor.debug.LiveDebug;
 import dev.skysurveyor.debug.PatternOverrides;
 import dev.skysurveyor.detection.EventText;
 import dev.skysurveyor.detection.LiveTracker;
+import dev.skysurveyor.detection.ShaftEvent;
 import dev.skysurveyor.detection.TextPatterns;
+import dev.skysurveyor.effects.Consumable;
 import dev.skysurveyor.effects.LiveEffects;
 import dev.skysurveyor.hud.EditHudScreen;
 import dev.skysurveyor.hud.EntryTitleOverlay;
@@ -47,6 +51,7 @@ import dev.skysurveyor.journal.LiveJournal;
 import dev.skysurveyor.mining.BlockWatch;
 import dev.skysurveyor.money.LiveMoney;
 import dev.skysurveyor.recorder.AutoRecorder;
+import dev.skysurveyor.recorder.MarkKey;
 import dev.skysurveyor.recorder.ShaftRecorder;
 import dev.skysurveyor.screen.EventLogScreen;
 import dev.skysurveyor.screen.JournalScreen;
@@ -68,7 +73,7 @@ import dev.skysurveyor.util.Guard;
 
 public class Surveyor implements ClientModInitializer {
 	public static final String MOD_ID = "skysurveyor";
-	// not /st, thats hypixels /storage. /shaftjournal + /sj kept from before the rename
+	// not /st = hypixel /storage. /shaftjournal + /sj from before the rename
 	private static final List<String> COMMAND_NAMES = List.of("surveyor", "shaftjournal", "sj", "sv");
 	private static final Logger LOGGER = LoggerFactory.getLogger("Surveyor");
 
@@ -79,6 +84,9 @@ public class Surveyor implements ClientModInitializer {
 	public static final LiveJournal JOURNAL = new LiveJournal(TRACKER::inMiningArea, MONEY, SETTINGS);
 	public static final LiveEffects EFFECTS = new LiveEffects();
 	public static final LiveHud HUD = new LiveHud(TRACKER, JOURNAL, MONEY, SETTINGS, EFFECTS::left);
+	// read only: election data, sacks msgs, tab list
+	public static final Fiesta FIESTA = new Fiesta(TextPatterns.defaults());
+	public static final LiveGuide GUIDE = new LiveGuide(task -> Minecraft.getInstance().execute(task));
 	private static final EntryTitleOverlay ENTRY_TITLE = new EntryTitleOverlay(() -> SETTINGS.get().entryTitle());
 	private static final FossilWaypointRenderer FOSSIL_WAYPOINT = new FossilWaypointRenderer(TRACKER::currentShaft,
 			() -> SETTINGS.get().waypoints());
@@ -94,15 +102,14 @@ public class Surveyor implements ClientModInitializer {
 		Guard.run("journal block break", () -> JOURNAL.onBlockBreak(block, ticks, clean, gone));
 	});
 
-	// unbound, only opens our own screen. old key name on purpose, options.txt saves by name
+	// unbound, opens our own screen only. old key name, options.txt saves by name
 	private static final KeyMapping JOURNAL_KEY = new KeyMapping("key.shaftjournal.journal", InputConstants.Type.KEYSYM,
 			InputConstants.UNKNOWN.getValue(), KeyMapping.Category.register(Identifier.fromNamespaceAndPath(MOD_ID, "main")));
 
-	// unbound, only opens our own screen
-	private static final KeyMapping MARK_KEY = new KeyMapping("key.skysurveyor.mark", InputConstants.Type.KEYSYM,
-			InputConstants.UNKNOWN.getValue(), JOURNAL_KEY.getCategory());
+	// unbound, only opens our own screen. null = not in controls (MarkKey)
+	private static KeyMapping markKey;
 
-	// opens next tick once the chat screen is closed
+	// next tick, after chat closes
 	private boolean openJournal;
 	private boolean openSettings;
 	private boolean openHud;
@@ -113,7 +120,7 @@ public class Surveyor implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
 		moveOldDataFolder();
-		// every hook from the game guarded (util/Guard), a throw would crash or disconnect
+		// every hook guarded, a throw crashes or disconnects
 		ClientTickEvents.END_CLIENT_TICK.register(client -> Guard.run("recorder tick", () -> RECORDER.onTick(client)));
 		ClientTickEvents.END_CLIENT_TICK.register(client -> Guard.run("tracker tick", () -> TRACKER.onTick(client)));
 		ClientTickEvents.END_CLIENT_TICK.register(client -> Guard.run("block watch tick", () -> {
@@ -121,11 +128,11 @@ public class Surveyor implements ClientModInitializer {
 			if (BLOCKS.holding()) JOURNAL.onStillMining();
 		}));
 		KeyMappingHelper.registerKeyMapping(JOURNAL_KEY);
-		KeyMappingHelper.registerKeyMapping(MARK_KEY);
+		registerMarkKey();
 		ClientTickEvents.END_CLIENT_TICK.register(client -> Guard.run("open journal", () -> openJournalIfAsked(client)));
 		ClientLifecycleEvents.CLIENT_STARTED.register(client -> Guard.run("settings + prices start", () -> {
 			Path folder = DataFolder.in(client.gameDirectory.toPath());
-			// moneys io thread, config saves + reloads stay in order w/ price refreshes
+			// moneys io thread, config + price refreshes stay in order
 			SETTINGS.start(folder, MONEY::run);
 			MONEY.start(folder, Objects.requireNonNullElse(modVersion(), "dev"));
 			// queued behind the config load
@@ -137,6 +144,8 @@ public class Surveyor implements ClientModInitializer {
 		ClientLifecycleEvents.CLIENT_STARTED.register(client -> Guard.run("hud start", () -> HUD.start(client)));
 		// before the hud, so it shows this ticks timers
 		ClientTickEvents.END_CLIENT_TICK.register(client -> Guard.run("effects tick", () -> EFFECTS.onTick(client)));
+		ClientTickEvents.END_CLIENT_TICK.register(client -> Guard.run("fiesta tick",
+				() -> FIESTA.onTick(System.currentTimeMillis(), TRACKER.currentShaft() != null, flaskRunning())));
 		ClientTickEvents.END_CLIENT_TICK.register(client -> Guard.run("hud tick", () -> HUD.onTick(client)));
 		ClientTickEvents.END_CLIENT_TICK.register(client -> Guard.run("auto record", () -> AUTO_RECORD.onTick(client)));
 		SETTINGS.onChange((before, after) -> Guard.run("recorder settings", () -> RECORDER.onSettings(after)));
@@ -157,14 +166,15 @@ public class Surveyor implements ClientModInitializer {
 				(graphics, delta) -> Guard.run("entry title render", () -> ENTRY_TITLE.render(graphics, delta)));
 		HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT, Identifier.fromNamespaceAndPath(MOD_ID, "debug"),
 				(graphics, delta) -> Guard.run("debug overlay render", () -> DEBUG_OVERLAY.render(graphics, delta)));
-		// each step on its own, one failing doesnt skip the journal close after it
+		// one failing doesnt skip journal close
 		ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
 			// before journal.close, else the shaft ur in is lost
 			Guard.run("quit", TRACKER::onQuit);
-			// after onQuit, so the last shaft is in the recording. waits, the recorder thread dies w/ the game
+			// after onQuit so the last shaft is recorded. waits, recorder thread dies w/ the game
 			Guard.run("recorder stop", () -> RECORDER.stop(true));
 			Guard.run("journal close", JOURNAL::close);
 			Guard.run("hud close", HUD::close);
+			Guard.run("guide close", GUIDE::close);
 			// queues its save, before the io thread closes
 			Guard.run("effects close", EFFECTS::close);
 			Guard.run("money close", MONEY::close);
@@ -175,6 +185,14 @@ public class Surveyor implements ClientModInitializer {
 		TRACKER.addListener(RECORDER::onLiveEvent);
 		TRACKER.addListener(JOURNAL::onEvent);
 		TRACKER.addListener(ENTRY_TITLE::onEvent);
+		MONEY.onElection(json -> FIESTA.onElection(System.currentTimeMillis(), json));
+		TRACKER.addListener(event -> {
+			// mines only, a bazaar claim elsewhere isnt a drop
+			if (event instanceof ShaftEvent.SacksChanged sacks && inMines()) FIESTA.onSacks(System.currentTimeMillis(), sacks.added());
+			if (event instanceof ShaftEvent.ShaftEntered) FIESTA.onShaftEntered();
+		});
+		TRACKER.addTabListener(lines -> FIESTA.onTabList(System.currentTimeMillis(), lines));
+		JOURNAL.stampEntries(entry -> entry.withFiesta(FIESTA.reading(System.currentTimeMillis()).on(), FIESTA.flaskMillis()));
 		TRACKER.addChatListener(JOURNAL::onChat);
 		TRACKER.addChatListener(EFFECTS::onChat);
 		TRACKER.addListener(event -> {
@@ -188,7 +206,7 @@ public class Surveyor implements ClientModInitializer {
 		});
 		Guard.addListener(failure -> EVENT_LOG.add(System.currentTimeMillis(), EventLog.Kind.ERROR,
 				failure.what() + ": " + failure.error() + " at " + failure.frame()));
-		// any thread, recorder is client thread only. no guard, a throw there would loop
+		// any thread, recorder client thread only. no guard, would loop
 		Guard.addListener(failure -> Minecraft.getInstance().execute(() -> {
 			try {
 				RECORDER.onError(failure);
@@ -261,6 +279,14 @@ public class Surveyor implements ClientModInitializer {
 		return 1;
 	}
 
+	// only now, fabric throws once Options exists. after the folder move, it reads config.json
+	private static void registerMarkKey() {
+		Path gameDir = FabricLoader.getInstance().getGameDir();
+		if (!MarkKey.inControls(gameDir, DataFolder.in(gameDir))) return;
+		markKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(MarkKey.NAME, InputConstants.Type.KEYSYM,
+				InputConstants.UNKNOWN.getValue(), JOURNAL_KEY.getCategory()));
+	}
+
 	private static void moveOldDataFolder() {
 		Path gameDir = FabricLoader.getInstance().getGameDir();
 		try {
@@ -273,8 +299,8 @@ public class Surveyor implements ClientModInitializer {
 
 	private void openJournalIfAsked(Minecraft client) {
 		while (JOURNAL_KEY.consumeClick()) openJournal = true;
-		if (MARK_KEY.consumeClick()) {
-			while (MARK_KEY.consumeClick()) {
+		if (markKey != null && markKey.consumeClick()) {
+			while (markKey.consumeClick()) {
 				// one screen per press burst
 			}
 			if (client.gui.screen() == null) client.gui.setScreen(new QuickMarkScreen(System.currentTimeMillis()));
@@ -305,12 +331,23 @@ public class Surveyor implements ClientModInitializer {
 		return TRACKER.inMiningArea() || TRACKER.currentShaft() != null;
 	}
 
+	// client thread
+	public static boolean flaskRunning() {
+		Long left = EFFECTS.left(Consumable.FIESTA_FLASK);
+		return left != null && left > 0;
+	}
+
+	// null = unknown. client thread
+	public static Fiesta.State fiestaState() {
+		return FIESTA.state(System.currentTimeMillis(), flaskRunning());
+	}
+
 	public static String modVersion() {
 		return FabricLoader.getInstance().getModContainer(MOD_ID)
 				.map(mod -> mod.getMetadata().getVersion().getFriendlyString()).orElse(null);
 	}
 
-	// extra = boss bar + sounds, to find out if hypixel uses them in the mines
+	// extra = boss bar + sounds, does hypixel use them in the mines?
 	private int startRecording(CommandContext<FabricClientCommandSource> context, boolean extra) {
 		Path file = RECORDER.start(context.getSource().getClient(), null, extra);
 		context.getSource().sendFeedback(Component.literal("§a[Surveyor] Recording to " + file.getFileName()));
@@ -318,7 +355,7 @@ public class Surveyor implements ClientModInitializer {
 	}
 
 	private int stopRecording(CommandContext<FabricClientCommandSource> context) {
-		// only an auto one, stopping ur own test recording keeps auto record on
+		// only auto ones, stopping ur own keeps auto record on
 		if (RECORDER.autoSession() != null) AUTO_RECORD.stoppedByHand();
 		Path file = RECORDER.stop();
 		context.getSource().sendFeedback(Component.literal(file == null
@@ -338,7 +375,7 @@ public class Surveyor implements ClientModInitializer {
 		Path folder = DataFolder.in(client.gameDirectory.toPath());
 		MONEY.run(() -> {
 			PatternOverrides.Read read = PatternOverrides.read(folder);
-			// swap between two chat lines + in the recording, so replay switches at the same spot
+			// swap between two chat lines + in the recording, so replay switches there too
 			client.execute(() -> Guard.run("pattern reload", () -> {
 				List<String> before = TextPatterns.overrides();
 				String text = PatternOverrides.apply(read);

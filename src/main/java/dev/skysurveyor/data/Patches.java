@@ -42,7 +42,7 @@ public final class Patches {
 		return new Patches(lines);
 	}
 
-	// day only = start of that day, utc
+	// day only = start of day, utc
 	private static long start(String text) {
 		try {
 			return Instant.parse(text).toEpochMilli();
@@ -51,7 +51,7 @@ public final class Patches {
 		}
 	}
 
-	// latest start, null = none
+	// null = none
 	public Patch newest() {
 		return patches.stream().max(Comparator.comparingLong(Patch::startMillis)).orElse(null);
 	}

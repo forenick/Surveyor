@@ -16,7 +16,7 @@ class NameMaskTest {
 	void ownNameIsYouOthersNumbered() {
 		NameMask mask = new NameMask(Set.of());
 		mask.update("Steve_1", List.of("Alex", "Steve_1", "Notch"));
-		// lines from recording 6, name swapped
+		// rec 6, name swapped
 		assertEquals("[MVP+] You entered Glacite Mineshafts!", mask.apply("[MVP+] Steve_1 entered Glacite Mineshafts!"));
 		assertEquals("§b[MVP+] You's Mineshaft Portal", mask.apply("§b[MVP+] Steve_1's Mineshaft Portal"));
 		assertEquals("§7[312] §aPlayer1 §7and Player2", mask.apply("§7[312] §aAlex §7and Notch"));
@@ -72,7 +72,7 @@ class NameMaskTest {
 	void rankedNamesFromOtherLobbiesMaskedInTheWholeLine() {
 		NameMask mask = new NameMask(Set.of());
 		mask.update("Steve_1", List.of());
-		// recording 3 line, name swapped. text 1st, legacy after
+		// rec 3 line, name swapped. text 1st, legacy after
 		JsonObject line = JsonParser.parseString("{\"type\":\"chat\",\"text\":\"Party > Alex_9 hi\","
 				+ "\"legacy\":\"§9The party leader, §b[MVP§c+§b] Alex_9 §ehas disconnected\"}").getAsJsonObject();
 		mask.apply(line);

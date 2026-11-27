@@ -89,7 +89,7 @@ class ChatParserTest {
 		assertNull(parse("§eMaxed the Supercraft to §b2,432x crafts§e!"));
 	}
 
-	// recording 6 at 0:55.9 (gem, icon) and 12:54.0 (no icon)
+	// rec 6 at 0:55.9 (gem, icon) + 12:54.0 (no icon)
 	@Test
 	void rareDrops() {
 		assertEquals(new RareDrop(new ItemCount("Fine Citrine Gemstone", 1)),
@@ -173,7 +173,7 @@ class ChatParserTest {
 				new ItemCount("Flawed Aquamarine Gemstone", 40)), 4111))), events);
 	}
 
-	// recording 1, AQUA_C
+	// rec 1, AQUA_C
 	@Test
 	void crystalFound() {
 		String purple = "§5§l" + "▬".repeat(64);
@@ -207,7 +207,7 @@ class ChatParserTest {
 		return events;
 	}
 
-	// recording 6, AQUA_2 loot block cut off after its 1st item (review 2.12)
+	// rec 6 AQUA_2, loot block cut after its 1st item (review 2.12)
 	@Test
 	void lootBlockCutOffByAWorldChangeIsDropped() {
 		List<ShaftEvent> events = new ArrayList<>();
@@ -221,7 +221,7 @@ class ChatParserTest {
 		tracker.onChat(2_000, BAR, List.of());
 		assertEquals(List.of(), events.stream().filter(e -> e instanceof CorpseLooted).toList());
 
-		// next block reads normally
+		// next block reads fine
 		tracker.onChat(3_000, "§r  §9§lLAPIS §b§lCORPSE LOOT! ", List.of());
 		tracker.onChat(3_000, "§r  §a§lREWARDS", List.of());
 		tracker.onChat(3_000, "§r    §9Yellow Goblin Egg", List.of());

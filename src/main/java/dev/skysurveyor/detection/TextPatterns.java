@@ -56,11 +56,11 @@ public final class TextPatterns {
 		return patterns;
 	}
 
-	// overrides 1st per key, so they win (first match per key wins). a bad line throws + changes nothing
+	// overrides 1st per key so they win. a bad line throws + changes nothing
 	private static Map<String, List<Pattern>> merged(List<String> extra) {
 		Map<String, List<Pattern>> merged = read(extra);
 		Map<String, List<Pattern>> builtIn = read(builtIn());
-		// code reads the built-in groups, a missing one throws on every match
+		// code reads built-in groups, a missing one throws on every match
 		merged.forEach((key, list) -> {
 			List<Pattern> own = builtIn.get(key);
 			if (own == null) return;
@@ -76,7 +76,7 @@ public final class TextPatterns {
 		return merged;
 	}
 
-	// patterns.txt in the data folder, f.e. a fix before the next release. returns how many patterns it has
+	// data folder patterns.txt, f.e. a hotfix. returns pattern count
 	public static synchronized int useOverrides(List<String> lines) {
 		Map<String, List<Pattern>> merged = merged(lines);
 		defaults().patterns = merged;
@@ -84,7 +84,7 @@ public final class TextPatterns {
 		return overrides.size();
 	}
 
-	// for a recordings start line, so replay can use the same
+	// recordings start line, so replay uses the same
 	public static synchronized List<String> overrides() {
 		return overrides;
 	}
@@ -115,7 +115,6 @@ public final class TextPatterns {
 		return match(key, text) != null;
 	}
 
-	// any pattern of the keys asked for
 	public boolean matchesAny(String text, Predicate<String> keys) {
 		for (Map.Entry<String, List<Pattern>> entry : patterns.entrySet()) {
 			if (!keys.test(entry.getKey())) continue;

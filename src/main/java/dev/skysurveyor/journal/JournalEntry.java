@@ -15,18 +15,21 @@ import dev.skysurveyor.detection.TextPatterns;
 import dev.skysurveyor.mining.MiningStats;
 import dev.skysurveyor.money.ItemPrice;
 
-// times epoch ms. new fields at the end, bump VERSION if a meaning changes
-// sessionId = session start time, campfiresAt relative to enteredAt
-// searchMillis null = not timed (someone elses portal or no block mined)
-// crystals, otherDrops, prices null in entries before 0.14.0
-// prices = by skyblock id at the end of the shaft, empty when there were none
-// campfireColds = cold before each campfire use, null in entries before 0.22.0, null items = no cold line
-// metal = shafts own metal, null = none or before 0.23.0 (those keep it in otherDrops)
-// keysSaved = loots indexes whose key resourceful saved, null = none or before 0.24.0
-// sacksAdded, sacksRemoved = raw sacks msgs. gems, otherDrops, metal have compaction taken off since 0.25.0
-// otherDrops has rare drops from chat since 0.25.0, also ones that never reached sacks
-// mining = blocks, break times, boost (efficiency), null = no block broken or before 0.26.0
-// fossil = fossil blocks + essence bars, null = none or before 0.26.0-alpha.22
+// epoch ms. new fields at the end, bump VERSION if a meaning changes
+// sessionId = session start, campfiresAt relative to enteredAt
+// searchMillis null = not timed (not ur portal or no block mined)
+// crystals, otherDrops, prices null before 0.14.0
+// prices = by skyblock id at shaft end, empty = none
+// campfireColds = cold before each use, null before 0.22.0, null item = no cold line
+// metal = shafts own, null = none or before 0.23.0 (then in otherDrops)
+// keysSaved = loot indexes resourceful saved, null = none or before 0.24.0
+// sacksAdded/Removed = raw msgs. gems, otherDrops, metal net of compaction since 0.25.0
+// otherDrops has chat rare drops since 0.25.0, sacks or not
+// mining = blocks, break times, boost. null = no block broken or before 0.26.0
+// fossil = blocks + essence bars, null = none or before 0.26.0-alpha.22
+// fiesta = on when u left, null = unknown or before 0.27.0-alpha.3
+// flaskMillis = time inside w/ flask running, null = before 0.27.0-alpha.3
+// spawnBlock = loop main block at spawn, f.e. green_stained_glass. null = not ur portal or before 0.27.0-alpha.3
 public record JournalEntry(
 		int version,
 		long sessionId,
@@ -55,7 +58,10 @@ public record JournalEntry(
 		MetalYield metal,
 		List<Integer> keysSaved,
 		MiningStats mining,
-		FossilYield fossil) {
+		FossilYield fossil,
+		Boolean fiesta,
+		Long flaskMillis,
+		String spawnBlock) {
 	public static final int VERSION = 1;
 
 	public static JournalEntry of(Shaft shaft, long sessionId, Long searchMillis, TextPatterns patterns) {
@@ -71,29 +77,36 @@ public record JournalEntry(
 				GemYield.of(shaft, patterns), List.copyOf(shaft.crystals()), otherDrops(shaft, patterns), null,
 				// list.copyOf hates nulls
 				Collections.unmodifiableList(new ArrayList<>(shaft.campfireColds())), MetalYield.of(shaft),
-				shaft.keysSaved().isEmpty() ? null : List.copyOf(shaft.keysSaved()), null, FossilYield.of(shaft));
+				shaft.keysSaved().isEmpty() ? null : List.copyOf(shaft.keysSaved()), null, FossilYield.of(shaft), null, null, null);
 	}
 
 	public JournalEntry withPrices(Map<String, ItemPrice> prices) {
-		return with(prices, mining);
+		return with(prices, mining, fiesta, flaskMillis, spawnBlock);
 	}
 
 	public JournalEntry withMining(MiningStats mining) {
-		return with(prices, mining);
+		return with(prices, mining, fiesta, flaskMillis, spawnBlock);
 	}
 
-	private JournalEntry with(Map<String, ItemPrice> prices, MiningStats mining) {
+	public JournalEntry withFiesta(Boolean fiesta, Long flaskMillis) {
+		return with(prices, mining, fiesta, flaskMillis, spawnBlock);
+	}
+
+	public JournalEntry withSpawnBlock(String spawnBlock) {
+		return with(prices, mining, fiesta, flaskMillis, spawnBlock);
+	}
+
+	private JournalEntry with(Map<String, ItemPrice> prices, MiningStats mining, Boolean fiesta, Long flaskMillis, String spawnBlock) {
 		return new JournalEntry(version, sessionId, shaftId, enteredAt, durationMillis, exit, exitPowder, searchMillis,
 				corpses, extraCorpses, loots, mayhemBuffs, campfiresAt, coldAtExit, scrapFound, pristineProcs,
 				pristineItems, sacksAdded, sacksRemoved, gems, crystals, otherDrops, prices, campfireColds, metal, keysSaved, mining,
-				fossil);
+				fossil, fiesta, flaskMillis, spawnBlock);
 	}
 
 	public boolean keySaved(int loot) {
 		return keysSaved != null && keysSaved.contains(loot);
 	}
 
-	// key item -> how many resourceful saved
 	public Map<String, Integer> savedKeys() {
 		Map<String, Integer> saved = new LinkedHashMap<>();
 		for (int i = 0; i < loots.size(); i++) {
@@ -103,8 +116,8 @@ public record JournalEntry(
 		return saved;
 	}
 
-	// sacks minus compaction, corpse loot, rare drops, supercrafts and the shafts own gem + metal (GemYield, MetalYield)
-	// plus rare drops from chat (since 0.25.0), own gem too bc its a mob drop
+	// sacks net minus corpse loot, rare drops, supercrafts, own gem + metal
+	// plus chat rare drops (since 0.25.0), own gem too bc mob drop
 	static Map<String, Long> otherDrops(Shaft shaft, TextPatterns patterns) {
 		Map<String, Long> drops = new LinkedHashMap<>(shaft.sacksNet());
 		shaft.notMinedInSacks().forEach((item, count) -> drops.merge(item, -count, Long::sum));

@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
+import dev.skysurveyor.data.ShaftNames;
 import dev.skysurveyor.journal.CorpseCounts;
 import dev.skysurveyor.journal.JournalEntry;
 import dev.skysurveyor.journal.JournalStats;
@@ -11,9 +12,8 @@ import dev.skysurveyor.journal.JournalStats.CorpseCount;
 import dev.skysurveyor.mining.Efficiency;
 import dev.skysurveyor.util.Format;
 
-// which columns fit + how wide, the shaft sort. plain java
 final class TableColumns {
-	// higher dropOrder hides first, 0 = never. tight = no spare room. extra = spare room handed out by fit()
+	// higher dropOrder hides first, 0 = never
 	record Column(String key, String title, int width, boolean right, int dropOrder, boolean tight, int extra) {
 		Column(String key, String title, int width, boolean right, int dropOrder) {
 			this(key, title, width, right, dropOrder, false, 0);
@@ -32,7 +32,7 @@ final class TableColumns {
 		}
 	}
 
-	// width = least, measured per table (0 = all measured). drops: campfire, eff, #, entered, inside, powder, spawn
+	// width 0 = measured
 	static final List<Column> SHAFTS = List.of(
 			new Column("number", "#", 14, false, 5), new Column("shaft", "Shaft", 44, false, 0),
 			new Column("time", "Entered", 0, false, 4), new Column("spawn", "Spawn", 66, false, 1),
@@ -41,7 +41,7 @@ final class TableColumns {
 			new Column("eff", "Eff.", 0, true, 6), new Column("coins", "Coins", 0, true, 0),
 			new Column("campfire", "Campfire", 0, false, 7));
 
-	// overview. by day: start time goes under the days date, no start column
+	// by day: no start column
 	static final List<Column> SESSIONS = List.of(
 			new Column("date", "Date", 56, false, 0), new Column("start", "Start", 32, false, 5),
 			new Column("length", "Length", 44, true, 4), new Column("shafts", "Shafts", 36, true, 0),
@@ -60,7 +60,7 @@ final class TableColumns {
 			if (drop == null) break;
 			visible.remove(drop);
 		}
-		// wide screens (gui scale 2) spread the spare room, up to 2x each
+		// up to 2x each
 		int spare = available - visible.stream().mapToInt(Column::width).sum() - gap * (visible.size() - 1);
 		int base = visible.stream().filter(c -> !c.tight()).mapToInt(Column::width).sum();
 		if (spare <= 0 || base <= 0) return visible;
@@ -72,7 +72,7 @@ final class TableColumns {
 		return spread;
 	}
 
-	// widest text + 1 slack, never below the fixed width: vanilla font stays put, wider fonts grow it
+	// never below fixed, wider fonts grow it
 	static int atLeast(int fixed, int widest) {
 		return Math.max(fixed, widest + 1);
 	}
@@ -82,19 +82,19 @@ final class TableColumns {
 		return column.withWidth(atLeast(column.width(), widest));
 	}
 
-	// sorted by a column thats not shown = played order, sort comes back w/ the column
+	// hidden sort column = played order
 	static String shownSort(String sort, List<Column> shown) {
 		if (sort == null) return null;
 		return shown.stream().anyMatch(c -> c.key().equals(sort)) ? sort : null;
 	}
 
-	// shaft names a to z + fastest spawn first, rest biggest first. flipped = 2nd click
+	// names a-z, spawn fastest, rest biggest first
 	static boolean ascending(String key, boolean flipped) {
 		boolean first = key.equals("shaft") || key.equals("spawn");
 		return first != flipped;
 	}
 
-	// display row -> entry index. nulls last both ways, ties in played order. key null = played order
+	// nulls last both ways, ties in played order
 	static int[] shaftOrder(List<JournalEntry> shafts, List<Double> coins, String key, boolean flipped, int metalTier) {
 		List<Integer> order = new ArrayList<>();
 		for (int i = 0; i < shafts.size(); i++) order.add(i);
@@ -119,7 +119,8 @@ final class TableColumns {
 
 	private static Comparable<?> sortKey(String key, int index, JournalEntry entry, Double coins, int metalTier) {
 		return switch (key) {
-			case "shaft" -> entry.shaftId();
+			// a-z by what the column shows
+			case "shaft" -> ShaftNames.defaults().shaftName(entry.shaftId());
 			case "spawn" -> entry.searchMillis();
 			case "inside" -> entry.durationMillis();
 			case "corpses" -> {
@@ -141,7 +142,7 @@ final class TableColumns {
 		};
 	}
 
-	// eff cell, § coded. - = skipped shaft or mined before 0.26.0
+	// - = skipped or before 0.26.0
 	static String efficiency(JournalEntry entry) {
 		Double efficiency = Efficiency.shown(entry.mining());
 		return efficiency == null ? "§8-" : "§f" + Format.percent(efficiency);

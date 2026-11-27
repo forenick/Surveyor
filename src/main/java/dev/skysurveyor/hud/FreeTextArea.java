@@ -7,7 +7,6 @@ import net.minecraft.client.gui.components.Whence;
 import net.minecraft.client.input.KeyEvent;
 import org.lwjgl.glfw.GLFW;
 
-// advanced page text + rules field
 final class FreeTextArea extends TextAreaComponent {
 	// rules = 1 rule a line, text = 1 HUD line
 	private final boolean multiline;
@@ -52,7 +51,7 @@ final class FreeTextArea extends TextAreaComponent {
 		return super.keyPressed(input);
 	}
 
-	// vanilla eats the wheel even w/ nothing to scroll, panel should scroll
+	// vanilla eats the wheel even w/ nothing to scroll
 	@Override
 	public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {
 		return maxScrollAmount() > 0 && super.mouseScrolled(mouseX, mouseY, horizontal, vertical);

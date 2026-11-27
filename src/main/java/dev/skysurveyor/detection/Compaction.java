@@ -9,17 +9,17 @@ import java.util.Set;
 import dev.skysurveyor.data.Ladder;
 import dev.skysurveyor.detection.ShaftEvent.SacksChanged;
 
-// compactors work inside sacks since skyblock 0.27.3: a msg adds the gross amount + removes what got compacted
-// f.e. +4,133 Glacite +32 Enchanted Glacite, -4,160 Glacite (recording 6 at 0:01.8)
-// any other remove (sell sacks, withdraw) stays ignored, no income lost
+// sacks compact since skyblock 0.27.3: msg adds gross + removes what got compacted
+// f.e. +4,133 Glacite +32 Enchanted Glacite, -4,160 Glacite (rec 6 at 0:01.8)
+// other removes (sell sacks, withdraw) stay ignored
 public final class Compaction {
-	// per item, short from earlier msgs, comes off its next adds
+	// per item, short from earlier msgs, off its next adds
 	private final Map<String, Long> owed = new HashMap<>();
 
-	// per item, how many this msg compacted. crafted = supercraft results since the last msg
-	// compaction removes whole steps (always 160s / 576s in recording 6), at most one per compacted add
-	// anything else = sell or withdraw, f.e. selling rough gems while pristine adds flawed
-	// a msg w/ compaction + a sell of the same item counts as a plain remove, rare
+	// crafted = supercraft results since the last msg
+	// compaction removes whole steps (always 160s / 576s in rec 6), max one per compacted add
+	// else sell or withdraw, f.e. selling rough while pristine adds flawed
+	// compaction + a sell of the same item in one msg = plain remove, rare
 	public static Map<String, Long> of(SacksChanged sacks, Map<String, Long> crafted) {
 		Map<String, Long> added = new HashMap<>();
 		sacks.added().forEach(item -> added.merge(item.item(), item.count(), Long::sum));
@@ -40,7 +40,7 @@ public final class Compaction {
 		return compacted;
 	}
 
-	// added - what compaction made from it, never below 0. the tier mix before compacting, for tail ratios
+	// tier mix before compacting, for tail ratios. never below 0
 	public static Map<String, Long> beforeCompacting(Map<String, Long> added, Map<String, Long> compacted) {
 		Map<String, Long> made = new LinkedHashMap<>(added);
 		compacted.forEach((item, count) -> {
@@ -50,8 +50,8 @@ public final class Compaction {
 		return made;
 	}
 
-	// added - compacted, never below 0. compaction can use what earlier msgs added (4,133 in, 4,160 out),
-	// that shortfall is owed and comes off the next adds of the same item
+	// compaction can use earlier msgs adds (4,133 in, 4,160 out),
+	// that shortfall is owed, comes off the next adds
 	public Map<String, Long> net(Map<String, Long> added, Map<String, Long> compacted) {
 		Set<String> items = new LinkedHashSet<>(added.keySet());
 		items.addAll(compacted.keySet());
@@ -68,7 +68,6 @@ public final class Compaction {
 		return net;
 	}
 
-	// still short after the last net
 	public Map<String, Long> owed() {
 		return Map.copyOf(owed);
 	}

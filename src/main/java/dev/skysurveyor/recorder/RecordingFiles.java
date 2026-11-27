@@ -17,7 +17,7 @@ import java.util.zip.GZIPInputStream;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
-// .jsonl (before 0.26.0-alpha.3) + .jsonl.gz. plain java, tests + the replay tool use it too
+// .jsonl (before 0.26.0-alpha.3) + .jsonl.gz. tests + replay tool use it too
 public final class RecordingFiles {
 	private RecordingFiles() {
 	}
@@ -33,7 +33,7 @@ public final class RecordingFiles {
 		return new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
 	}
 
-	// every line up to a cut off end (crash mid write), a half line is dropped
+	// up to a cut off end (crash mid write), half line dropped
 	public static List<String> lines(Path file) throws IOException {
 		List<String> lines = new ArrayList<>();
 		try (BufferedReader reader = open(file)) {
@@ -46,7 +46,7 @@ public final class RecordingFiles {
 		return lines;
 	}
 
-	// gzip never closed (crash) = normal end at the last flush, not an error
+	// gzip never closed (crash) = normal end at the last flush
 	private static final class CutOffEnd extends FilterInputStream {
 		CutOffEnd(InputStream in) {
 			super(in);
@@ -81,7 +81,7 @@ public final class RecordingFiles {
 		}
 	}
 
-	// auto recordings older than days, by file time. manual ones never
+	// by file time, manual ones never
 	public static List<Path> expired(Path folder, int days, long now) throws IOException {
 		if (days < 0 || !Files.isDirectory(folder)) return List.of();
 		long cutoff = now - days * 86_400_000L;

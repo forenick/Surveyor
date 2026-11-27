@@ -35,12 +35,12 @@ public final class HudLayout {
 	public static int argb(String code) {
 		return 0xFF000000 | COLOR_RGB[colorIndex(code)];
 	}
-	// box title in the shafts (or last ones) colour, yellow w/o one
+	// shafts (or last ones) colour, yellow w/o one
 	public static final String SHAFT_COLOR = "shaft";
 	// drops line, mockup hud-drops-v1
 	public static final int DEFAULT_ROWS = 5;
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-	// display choice, not a game number. fixtures have 6 boxes, 6 lines, 66 chars, the editor allows 64 to 512 chars
+	// display choice. fixtures: 6 boxes, 6 lines, 66 chars, editor 64 to 512
 	static final int MAX_BOXES = 100;
 	static final int MAX_LINES = 100;
 	static final int MAX_RULES = 100;
@@ -170,7 +170,7 @@ public final class HudLayout {
 			return value == null ? null : value.period(range());
 		}
 
-		// period row. across the shafts family it changes the value, saved ids stay
+		// across the shafts family it swaps the value, saved ids stay
 		public void setPeriod(HudValue.Period period) {
 			HudValue old = hudValue();
 			if (old == null) return;
@@ -241,7 +241,7 @@ public final class HudLayout {
 			return HudValue.byId(value);
 		}
 
-		// a value w/o a graph (or not in this period) shows text, showAs kept
+		// no graph (or not this period) = text, showAs kept
 		public ShowAs showAs() {
 			HudValue value = hudValue();
 			if (value == null || value.graph(range()) == HudValue.Graph.NONE) return ShowAs.TEXT;
@@ -259,7 +259,7 @@ public final class HudLayout {
 			return advanced || oldRules();
 		}
 
-		// rules from before 0.23 on an Easy line: shows as Advanced, looks the same
+		// pre 0.23 rules on an Easy line show as Advanced
 		private boolean oldRules() {
 			return !advanced && colorRules == null && (rules != null || readyRule);
 		}
@@ -274,7 +274,7 @@ public final class HudLayout {
 			return HudRules.fromOld(hudValue(), HudBoxText.ruleRange(this), rules, readyRule);
 		}
 
-		// 1st edit on the line page writes the typed form, just opening it changes nothing
+		// 1st edit writes the typed form, just opening changes nothing
 		public void settle(Box box) {
 			boolean old = oldRules();
 			String start = advancedText(box);
@@ -288,7 +288,7 @@ public final class HudLayout {
 			if (old) advanced = true;
 		}
 
-		// Reset: the Easy look + the preset rules
+		// Easy look + preset rules
 		public void resetAdvanced(Box box) {
 			text = HudBoxText.basicText(box, this);
 			colorRules = new ArrayList<>(HudRules.preset(hudValue()));
@@ -366,11 +366,11 @@ public final class HudLayout {
 		public Boolean titleBold;
 		// "(/sv hud)" under the box till the editor opens, new players only. null = none
 		public Boolean hint;
-		// id of the box this one sticks to + on which side of it. null = own anchors.
-		// stuck: anchor + offset across are against that box, along is the gap (HudPlace)
+		// box id this sticks to, null = own anchors
+		// across = against that box, along = the gap (HudPlace)
 		public String stickTo;
 		public HudPlace.Side stickSide;
-		// screen anchor + offset across from when it stuck, used if that box is gone. null before 0.26.0-alpha.28
+		// screen spot when it stuck, for when that box is gone. null before 0.26.0-alpha.28
 		public Anchor freeAnchor;
 		public Integer freeOffset;
 
@@ -401,7 +401,7 @@ public final class HudLayout {
 
 	public int version = VERSION;
 	public List<Box> boxes = new ArrayList<>();
-	// movable shaft toast spot, null = never moved (defaultToast). only position + scale count
+	// null = never moved (defaultToast). only position + scale count
 	public Box toast;
 	// parts the caps cut on load, never saved
 	transient int cutParts;
@@ -416,7 +416,6 @@ public final class HudLayout {
 		return layout;
 	}
 
-	// a new players HUD, so they can find where the boxes come from
 	public static HudLayout firstStart() {
 		HudLayout layout = defaults();
 		for (Box box : layout.boxes) box.hint = true;
@@ -455,7 +454,7 @@ public final class HudLayout {
 		return List.of(
 				new Preset("Spawn", "Spawn timer, average spawn and efficiency", HudLayout::spawnBox),
 				new Preset("Session", "Shafts, shafts per hour and powder", HudLayout::sessionBox),
-				new Preset("Current shaft", "Time inside, corpses, campfires, coins and efficiency", HudLayout::shaftBox),
+				new Preset("Current shaft", "Time inside, corpses, campfires, freeze timer, shaft gain, coins and efficiency", HudLayout::shaftBox),
 				new Preset("All-time", "Shafts, powder and corpse Fine, all-time", HudLayout::allTimeBox),
 				new Preset("Session profit", "Coins this session, per hour, per shaft, session length and drops", HudLayout::moneyBox),
 				new Preset("Performance", "FPS, ping and TPS", HudLayout::performanceBox),
@@ -473,7 +472,7 @@ public final class HudLayout {
 	}
 
 	private static Box spawnBox() {
-		// same spot as the shaft box, never both at once. offsets leave room for the first start hint
+		// shaft box spot, never both at once. room for the start hint
 		Box spawn = box("spawn", "Spawn", false, true, Background.NONE, Align.LEFT, Anchor.START, 0, Anchor.START, 54);
 		spawn.showInShaft = false;
 		spawn.valueBold = true;
@@ -485,11 +484,14 @@ public final class HudLayout {
 	}
 
 	private static Box shaftBox() {
-		Box shaft = box("shaft", "{shaft_type} Shaft", true, false, Background.FRAME, Align.LEFT, Anchor.START, 0, Anchor.START, 54);
+		// layout too, nicks pick (2026-11-27). saved titles stay
+		Box shaft = box("shaft", "{shaft_name}", true, false, Background.FRAME, Align.LEFT, Anchor.START, 0, Anchor.START, 54);
 		shaft.titleColor = SHAFT_COLOR;
 		shaft.lines.add(new Line(HudValue.SHAFT_TIME, null, true, 0));
 		shaft.lines.add(new Line(HudValue.SHAFT_CORPSES, null, true, 0));
 		shaft.lines.add(new Line(HudValue.SHAFT_CAMPFIRES, null, true, 0));
+		shaft.lines.add(new Line(HudValue.FREEZE_IN, null, true, 0));
+		shaft.lines.add(new Line(HudValue.SHAFT_GAIN, null, true, 0));
 		// title says the shaft already. no cold, the scoreboard has it (nick, 2026-11-15)
 		shaft.lines.add(rangeLine(HudValue.COINS, "Coins: ", Range.SHAFT));
 		shaft.lines.add(new Line(HudValue.EFFICIENCY, null, true, 0));
@@ -506,8 +508,8 @@ public final class HudLayout {
 	}
 
 	private static Box moneyBox() {
-		// under the shaft box w/ its efficiency line + the 4 px snap gap
-		Box box = box("money", "Session profit", true, true, Background.DARK, Align.LEFT, Anchor.START, 0, Anchor.START, 128);
+		// under the shaft box + the 4 px snap gap
+		Box box = box("money", "Session profit", true, true, Background.DARK, Align.LEFT, Anchor.START, 0, Anchor.START, 148);
 		// this shaft lives in the shaft box (nick, 2026-11-15)
 		box.lines.add(rangeLine(HudValue.COINS, "Total: ", Range.SESSION));
 		box.lines.add(rangeLine(HudValue.COINS, "Per hour: ", Range.PER_HOUR));
@@ -526,7 +528,7 @@ public final class HudLayout {
 
 	// no title, so the box takes no room w/o an effect on. mines + shafts (nick, 2026-11-22)
 	private static Box consumablesBox() {
-		// left middle: top right has the potion icons, right middle the scoreboard. editor moves it if taken
+		// top right = potion icons, right middle = scoreboard
 		Box box = box("consumables", "Consumables", false, true, Background.DARK, Align.LEFT, Anchor.START, 0, Anchor.MIDDLE, 0);
 		for (HudValue value : List.of(HudValue.PRISTINE_POTATO, HudValue.FILET_O_FORTUNE, HudValue.COLD_RESISTANCE, HudValue.FIESTA_FLASK)) {
 			box.lines.add(new Line(value));
@@ -683,7 +685,7 @@ public final class HudLayout {
 		box.visibility = null;
 	}
 
-	// 480×270 = 1080p auto gui scale. non-edge boxes can land a few px off
+	// 480×270 = 1080p auto scale. non-edge boxes may be a few px off, oh well
 	private static void convertVersion1(Box box) {
 		float fx = clamp(box.x == null ? 0 : box.x, 0, 1);
 		float fy = clamp(box.y == null ? 0 : box.y, 0, 1);

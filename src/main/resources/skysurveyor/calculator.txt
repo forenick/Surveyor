@@ -1,0 +1,119 @@
+# shaft calculator game data (Docs/calculator-design.md). format: key = value  # source
+# gem lines: gem CODE = Name, block strength, breaking power
+# block strength since 0.27.3 (hypixel.net/threads/6169127/, research/11 s8)
+# breaking power from glossy chances 0.18 / 0.16 / 0.14 / 0.12% (CW Glossy_Gemstone, research/11 s14)
+gem JASP = Jasper, 4000, 9
+gem ONYX = Onyx, 4000, 9
+gem PERI = Peridot, 4000, 9
+gem CITR = Citrine, 4000, 9
+gem AQUA = Aquamarine, 4000, 9
+gem TOPA = Topaz, 3500, 8
+gem AMBE = Amber, 3000, 7
+gem SAPP = Sapphire, 3000, 7
+gem AMET = Amethyst, 3000, 7
+gem JADE = Jade, 3000, 7
+gem OPAL = Opal, 3000, 7
+gem RUBY = Ruby, 2500, 6
+
+# gem glass + its pane, counted in worlds/Mineshaft World Saves.zip (29 layouts, 11-25),
+# nicks journal agrees on the 4 he mined
+block magenta_stained_glass = JASP
+block black_stained_glass = ONYX
+block green_stained_glass = PERI
+block brown_stained_glass = CITR
+block blue_stained_glass = AQUA
+block yellow_stained_glass = TOPA
+block orange_stained_glass = AMBE
+block light_blue_stained_glass = SAPP
+block purple_stained_glass = AMET
+block lime_stained_glass = JADE
+block white_stained_glass = OPAL
+block red_stained_glass = RUBY
+
+# gem layouts, each tracks its own efficiency. crystals = 1 map (jasper + ruby minus 182 blocks, research/17),
+# so they group per breaking power. no map factors since alpha.19: simulated on nicks recs, unconfirmed (research/17 s9)
+# value = own gem blocks till the route players use is done (research/17 s9, 11-26). simulated miner on those routes,
+# NOT a game number. citrine 1 checked: 784, nick broke 780 + 770
+# crystals 0 = no limit till ur own is tracked: the simulated 804 was 21 to 27% short of nicks route (1,018 to 1,107),
+# his crystal rows came out a quarter low (nick 11-27)
+layout JASP_1 = 1864
+layout JASP_C = 0
+layout ONYX_1 = 1261
+layout ONYX_2 = 1069
+layout ONYX_C = 0
+layout PERI_1 = 1479
+layout PERI_2 = 1394
+layout PERI_C = 0
+layout CITR_1 = 784
+layout CITR_2 = 556
+layout CITR_C = 0
+layout AQUA_1 = 1657
+layout AQUA_2 = 1107
+layout AQUA_C = 0
+layout TOPA_1 = 1937
+layout AMBE_1 = 1072
+layout SAPP_1 = 1256
+layout AMET_1 = 1186
+layout JADE_1 = 1628
+layout OPAL_1 = 1579
+layout OPAL_C = 0
+layout RUBY_1 = 1848
+layout RUBY_2 = 1559
+layout RUBY_C = 0
+
+# ticks = strength x 30 / mining speed, rounded half up, min 4 (CW Mining_Speed, research/11 s8)
+tick_factor = 30
+min_ticks = 4
+# 17 shaft types, weight 100 each (CW Glacite_Mineshafts). littlefoot's weight unconfirmed
+shaft_types = 17
+# always 2 corpses, 50% for a 3rd, perks add one, max 4 (CW Frozen_Corpses, research/11 s10)
+corpses_base = 2
+third_corpse = 0.5
+# each tier is 80 of the one below (research/05)
+per_tier = 80
+# coles perk x1.25 mining fortune, flask 0.25 more (CW Mining_Fiesta, Fiesta_Flask, research/11 s12-14)
+# gemstone fortune not multiplied, unconfirmed
+fiesta_fortune = 1.25
+flask_fortune = 1.5
+# glossy per gem block = breaking power / 5000, x2 w/ a flask (CW Glossy_Gemstone). fiesta only
+glossy_per_power = 0.0002
+flask_glossy = 2
+
+# starting values, not game numbers: used till ur own shafts give one
+start.spawn = 100
+start.not_mining = 30
+# leaving a mined shaft till mining in the tunnels again. nicks median 82 s over 8, 60 to 80 w/o 2 breaks
+start.back_mined = 70
+start.coins_per_spawn = 500000
+start.efficiency = 0.65
+start.setup = 80
+start.boost = 0.22
+start.lapis_loot = 160000
+start.other = 70000
+# a mining speed of 10,000 at the block: jasper 12, topaz 11, bp7 9, ruby 8
+start.speed = 10000
+start.boost_ticks = 4
+# aiming + ping per block, research/11 s17 (2.1 to 2.9 on recs 1, 5, 6)
+start.lost_ticks = 2
+start.spread = 0.10
+# 4 base drops x (1 + 2,300 fortune / 100)
+start.gems_per_block = 96
+start.flawed = 0.15
+# legendary glacite golem lvl 100: +1 pristine per looted corpse (research/10 s3). every1 has it, no field (nick 11-26)
+per_corpse = 1
+# cold resistance 130 (research/10 s2 formula)
+start.freeze = 760
+# dead man's chest maxed (research/11 s11)
+start.extra_corpse = 0.25
+# 50 / 25 / 25 (CW Frozen_Corpses)
+start.lapis_share = 0.5
+# even odds, 1 in 17
+start.spawn_gem = 0.0588
+# display choice
+start.close_call = 1000000
+# display choice, a key is a smaller sum than a shaft. ~10% of a key corpse (research/16: 2.99M loot)
+start.key_close_call = 300000
+# replaced by the wiki table at ur prices once prices are in
+start.key_loot = 0
+# none until ur corpses show a bonus drop
+start.extra_roll = 0

@@ -20,7 +20,6 @@ import static dev.skysurveyor.hud.EditorParts.MENU_SWATCH;
 import static dev.skysurveyor.hud.EditorParts.OUTLINE_SELECTED;
 import static dev.skysurveyor.hud.EditorParts.menuEntry;
 
-// the editors dropdown under a button, w/ its own tips. one open at a time
 final class EditorMenu {
 	private static final Surface SURFACE = Surface.flat(0xF0101010).and(Surface.outline(0xFFA0A0A0));
 
@@ -59,19 +58,19 @@ final class EditorMenu {
 		menu = UIContainers.verticalFlow(Sizing.content(), Sizing.content());
 		menu.surface(SURFACE);
 		menu.padding(Insets.of(2));
-		// headings + gaps would pass clicks to the panel below
+		// else gaps pass clicks to the panel below
 		menu.mouseDown().subscribe((click, doubled) -> true);
 		menu.mouseScroll().subscribe((x, y, amount) -> true);
 		this.anchor = anchor;
 		fill.accept(this);
 		menu.positioning(Positioning.absolute(anchor.x() - root.x() - EditHudScreen.PADDING,
 				anchor.y() + anchor.height() + 1 - root.y() - EditHudScreen.PADDING));
-		// owo lays it out right away, so no frame below the screen
+		// owo lays out right away, no frame offscreen
 		root.child(menu);
 		fit();
 	}
 
-	// kept on screen, sizes known after layout
+	// sizes only known after layout
 	void fit() {
 		if (menu == null || menu.width() == 0) return;
 		int pad = EditHudScreen.PADDING;
@@ -90,7 +89,7 @@ final class EditorMenu {
 		anchor = null;
 	}
 
-	// boxColor null = no "Box" choice. valueDefault = the values own colour. shaft = offer Shaft colour
+	// boxColor null = no Box choice
 	void colors(UIComponent anchor, String current, String boxColor, String valueDefault, boolean shaft, Consumer<String> pick) {
 		open(anchor, m -> {
 			if (boxColor != null) {
@@ -109,7 +108,7 @@ final class EditorMenu {
 		});
 	}
 
-	// dark row + light row, like the code order
+	// dark row + light row, code order
 	private void swatchGrid(String selected, Consumer<String> pick) {
 		for (int half = 0; half < 2; half++) {
 			FlowLayout swatches = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());

@@ -2,7 +2,7 @@ package dev.skysurveyor.data;
 
 import java.util.List;
 
-// enum order = display order, colours a display choice. keys from research/01
+// enum order = display order, colours display choice. keys research/01
 public enum CorpseType {
 	LAPIS("Lapis", "§9", 0xFF5555FF, null),
 	UMBER("Umber", "§6", 0xFFFFAA00, "Umber Key"),
@@ -10,6 +10,8 @@ public enum CorpseType {
 	VANGUARD("Vanguard", "§b", 0xFF55FFFF, "Skeleton Key");
 
 	public static final List<String> ORDER = List.of(LAPIS.label, UMBER.label, TUNGSTEN.label, VANGUARD.label);
+	// share a loot table + the calculators key columns (research/16)
+	public static final List<CorpseType> KEY_LOOT = List.of(TUNGSTEN, UMBER);
 
 	private final String label;
 	private final String color;
@@ -28,7 +30,7 @@ public enum CorpseType {
 		return label;
 	}
 
-	// null = unknown type
+	// null = unknown
 	public static CorpseType of(String label) {
 		for (CorpseType type : values()) {
 			if (type.label.equals(label)) return type;

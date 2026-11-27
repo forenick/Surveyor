@@ -20,7 +20,7 @@ import com.google.gson.GsonBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-// one json object a line, appended so a crash only loses the last one
+// appended, crash loses only the last line
 public class JsonLinesFile<T> {
 	private static final Logger LOGGER = LoggerFactory.getLogger("Surveyor");
 
@@ -44,17 +44,17 @@ public class JsonLinesFile<T> {
 		return file;
 	}
 
-	// read threw, so some lines may be missing
+	// read threw, lines may be missing
 	public boolean failed() {
 		return failed;
 	}
 
-	// lines the last read couldnt use, they stay in the file
+	// they stay in the file
 	public int skipped() {
 		return skipped;
 	}
 
-	// never completes exceptionally, a failed future = empty journal w/o a word. throwable on purpose
+	// never fails, else empty journal w/o a word. catches throwable on purpose, trust me
 	public CompletableFuture<List<T>> load() {
 		return CompletableFuture.supplyAsync(() -> {
 			List<T> entries = new ArrayList<>();
@@ -73,7 +73,7 @@ public class JsonLinesFile<T> {
 		io.execute(() -> {
 			try {
 				Files.createDirectories(file.getParent());
-				// cut off write left no newline, dont glue onto it
+				// cut off write, dont glue onto it
 				String text = endsMidLine() ? "\n" + line : line;
 				Files.writeString(file, text, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
 			} catch (IOException e) {
@@ -90,7 +90,7 @@ public class JsonLinesFile<T> {
 
 	private void read(List<T> entries) throws IOException {
 		if (!Files.exists(file)) return;
-		// replaces bad utf-8, newBufferedReader throws and one cut off char would hide every line
+		// replaces bad utf-8, newBufferedReader would throw on one bad char
 		try (BufferedReader reader = new BufferedReader(new InputStreamReader(Files.newInputStream(file), StandardCharsets.UTF_8))) {
 			String line;
 			int number = 0;
@@ -104,14 +104,14 @@ public class JsonLinesFile<T> {
 						skipped++;
 						LOGGER.warn("Skipping empty line {} of {}", number, file);
 					} else if (!complete.test(entry)) {
-						// f.e. {} from a hand edit, line stays in the file
+						// f.e. {} from a hand edit, line stays
 						skipped++;
 						LOGGER.warn("Skipping line {} of {}: fields missing", number, file);
 					} else {
 						entries.add(entry);
 					}
 				} catch (RuntimeException e) {
-					// not just JsonParseException, f.e. a price typed as text. line stays in the file
+					// f.e. price typed as text, line stays
 					skipped++;
 					LOGGER.warn("Skipping unreadable line {} of {}: {}", number, file, e.toString());
 				}
@@ -119,7 +119,7 @@ public class JsonLinesFile<T> {
 		}
 	}
 
-	// cant tell = true, a blank line is skipped on read
+	// cant tell = true, blank lines skipped on read
 	private boolean endsMidLine() {
 		if (!Files.exists(file)) return false;
 		try (SeekableByteChannel channel = Files.newByteChannel(file, StandardOpenOption.READ)) {

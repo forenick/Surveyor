@@ -2,7 +2,7 @@ package dev.skysurveyor.hud;
 
 import java.util.ArrayDeque;
 
-// skyhanni's method: hypixel anticheat sends 1 ping packet per server tick. unconfirmed in our recordings
+// skyhanni: 1 ping packet a server tick. unconfirmed in recs, idk
 // client thread only
 public final class TickRate {
 	// skyhanni's numbers

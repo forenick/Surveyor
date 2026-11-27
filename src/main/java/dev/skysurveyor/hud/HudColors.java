@@ -11,7 +11,7 @@ public final class HudColors {
 	private HudColors() {
 	}
 
-	// times only vs times (secs), cold vs cold, counts vs counts. old rule limits
+	// same kind only, old rule limits
 	public static boolean comparable(HudValue a, HudValue b) {
 		if (!a.hasNumber() || !b.hasNumber()) return false;
 		return family(a.kind()) == family(b.kind());

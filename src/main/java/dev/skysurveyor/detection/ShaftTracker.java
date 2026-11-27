@@ -13,7 +13,7 @@ import dev.skysurveyor.detection.ShaftEvent.ShaftLeft;
 
 // candidate per world change, so msgs before its confirmed still count
 public final class ShaftTracker {
-	// fossil blocks, wiki Fossil_Essence: quartz block, stairs, slabs
+	// wiki Fossil_Essence: quartz block, stairs, slabs
 	public static final Set<String> FOSSIL_BLOCKS = Set.of("quartz_block", "quartz_stairs", "quartz_slab");
 
 	private final ChatParser chat;
@@ -68,7 +68,7 @@ public final class ShaftTracker {
 
 	public void onActionBar(long now, String legacy) {
 		boolean same = legacy.equals(lastBar);
-		// a resend still samples a pending block, its 1st bar comes the tick before BlockWatch sees the break
+		// resend still samples a pending block, 1st bar beats BlockWatch by a tick
 		if (same && (shaft == null || !shaft.essencePending())) return;
 		lastBar = legacy;
 		Matcher m = patterns.match("fossil.essence", TextPatterns.clean(legacy));
@@ -78,7 +78,7 @@ public final class ShaftTracker {
 		if (!same) listener.accept(new FossilEssence(amount));
 	}
 
-	// mining/BlockWatch, block ids. gone = spread that went w/ it
+	// BlockWatch block ids. gone = spread
 	public void onBlockBreak(String block, List<String> gone) {
 		int fossil = FOSSIL_BLOCKS.contains(block) ? 1 : 0;
 		for (String other : gone) {
@@ -101,7 +101,7 @@ public final class ShaftTracker {
 		Integer newCold = scoreboard.cold(lines);
 		if (newCold != null && !newCold.equals(cold)) {
 			cold = newCold;
-			if (shaft != null) shaft.setCold(newCold);
+			if (shaft != null) shaft.setCold(now, newCold);
 			listener.accept(new ColdChanged(newCold));
 		}
 	}

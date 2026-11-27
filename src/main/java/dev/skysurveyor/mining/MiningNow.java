@@ -5,16 +5,17 @@ import java.util.List;
 import java.util.function.BooleanSupplier;
 
 import dev.skysurveyor.detection.ShaftEvent;
+import dev.skysurveyor.detection.ShaftEvent.PortalSpawned;
 import dev.skysurveyor.detection.ShaftEvent.ShaftEntered;
 import dev.skysurveyor.detection.ShaftEvent.ShaftLeft;
 
-// the shaft u're in (saved w/ its entry) + the tunnel loop (hud only). plain java, client thread
-// a loop = from the 1st block after a shaft till the next one, or till LOOP_GAP_MILLIS w/o mining
+// client thread only
+// loop = 1st block after a shaft till the next, or LOOP_GAP_MILLIS idle
 public final class MiningNow {
-	// display choices: hud shows - till then, same gap as a journal break
+	// display choice, same gap as a journal break
 	public static final int HUD_MIN_BLOCKS = 10;
 	public static final long LOOP_GAP_MILLIS = 2 * 60_000L;
-	// the hud line chart: last minute, a point every 10 s, 15 min kept. display choices
+	// chart, display choices
 	public static final long WINDOW_MILLIS = 60_000;
 	public static final long STEP_MILLIS = 10_000;
 	public static final int MAX_POINTS = 90;
@@ -24,25 +25,34 @@ public final class MiningNow {
 	private final BooleanSupplier inMines;
 	private boolean inShaft;
 	private long enteredAt = -1;
-	// 1st hit of the loop, -1 = none yet
+	// -1 = none yet
 	private long loopFrom = -1;
-	// oldest 1st, efficiency 0..1. key = what they belong to (shaft entered or loop start)
+	// oldest 1st, 0..1
 	private final List<Double> points = new ArrayList<>();
 	private long pointsKey = -1;
 	private long lastPoint = -1;
+	// kept bc the world change clears the loop
+	private String portalBlock;
+	private String spawnBlock;
 
 	public MiningNow(BooleanSupplier inMines) {
 		this.inMines = inMines;
 	}
 
-	// before the journal, a shaft left reads the shaft meter
+	// before the journal, order matters
 	public void onEvent(ShaftEvent event, long now) {
 		shaft.onEvent(event, now);
 		loop.onEvent(event, now);
 		switch (event) {
+			case PortalSpawned spawned when spawned.foundByYou() -> {
+				MiningStats stats = inShaft ? null : current(now);
+				portalBlock = stats == null ? null : stats.block();
+			}
 			case ShaftEntered entered -> {
 				inShaft = true;
 				enteredAt = entered.shaft().enteredAt();
+				spawnBlock = portalBlock;
+				portalBlock = null;
 				startLoop();
 			}
 			case ShaftLeft left -> inShaft = false;
@@ -51,7 +61,7 @@ public final class MiningNow {
 		}
 	}
 
-	// after the trackers world change, so the shaft left already has its numbers
+	// after the trackers world change
 	public void onWorldChange() {
 		shaft.onWorldChange();
 		loop.onWorldChange();
@@ -60,7 +70,6 @@ public final class MiningNow {
 		enteredAt = -1;
 	}
 
-	// each new block hit + every tick still on one
 	public void onHit(long now) {
 		MiningMeter meter = meter(now);
 		if (meter != null) meter.onHit(now);
@@ -71,7 +80,7 @@ public final class MiningNow {
 		if (meter != null) meter.onBreak(now, block, ticks, clean, spread);
 	}
 
-	// null = blocks here dont count (hub, garden)
+	// null = hub, garden etc
 	private MiningMeter meter(long now) {
 		if (inShaft) return shaft;
 		if (!inMines.getAsBoolean()) return null;
@@ -94,12 +103,16 @@ public final class MiningNow {
 		return shaft.boosting() || loop.boosting();
 	}
 
-	// the shaft just left, for its journal entry
+	// main block not last, last was stone in 3/39 spawns
+	public String spawnBlock() {
+		return spawnBlock;
+	}
+
 	public MiningStats shaftStats(long entered, long ended) {
 		return shaft.stats(entered, ended);
 	}
 
-	// the hud line: this shaft, or this tunnel loop. null = -
+	// null = -
 	public MiningStats current(long now) {
 		if (inShaft) return enteredAt < 0 ? null : shaft.stats(enteredAt, now);
 		long last = loop.lastAt();
@@ -107,7 +120,7 @@ public final class MiningNow {
 		return loop.stats(loopFrom, now);
 	}
 
-	// last minute every STEP_MILLIS, empty = nothing yet. call often, it samples itself
+	// call often, samples itself
 	public List<Double> track(long now) {
 		MiningStats stats = current(now);
 		long key = inShaft ? enteredAt : loopFrom;
@@ -127,7 +140,7 @@ public final class MiningNow {
 		return List.copyOf(points);
 	}
 
-	// whole percent, null = - (under HUD_MIN_BLOCKS)
+	// null under HUD_MIN_BLOCKS
 	public Long percent(long now) {
 		MiningStats stats = current(now);
 		if (stats == null || stats.blocks() < HUD_MIN_BLOCKS) return null;

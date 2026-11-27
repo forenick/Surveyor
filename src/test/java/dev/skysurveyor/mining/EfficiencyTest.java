@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 class EfficiencyTest {
-	// the 16:58 jasper shaft of recording 5 as the design doc has it (Docs/efficiency-design.md section 6)
+	// rec 5 jasper shaft at 16:58 (efficiency-design.md s6)
 	private static final MiningStats JASPER = new MiningStats(705_000, 36_000, 1168, 63, "magenta_stained_glass", 13.0, 4.0, 188_000, 0);
 
 	@Test
@@ -32,7 +32,7 @@ class EfficiencyTest {
 		assertNull(Efficiency.of(new MiningStats(0, 0, 5, 0, "x", 13.0, null, 0, 0)));
 	}
 
-	// nicks PERI_C of 2026-11-21 19:22 as alpha.16 saved it (hard stone counted)
+	// nicks PERI_C 11-21 19:22 as alpha.16 saved it (hard stone counted)
 	@Test
 	void stoneCountedSavesAreHidden() {
 		MiningStats saved = new MiningStats(712_790, 41_776, 1949, 4475, "stone", 7.6747776033490345, 3.937777777777778, 138_392, 55_449,

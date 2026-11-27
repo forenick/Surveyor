@@ -245,7 +245,7 @@ class HudPlaceTest {
 		HudLayout read = HudLayout.fromJson(layout.toJson());
 		assertNull(read.boxes.get(0).stickTo);
 		assertNull(read.boxes.get(1).stickTo);
-		// loop cut at the first box, the other link is fine now
+		// loop cut at the 1st box, other link fine
 		assertEquals(Side.ABOVE, read.boxes.get(2).stickSide);
 		assertEquals(layout.boxes.get(0).id, read.boxes.get(3).stickTo);
 		assertEquals(Side.RIGHT, read.boxes.get(3).stickSide);

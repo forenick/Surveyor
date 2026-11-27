@@ -4,13 +4,13 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 
-// ping w/o sending: vanilla block break/use packet (has a sequence) to the servers ack of it
-// hypixels tab list ping is always 1. ack may wait for the server tick, up to 50ms high
+// ping w/o sending: block packet sequence -> servers ack
+// hypixel tab ping always 1. ack may wait a tick, up to 50ms high
 // client thread only
 public final class PingTimer {
 	// display choice
 	static final int SAMPLES = 10;
-	// display choice, keeps the last ping this long after u stop mining
+	// display choice, kept this long after mining
 	static final long STALE_MILLIS = 60_000;
 	// acks come in order, this only caps lost ones
 	private static final int MAX_PENDING = 64;

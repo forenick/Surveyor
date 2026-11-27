@@ -32,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-// all-time sums over a real journal, saved prices only. expected = how LiveHud summed before HudSums
+// real journal, saved prices only. expected = LiveHud sums before HudSums
 class HudSumsTest {
 	private static final TextPatterns PATTERNS = TextPatterns.defaults();
 	private static final ItemIds IDS = ItemIds.bundled(Map.of());
@@ -203,7 +203,7 @@ class HudSumsTest {
 		}
 	}
 
-	// review 4.1: a sacks msg outside shafts used to redo every pb
+	// review 4.1: sacks msg outside shafts redid every pb
 	@Test
 	void pbsOnlyWhileALineWantsThem() {
 		FakeJournal journal = full();
@@ -230,7 +230,7 @@ class HudSumsTest {
 		assertEquals(2 * entries.size(), money.computed);
 	}
 
-	// io + client queued like in game: nothing summed twice, results only on the client thread
+	// io + client queued like in game: no double sums, results on the client thread
 	@Test
 	void waitsForTheIoThread() {
 		List<Runnable> io = new ArrayList<>();

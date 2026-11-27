@@ -26,7 +26,7 @@ import dev.skysurveyor.money.MiningValue;
 import dev.skysurveyor.money.MoneyStats;
 import dev.skysurveyor.money.ShaftValue;
 
-// whole journal sums: all-time coins + drops, pbs. summed on io, new entries added on the client thread
+// summed on io, new entries added on the client thread
 public final class HudSums {
 	private static final Logger LOGGER = LoggerFactory.getLogger("Surveyor");
 
@@ -40,7 +40,7 @@ public final class HudSums {
 			Function<JournalEntry, ShaftValue> compute, Function<MiningEntry, List<ShaftValue.Line>> computeLines) {
 	}
 
-	// coins null = no prices. shafts = how many saved shafts coins has. lines null = not summed yet
+	// coins null = no prices. lines null = not summed yet
 	public record AllTime(Double coins, int shafts, Double outside, int mining, DropList.Lines shaftLines,
 			DropList.Lines outsideLines) {
 		public static final AllTime NONE = new AllTime(null, 0, null, 0, null, null);
@@ -67,7 +67,7 @@ public final class HudSums {
 	private JournalEntry firstShaft;
 	private MiningEntry firstMining;
 	private boolean pending;
-	// pbs, client thread. key -> result
+	// client thread
 	private Map<String, PersonalBests.Result> pbResults = Map.of();
 	private List<PersonalBests.Def> pbList;
 	private int pbEntries = -1;
@@ -77,7 +77,7 @@ public final class HudSums {
 	private int pbMining = -1;
 	private int pbBreaks = -1;
 	private boolean pbPending;
-	// io thread only. each saved entry valued once per price or settings change, shared by sums + pbs
+	// io only. once per price or settings change
 	// null values too (no prices), so containsKey not computeIfAbsent
 	private final Map<JournalEntry, Double> nets = new IdentityHashMap<>();
 	private final Map<MiningEntry, Double> outsideNets = new IdentityHashMap<>();
@@ -167,7 +167,7 @@ public final class HudSums {
 		return lines == null ? null : MiningValue.total(lines);
 	}
 
-	// client thread. wanted = a drawn line or the editor reads a pb, else nothing is redone (sacks msgs come every ~30 s)
+	// client thread. wanted = a line or the editor reads a pb (sacks msgs every ~30 s)
 	public void updatePbs(List<PersonalBests.Def> list, int changes, boolean wanted) {
 		if (!wanted || pbPending) return;
 		JournalEntry first = journal.first().get();
@@ -226,7 +226,7 @@ public final class HudSums {
 		return outsideNets.get(entry);
 	}
 
-	// client thread. key -> shown text, the shaft ur in counts for drystreaks
+	// client thread. shaft ur in counts for drystreaks
 	public Map<String, String> pbTexts(List<PersonalBests.Def> list, String inShaftType, int metalTier) {
 		Map<String, String> texts = new HashMap<>();
 		for (PersonalBests.Def def : list) {

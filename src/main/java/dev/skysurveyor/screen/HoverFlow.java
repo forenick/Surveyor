@@ -6,7 +6,7 @@ import io.wispforest.owo.ui.core.CursorStyle;
 import io.wispforest.owo.ui.core.OwoUIGraphics;
 import io.wispforest.owo.ui.core.Sizing;
 
-// drawn hover, not mouseEnter: survives rebuild under the mouse
+// not mouseEnter, survives rebuilds
 public class HoverFlow extends FlowLayout {
 	public static final int ROW = 0x1AFFFFFF;
 	public static final int SMALL = 0x30FFFFFF;

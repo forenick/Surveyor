@@ -9,7 +9,7 @@ import dev.skysurveyor.hud.ToastClock;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-// expected strings = corpse loot lines from recording 2026-11-15
+// expected = corpse loot lines, rec 11-15
 class ItemNamesTest {
 	private static final ItemNames HYPIXEL = new ItemNames(Map.of("Enchanted Tungsten", "RARE", "Tungsten Key", "EPIC", "Fine Jasper Gemstone", "RARE")::get);
 

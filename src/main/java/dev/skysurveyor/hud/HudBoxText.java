@@ -26,20 +26,20 @@ public final class HudBoxText {
 	private static final String STYLES = "lonm";
 	// display choice, 3 HUD refreshes
 	private static final long WAIT_STEP_MILLIS = 600;
-	// unknown § codes, font skips them. text between = measured, not drawn
+	// font skips unknown § codes. between = measured, not drawn
 	static final String HIDE_START = "§";
 	static final String HIDE_END = "§";
 	private static final Pattern HIDDEN = Pattern.compile(Pattern.quote(HIDE_START) + ".*?" + Pattern.quote(HIDE_END));
-	// text before a rate says /h already. \b so w/helmet doesnt count
+	// label already says /h. \b for w/helmet
 	private static final Pattern SAYS_RATE = Pattern.compile("(?i)(/\\s*h(r|our)?\\b|per hour|hourly)");
 	private static final String PER_HOUR = "/h";
-	// drops both: items under each source, display choice
+	// items per source, display choice
 	private static final int SUB_ITEMS = 2;
 
 	private HudBoxText() {
 	}
 
-	// text of the rows, keeps the hidden dots
+	// keeps the hidden dots
 	public static List<String> lines(Box box, HudData data, boolean example) {
 		List<String> lines = new ArrayList<>();
 		for (HudRow row : rows(box, data, example)) {
@@ -48,7 +48,7 @@ public final class HudBoxText {
 		return lines;
 	}
 
-	// for HudRenderer, keeps the hidden dots
+	// keeps the hidden dots
 	public static List<HudRow> rows(Box box, HudData data, boolean example) {
 		List<HudRow> rows = new ArrayList<>();
 		if (box.showTitle) {
@@ -135,22 +135,20 @@ public final class HudBoxText {
 		return new ArrayList<>(List.of(HudRow.columns("§7" + text, "", false)));
 	}
 
-	// items like hypixel: rarity colour, gem icon, name, §8x amount
+	// like hypixel: rarity, gem icon, name, §8x amount
 	static String dropText(DropList.Row row, boolean amounts) {
 		String amount = amounts ? DropList.amount(row) : "";
 		boolean item = row.kind() != DropList.Kind.SOURCE && row.kind() != DropList.Kind.MORE;
-		// rarity now, not when the list was made (item list may load later)
+		// rarity now, item list may load later
 		if (item) return ItemNames.current().styled(row.name(), amount);
 		return "§" + row.color() + row.name() + ItemNames.amount(amount);
 	}
 
-	// editor line list + preview
 	static String dropsName(Line line) {
 		int rows = line.rowsOrDefault();
 		return "Drops, " + (rows == 0 ? "all" : String.valueOf(rows)) + " rows";
 	}
 
-	// add line: how many items now
 	static String dropsText(DropList list) {
 		if (list == null || list.noPrices()) return HudFormat.MISSING;
 		int items = list.items().size();
@@ -187,7 +185,7 @@ public final class HudBoxText {
 		};
 	}
 
-	// scale = longest shaft or the avg, whichever is bigger
+	// longest shaft or avg, whichever is bigger
 	static HudGraph.Chart spawnChart(List<HudData.Spawn> spawns, Double average, ShaftNames names) {
 		if (spawns.isEmpty()) return null;
 		double scale = average == null ? 0 : average;
@@ -209,7 +207,7 @@ public final class HudBoxText {
 		return shaft != null ? String.valueOf(shaft) : "e";
 	}
 
-	// also hidden lines, for the editor. no hidden dots, labels would draw them
+	// no hidden dots, labels would draw them
 	public static String line(Box box, Line line, HudData data, boolean example) {
 		String raw = rawLine(box, line, data, example);
 		return raw == null ? null : visible(raw);
@@ -266,7 +264,7 @@ public final class HudBoxText {
 		return tags(text, data, example, "e", "§l");
 	}
 
-	// box titles. color + styles = the title's, for painted values. missing = left out
+	// color + styles = the titles. missing = left out
 	static String tags(String text, HudData data, boolean example, String color, String styles) {
 		if (text.indexOf('{') < 0) return text;
 		Matcher matcher = TAG.matcher(text);
@@ -286,7 +284,7 @@ public final class HudBoxText {
 		return out.toString();
 	}
 
-	// one tag as shown. null = cant show it (text in maths), stays as typed
+	// null = cant show (text in maths)
 	static String tagText(Node node, HudData data, boolean example) {
 		if (node instanceof Val v && (v.format() == null || HudFormat.names(v.value().kind()).contains(v.format()))) {
 			return text(v.value(), v.range(), v.target(), HudExpr.index(v.value().kind(), v.format()), data, example);
@@ -300,7 +298,7 @@ public final class HudBoxText {
 		}
 	}
 
-	// &r = box label colour, &v = box value colour, unknown tags stay as typed. colors = rule key -> colour
+	// &r = label colour, &v = value colour, unknown tags stay as typed
 	static String free(Box box, Line line, String text, Map<String, String> colors, HudData data, boolean example) {
 		boolean shaftTag = false;
 		String color = box.labelColor;
@@ -366,7 +364,7 @@ public final class HudBoxText {
 			out.append(c);
 			i++;
 		}
-		// values never say "this shaft", so the drawn line is safe to swap
+		// values never say this shaft, safe to swap
 		return shaftTag && !data.inShaft() ? lastShaft(out.toString()) : out.toString();
 	}
 
@@ -374,13 +372,13 @@ public final class HudBoxText {
 		return HudExpr.values(node).stream().anyMatch(v -> v.value().followsShaft(v.range()));
 	}
 
-	// no value in it = not a tag, old text had f.e. {5}
+	// no value = not a tag, old text had {5}
 	private static HudExpr.Parsed parseTag(String inner) {
 		HudExpr.Parsed parsed = HudExpr.parse(inner);
 		return parsed.error() == null && HudExpr.literal(parsed.node()) ? new HudExpr.Parsed(null, "no value in it") : parsed;
 	}
 
-	// {tag}: what's wrong, for the line page. text in maths counts too
+	// text in maths counts too
 	public static List<String> problems(String text) {
 		List<String> problems = new ArrayList<>();
 		Matcher tags = TAG.matcher(text);
@@ -483,7 +481,7 @@ public final class HudBoxText {
 		return line.range();
 	}
 
-	// own colours as codes, box colours stay live (&v). label escaped, its typed as is
+	// own colours as codes, box colours stay live (&v)
 	public static String basicText(Box box, Line line) {
 		HudValue value = line.hudValue();
 		String label = line.labelColor == null ? "" : "&" + line.labelColor + (box.labelBold ? "&l" : "");
@@ -517,7 +515,7 @@ public final class HudBoxText {
 		return value == HudValue.SHAFTS_PER_HOUR || (range == Range.PER_HOUR && value.hasRange(range));
 	}
 
-	// . .. ... so it looks like its waiting, not broken. unshown dots hidden, so the box keeps its width
+	// dots hidden, not dropped, so the width stays
 	static String waiting(long now) {
 		int dots = 1 + (int) (now / WAIT_STEP_MILLIS % 3);
 		return dots == 3 ? "..." : ".".repeat(dots) + HIDE_START + ".".repeat(3 - dots) + HIDE_END;
@@ -569,6 +567,8 @@ public final class HudBoxText {
 
 	private static String formatted(HudValue value, Range range, int format, Object v) {
 		String text = HudFormat.format(value.kind(), format, v);
+		// gains +, like the entry title + key corpses
+		if (value.signed() && v instanceof Number n && Math.round(n.doubleValue()) > 0) text = "+" + text;
 		return v == null ? text : text + suffix(value, range);
 	}
 

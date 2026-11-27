@@ -196,7 +196,7 @@ class HudExprTest {
 		assertEquals(new HudTyping.Edit("{dry:vanguard}", 14), HudTyping.option("{dry}", 5, HudValue.DRYSTREAK, "vanguard"));
 	}
 
-	// review 2026-11-21: bare pb stayed on the pb it was 1st parsed with
+	// review 11-21: bare pb stuck to its 1st parse
 	@Test
 	void barePbFollowsTheListOrder() {
 		List<PersonalBests.Def> list = PersonalBests.DEFAULTS;
@@ -219,7 +219,7 @@ class HudExprTest {
 		assertEquals("pb has no :shaft_powdr. Did you mean :shaft_powder?", error("pb:shaft_powdr"), "typo, not a pb key");
 		assertEquals("pb:drystreak_jasp", HudExpr.plain(HudExpr.parseOrThrow("pb:drystreak_jasp")));
 		assertEquals("Coins / shaft", HudValue.PERSONAL_BEST.targetName("shaft_coins"));
-		assertEquals("PB Jasper dry: ", HudValue.PERSONAL_BEST.defaultPrefix(null, "drystreak_jasp"));
+		assertEquals("PB Jasper drystreak: ", HudValue.PERSONAL_BEST.defaultPrefix(null, "drystreak_jasp"));
 		assertEquals("9 (longest 18)", HudData.pbText(new dev.skysurveyor.journal.PersonalBests.Def("drystreak", "JASP", null, null),
 				new dev.skysurveyor.journal.PersonalBests.Result(18.0, null, null, 9L), 0));
 		assertEquals("1m 31s avg", HudData.pbText(new dev.skysurveyor.journal.PersonalBests.Def("session_spawn", null, null, null),
@@ -241,7 +241,7 @@ class HudExprTest {
 		assertEquals(List.of("lapis", "umber", "tungsten", "vanguard"), HudValue.CORPSES_LOOTED.targets());
 	}
 
-	// reviewers probe: both threw StackOverflowError on every HUD refresh
+	// reviewer probe: both threw StackOverflowError every refresh. oops
 	@Test
 	void tooLongOrDeepIsAMistakeNotACrash() {
 		assertEquals("too long", error("(".repeat(5000) + "coins" + ")".repeat(5000)));
@@ -261,7 +261,7 @@ class HudExprTest {
 		assertEquals("coins + 1 + 1", HudExpr.plain(HudExpr.parseOrThrow("coins+1+1")), "long but legal still works");
 	}
 
-	// the worst at the limits, on a quarter of the default 1 MB stack
+	// worst case at the limits, 1/4 of the 1 MB stack
 	@Test
 	void limitsFitASmallStack() throws InterruptedException {
 		List<String> worst = List.of(

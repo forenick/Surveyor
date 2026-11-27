@@ -57,7 +57,7 @@ import dev.skysurveyor.util.GameText;
 import dev.skysurveyor.util.Guard;
 import dev.skysurveyor.util.TextUtil;
 
-// dev tool. read only, never sends anything to the server
+// dev tool. read only, never sends anything
 public final class ShaftRecorder {
 	static final Logger LOGGER = LoggerFactory.getLogger("Surveyor Recorder");
 
@@ -81,7 +81,7 @@ public final class ShaftRecorder {
 	private boolean extra;
 	// none = nothing to write at start
 	private String lastBossBars = "[]";
-	// static bc describeItem is, client thread only
+	// static bc describeItem is. client thread only
 	private static boolean skipProfiles;
 	private long lastBlockHit = Long.MIN_VALUE;
 	private long startMillis;
@@ -100,17 +100,16 @@ public final class ShaftRecorder {
 		return writer != null;
 	}
 
-	// manual
 	public Path start(Minecraft client) {
 		return start(client, null, false);
 	}
 
-	// session != null = auto record, stops when that session ends. extra = boss bar + sounds too.
-	// file opens on the recorder thread, a failure shows up in onTick
+	// session != null = auto, stops w/ that session. extra = boss bar + sounds too
+	// file opens on the recorder thread, failure shows up in onTick
 	public Path start(Minecraft client, Long session, boolean extra) {
 		stop();
 		String name = LocalDateTime.now().format(FILE_NAME);
-		// 2 starts in 1 second, so the name in chat is the real one. the writer still skips taken names
+		// 2 starts in 1 sec, so the name in chat is real. writer still skips taken names
 		sameName = name.equals(lastName) ? sameName + 1 : 1;
 		lastName = name;
 		if (sameName > 1) name += "_" + sameName;
@@ -152,7 +151,7 @@ public final class ShaftRecorder {
 		return writer.file();
 	}
 
-	// session of an auto recording whose file couldnt be written, once. null = none
+	// auto session whose file failed, once. null = none
 	public Long takeFailedAuto() {
 		Long failed = failedAuto;
 		failedAuto = null;
@@ -173,7 +172,7 @@ public final class ShaftRecorder {
 		return writer == null ? null : writer.file();
 	}
 
-	// settings page change, replays numbers depend on them
+	// replay numbers depend on settings
 	public void onSettings(Settings settings) {
 		if (writer == null) return;
 		JsonObject event = event("settings");
@@ -185,7 +184,7 @@ public final class ShaftRecorder {
 		return stop(false);
 	}
 
-	// wait = game closing, else the recorder thread finishes the file on its own
+	// wait = game closing, else recorder thread finishes on its own
 	public Path stop(boolean wait) {
 		if (writer == null) {
 			return null;
@@ -198,7 +197,7 @@ public final class ShaftRecorder {
 		return file;
 	}
 
-	// once per new target (every tick in creative), only a new block pos gets written
+	// once per new target (every tick in creative), only new pos written
 	public void onBlockHit(BlockPos pos) {
 		if (writer == null || pos.asLong() == lastBlockHit) return;
 		lastBlockHit = pos.asLong();
@@ -207,7 +206,7 @@ public final class ShaftRecorder {
 		write(event);
 	}
 
-	// what BlockWatch saw go, to check the block count against sacks
+	// to check block count vs sacks
 	public void onBlockBreak(BlockPos pos, String block, int ticks, boolean clean, boolean boost, List<String> gone) {
 		if (writer == null) return;
 		JsonObject event = event("block_break");
@@ -237,7 +236,7 @@ public final class ShaftRecorder {
 		write(event);
 	}
 
-	// quick mark hotkey, at = when the key was pressed
+	// at = key press time
 	public boolean quickMark(String category, String note, long at) {
 		if (writer == null) return false;
 		JsonObject event = new JsonObject();
@@ -250,7 +249,7 @@ public final class ShaftRecorder {
 		return true;
 	}
 
-	// once per kind + key per file, so claude jumps straight to the odd spots
+	// once per kind + key per file, so claude finds the odd spots fast
 	private void autoMark(String kind, String key, String note) {
 		if (writer == null || !marked.add(kind + "|" + key)) return;
 		JsonObject event = event("mark");
@@ -271,7 +270,7 @@ public final class ShaftRecorder {
 		autoMark("error", failure.what() + "|" + failure.frame(), failure.what() + ": " + failure.error());
 	}
 
-	// chat ChatWatch flagged, checked once in Surveyor
+	// ChatWatch flagged, checked once in Surveyor
 	public void onUnmatched(String text) {
 		autoMark("unmatched", ChatWatch.key(text), text);
 	}
@@ -367,7 +366,7 @@ public final class ShaftRecorder {
 		}
 	}
 
-	// container screens only (sell sacks, sacks, menus), not ur own inventory below them
+	// container screens only (sell sacks, sacks, menus), not ur inventory
 	private void recordScreen(Screen screen) {
 		AbstractContainerScreen<?> shown = screen instanceof AbstractContainerScreen<?> container && !(screen instanceof InventoryScreen)
 				&& !(screen instanceof CreativeModeInventoryScreen) && Surveyor.SETTINGS.get().dev().isRecordScreens() ? container : null;
@@ -397,7 +396,7 @@ public final class ShaftRecorder {
 		write(event);
 	}
 
-	// extra mode. unknown if skyblock shows one in the mines, this finds out
+	// extra mode. idk if the mines have one, this finds out
 	private void recordBossBars(Minecraft client) {
 		JsonArray bars = new JsonArray();
 		for (LerpingBossEvent bar : ((BossHealthOverlayAccessor) client.gui.hud.getBossOverlay()).skysurveyor$getEvents().values()) {
@@ -431,7 +430,7 @@ public final class ShaftRecorder {
 		write(event);
 	}
 
-	// whos on the server now. own name from the login, not the tab list. every write, a joiner's 1st chat or tab line comes before any tick
+	// own name from login, not tab. every write bc a joiners 1st line can beat any tick
 	private void updateNames(Minecraft client) {
 		List<String> online = new ArrayList<>();
 		if (client.getConnection() != null) {
@@ -492,7 +491,7 @@ public final class ShaftRecorder {
 		Set<Integer> seen = new HashSet<>();
 		for (ArmorStand stand : level.getEntitiesOfClass(ArmorStand.class, area)) {
 			JsonObject description = describeArmorStand(stand);
-			// decoration only, skip to keep files small
+			// decoration, skip for small files
 			if (!description.has("name") && !description.has("equipment")) continue;
 			seen.add(stand.getId());
 			String signature = description.toString();

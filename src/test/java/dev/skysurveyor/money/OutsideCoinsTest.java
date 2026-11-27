@@ -31,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OutsideCoinsTest {
 	private static final TextPatterns PATTERNS = TextPatterns.defaults();
-	// made up prices, not real ones
+	// made up prices
 	private static final Map<String, ItemPrice> PRICES = Map.of(
 			"FLAWLESS_JADE_GEM", new ItemPrice(8_000_000.0, 8_100_000.0, null),
 			"FINE_JADE_GEM", new ItemPrice(90_000.0, 95_000.0, null),
@@ -71,7 +71,7 @@ class OutsideCoinsTest {
 		assertEquals(Map.of("Jade", 11.0), OutsideMining.fineGems(List.of(tunnels()), PATTERNS));
 	}
 
-	// recorded hour of recording 5 (money-tracker-design.md section 1): session 16:02:24 to 17:10:37,
+	// rec 5 hour (money-tracker-design.md s1): session 16:02:24 to 17:10:37,
 	// shafts 55.58M (55.27M recorded + 0.31M before), outside 24.09M reported + 1.69M tail
 	private static final long START = 1_794_754_944_000L;
 	private static final long LAST_EXIT = START + 68 * 60_000L + 13_000;

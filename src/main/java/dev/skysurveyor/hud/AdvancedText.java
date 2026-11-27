@@ -3,7 +3,6 @@ package dev.skysurveyor.hud;
 import java.util.ArrayList;
 import java.util.List;
 
-// advanced line page: field limits, the hint under the text, what + Rule types
 final class AdvancedText {
 	static final int TEXT_LIMIT = 256;
 	static final int RULES_LIMIT = 512;
@@ -15,24 +14,23 @@ final class AdvancedText {
 	private AdvancedText() {
 	}
 
-	// pasted newlines, 1 HUD line
 	static String oneLine(String typed) {
 		return typed.replace("\r", "").replace('\n', ' ');
 	}
 
-	// field lines, trailing empty ones left out
+	// trailing empty ones dropped
 	static List<String> ruleLines(String typed) {
 		List<String> lines = new ArrayList<>(List.of(typed.split("\n", -1)));
 		while (!lines.isEmpty() && lines.getLast().isBlank()) lines.removeLast();
 		return lines;
 	}
 
-	// rules so far + a new line up to the compare, the number goes after
+	// rules + new line up to the compare
 	static String ruleLead(String rules, String tag) {
 		return (rules.isEmpty() || rules.endsWith("\n") ? rules : rules + "\n") + "{" + tag + "} > ";
 	}
 
-	// under the text field, 1st problem only
+	// 1st problem only
 	static String hint(List<String> problems, boolean noRoom) {
 		if (noRoom) return "§cNo room for that, the text is " + TEXT_LIMIT + " and the rules " + RULES_LIMIT + " characters max.";
 		if (problems.isEmpty()) return TEXT_HINT;
@@ -40,13 +38,12 @@ final class AdvancedText {
 		return "§c" + problem + (problem.endsWith("?") ? " " : ". ") + "It shows as typed.";
 	}
 
-	// grey example in the empty rules field, for the 1st number in the text
+	// for the 1st number in the text
 	static String example(String text, HudExpr.Values values) {
 		List<String> tags = HudBoxText.numberTags(text);
 		return tags.isEmpty() ? "{coins} > 2M &a" : "{" + tags.getFirst() + "} > " + typedNumber(tags.getFirst(), values) + " &c";
 	}
 
-	// the number now, as a player would type it
 	static String typedNumber(String tag, HudExpr.Values values) {
 		HudExpr.Parsed parsed = HudExpr.parse(tag);
 		HudExpr.Result r;

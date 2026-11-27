@@ -10,7 +10,10 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.function.Function;
+
+import com.google.gson.JsonObject;
 
 import dev.skysurveyor.data.ItemNames;
 import dev.skysurveyor.detection.Shaft;
@@ -21,10 +24,12 @@ import dev.skysurveyor.journal.MiningEntry;
 import dev.skysurveyor.settings.LiveSettings;
 import dev.skysurveyor.settings.MoneySettings;
 import dev.skysurveyor.settings.MoneySettings.OldShafts;
+import dev.skysurveyor.settings.MoneySettings.SellPrice;
+import dev.skysurveyor.util.Guard;
 
-// prices refresh on shaft entry + journal open, not on a timer, so no traffic when not shafting
+// refresh on shaft entry + journal open, no timer, no traffic when idle
 public final class LiveMoney {
-	// display choice, older = refresh failed or still running, not that days prices
+	// display choice, older = failed or running, not that days prices
 	static final long SNAPSHOT_MAX_AGE = 60 * 60_000L;
 	public static final long BAZAAR_MAX_AGE = PriceFeed.BAZAAR_MAX_AGE;
 	public static final long BINS_MAX_AGE = PriceFeed.BINS_MAX_AGE;
@@ -37,15 +42,18 @@ public final class LiveMoney {
 	private final AtomicBoolean refreshing = new AtomicBoolean();
 	private final AtomicInteger changes = new AtomicInteger();
 	private final LiveSettings config;
-	// read by 3 threads
+	// io thread
+	private volatile Consumer<JsonObject> election = json -> {
+	};
+	// read by 3 threads, careful
 	private volatile PriceFeed feed;
-	// client thread only, saved entries only (live ones would pile up). cleared when changes() moves
+	// client thread only, saved entries only. cleared when changes() moves
 	private final Map<JournalEntry, ShaftValue> values = new IdentityHashMap<>();
 	private final Map<MiningEntry, List<ShaftValue.Line>> miningValues = new IdentityHashMap<>();
 	private final Map<JournalEntry, ShaftValue> untaxedValues = new IdentityHashMap<>();
 	private final Map<MiningEntry, List<ShaftValue.Line>> untaxedMining = new IdentityHashMap<>();
 	private int valuesAt = -1;
-	// client thread only, live value until the shaft or prices change
+	// client thread only
 	private Shaft liveShaft;
 	private int liveVersion;
 	private int liveAt = -1;
@@ -53,7 +61,7 @@ public final class LiveMoney {
 
 	public LiveMoney(LiveSettings config) {
 		this.config = config;
-		// page changes, a hand edit is seen by refresh()
+		// hand edits seen by refresh()
 		config.onChange((before, after) -> {
 			if (!after.money().equals(before.money())) changes.incrementAndGet();
 		});
@@ -82,17 +90,24 @@ public final class LiveMoney {
 				if (feed.stale(now)) feed.fetchStale(now);
 				if (feed.tiers() != tiers) ItemNames.use(itemNames());
 				if (!settings().equals(settings) || feed.book() != book || feed.tiers() != tiers) changes.incrementAndGet();
+				JsonObject mayor = feed.fetchElection(now);
+				if (mayor != null) Guard.run("election", () -> election.accept(mayor));
 			} finally {
 				refreshing.set(false);
 			}
 		});
 	}
 
+	// fetched w/ prices, called on the io thread
+	public void onElection(Consumer<JsonObject> listener) {
+		election = listener;
+	}
+
 	public void onEvent(ShaftEvent event) {
 		if (event instanceof ShaftEvent.ShaftEntered) refresh();
 	}
 
-	// goes up when prices or settings change, open screens redraw on it
+	// goes up on price or setting change, screens redraw on it
 	public int changes() {
 		return changes.get();
 	}
@@ -107,6 +122,12 @@ public final class LiveMoney {
 
 	public PriceBook book() {
 		return feed == null ? PriceBook.EMPTY : feed.book();
+	}
+
+	// null = none yet
+	public PriceRules rules() {
+		PriceBook book = book();
+		return book.isEmpty() ? null : new PriceRules(book::get, settings(), ids(), TextPatterns.defaults());
 	}
 
 	public ItemIds ids() {
@@ -139,8 +160,8 @@ public final class LiveMoney {
 		return book.hasBazaar() && end - book.bazaarAt() <= SNAPSHOT_MAX_AGE;
 	}
 
-	// null = nothing saved. old bins = bazaar items only, the rest keep todays price.
-	// not just bins dropped: get() would still give an npc only price for an ah item, saved for good
+	// null = nothing saved. old bins = bazaar items only, rest keep todays price
+	// not just bins dropped: get() would save an npc only price for an ah item
 	static ShaftValue.Prices forSnapshot(PriceBook book, long end) {
 		if (!freshForSnapshot(book, end)) return null;
 		if (end - book.binsAt() <= SNAPSHOT_MAX_AGE) return book::get;
@@ -150,12 +171,12 @@ public final class LiveMoney {
 		};
 	}
 
-	// null = no prices at all yet. saved entries only, cached
+	// null = no prices yet. saved entries only, cached
 	public ShaftValue value(JournalEntry entry) {
 		return cached(values, entry, e -> compute(e, settings()));
 	}
 
-	// same w/o bazaar tax, for the tax line. cached
+	// cached
 	public ShaftValue untaxed(JournalEntry entry) {
 		MoneySettings untaxed = untaxedSettings();
 		return untaxed == null ? value(entry) : cached(untaxedValues, entry, e -> compute(e, untaxed));
@@ -166,18 +187,20 @@ public final class LiveMoney {
 		return untaxed == null ? lines(entry) : cached(untaxedMining, entry, e -> computeLines(e, untaxed));
 	}
 
-	// false = untaxed values are the same, no tax line to work out
+	// false = no tax line
 	public boolean taxed() {
 		return untaxedSettings() != null;
 	}
 
-	// null = no tax to take off
+	// null = no tax
 	private MoneySettings untaxedSettings() {
 		MoneySettings settings = settings();
-		return settings.isIronman() || settings.bazaarTax() == 0 ? null : settings.withBazaarTax(0);
+		// w/o tax bazaar can beat npc, no honest tax line
+		return settings.isIronman() || settings.bazaarTax() == 0 || settings.sellPrice() == SellPrice.BEST ? null
+				: settings.withBazaarTax(0);
 	}
 
-	// containsKey bc null = no prices is cached too
+	// containsKey bc null is cached too
 	private <K, V> V cached(Map<K, V> map, K key, Function<K, V> compute) {
 		clearIfChanged();
 		if (map.containsKey(key)) return map.get(key);
@@ -196,12 +219,12 @@ public final class LiveMoney {
 		valuesAt = now;
 	}
 
-	// null = no prices at all yet. saved entries only, cached
+	// null = no prices yet. saved entries only, cached
 	public Double value(MiningEntry entry) {
 		return total(lines(entry));
 	}
 
-	// per item, null = no prices at all yet. saved entries only, cached
+	// null = no prices yet. saved entries only, cached
 	public List<ShaftValue.Line> lines(MiningEntry entry) {
 		return cached(miningValues, entry, e -> computeLines(e, settings()));
 	}
@@ -211,7 +234,7 @@ public final class LiveMoney {
 		return total(computeLines(entry, settings()));
 	}
 
-	// per item, uncached, any thread
+	// uncached, any thread
 	public List<ShaftValue.Line> computeLines(MiningEntry entry) {
 		return computeLines(entry, settings());
 	}
@@ -225,7 +248,7 @@ public final class LiveMoney {
 		return prices == null ? null : MiningValue.lines(entry, prices, settings, ids(), TextPatterns.defaults());
 	}
 
-	// shaft still going, todays prices
+	// todays prices
 	public ShaftValue live(Shaft shaft) {
 		int now = changes.get();
 		if (shaft != liveShaft || shaft.version() != liveVersion || now != liveAt) {
@@ -247,7 +270,7 @@ public final class LiveMoney {
 		return prices == null ? null : ShaftValue.of(entry, prices, settings, ids(), TextPatterns.defaults());
 	}
 
-	// null = no prices at all yet
+	// null = no prices yet
 	private ShaftValue.Prices prices(Map<String, ItemPrice> saved, MoneySettings settings) {
 		PriceBook book = book();
 		boolean useSaved = usesSavedPrices(saved, settings);
@@ -263,7 +286,7 @@ public final class LiveMoney {
 		return settings.oldShafts() == OldShafts.THAT_DAY && saved != null && !saved.isEmpty();
 	}
 
-	// shutdown not shutdownNow, queued config saves must still run
+	// not shutdownNow, queued config saves must run
 	public void close() {
 		if (feed != null) feed.close();
 		io.shutdown();
@@ -275,12 +298,11 @@ public final class LiveMoney {
 		}
 	}
 
-	// config saves queue here too, behind a price fetch
+	// config saves queue here too, behind a fetch
 	public void run(Runnable task) {
 		try {
 			io.execute(task);
 		} catch (RejectedExecutionException e) {
-			// closing
 			refreshing.set(false);
 		}
 	}

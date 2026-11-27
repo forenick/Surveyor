@@ -9,13 +9,13 @@ import java.util.function.Function;
 
 import com.google.gson.JsonObject;
 
-// config.json for the whole mod. get() from any thread, the file only on the io thread its handed
+// get() any thread, file io thread only
 public final class LiveSettings {
 	private final List<BiConsumer<Settings, Settings>> listeners = new CopyOnWriteArrayList<>();
 	private volatile ConfigFile config;
 	private Executor io;
 
-	// io = one thread, saves + reloads must run in the order they were asked
+	// one thread, saves + reloads stay in order
 	public void start(Path folder, Executor io) {
 		this.io = io;
 		config = new ConfigFile(folder);
@@ -25,7 +25,7 @@ public final class LiveSettings {
 		return config == null ? Settings.DEFAULTS : config.get();
 	}
 
-	// settings page. built on memory now, each changed section saved on the io thread
+	// memory now, changed sections saved on io thread
 	public Settings change(Function<Settings, Settings> change) {
 		Settings before = get();
 		Settings after = change.apply(before);
@@ -43,12 +43,11 @@ public final class LiveSettings {
 		io.execute(() -> config.save(section, old, value));
 	}
 
-	// (before, after) right after change(), on its thread. not for hand edits, those come in w/ reloadIfChanged
+	// on change()s thread. not for hand edits
 	public void onChange(BiConsumer<Settings, Settings> listener) {
 		listeners.add(listener);
 	}
 
-	// what config.json would hold, f.e. for a recordings start line
 	public static JsonObject toJson(Settings settings) {
 		return ConfigFile.json(settings);
 	}

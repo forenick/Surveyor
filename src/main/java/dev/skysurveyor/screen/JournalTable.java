@@ -18,27 +18,26 @@ import net.minecraft.network.chat.Component;
 
 import dev.skysurveyor.Surveyor;
 import dev.skysurveyor.journal.JournalEntry;
+import dev.skysurveyor.journal.JournalStats;
 import dev.skysurveyor.mining.Efficiency;
 import dev.skysurveyor.screen.TableColumns.Column;
 import dev.skysurveyor.settings.SettingsList;
 
 import static dev.skysurveyor.screen.ScreenParts.label;
 
-// the journals tables: header, cells, column widths, shaft sort. which columns fit is TableColumns
 final class JournalTable {
 	// display choices
 	static final int ROW_HEIGHT = 12;
 	static final int COLUMN_GAP = 6;
 	static final int SPAWN_BAR = 26;
 	private static final Color GREEN = Color.ofArgb(0xCC55FF55);
-	// session table order, null = played order. kept while the game runs
+	// null = played order, not saved
 	private static String shaftSort;
 	private static boolean shaftSortFlipped;
 
 	private final Font font;
 	private final Runnable rebuild;
 
-	// rebuild = after a sort click
 	JournalTable(Font font, Runnable rebuild) {
 		this.font = font;
 		this.rebuild = rebuild;
@@ -48,17 +47,15 @@ final class JournalTable {
 		return TableColumns.fit(columns, available, COLUMN_GAP);
 	}
 
-	// measured bc pack fonts (caxton, bold) are wider, never below the width in the list
+	// pack fonts are wider, measure
 	List<Column> measured(List<Column> columns, String key, List<String> texts) {
 		return measured(columns, key, widest(texts));
 	}
 
-	// widest = cells measured by the caller, f.e. text + bar
 	List<Column> measured(List<Column> columns, String key, int widest) {
 		return columns.stream().map(c -> c.key().equals(key) ? TableColumns.measure(c, Math.max(widest, font.width(c.title()))) : c).toList();
 	}
 
-	// spawn cells: text + the bar, which keeps its own room
 	int barCellWidth(List<String> texts) {
 		return widest(texts) + 3 + SPAWN_BAR;
 	}
@@ -67,20 +64,20 @@ final class JournalTable {
 		return texts.stream().mapToInt(font::width).max().orElse(0);
 	}
 
-	// display row -> entry index, by the sort if its column shows
+	// display row -> entry index
 	static int[] shaftOrder(List<JournalEntry> shafts, List<Double> coins, List<Column> columns) {
 		return TableColumns.shaftOrder(shafts, coins, TableColumns.shownSort(shaftSort, columns), shaftSortFlipped,
 				Surveyor.MONEY.settings().metalTierUsed().tier());
 	}
 
-	// sortable false = headers not clickable. rows scroll = the callers, so it can keep it
+	// caller owns rows scroll, so it can keep it
 	FlowLayout panel(List<Column> columns, KeptScroll rows, boolean sortable) {
 		FlowLayout table = UIContainers.verticalFlow(Sizing.expand(), Sizing.fill(100));
 		table.surface(ScreenParts.PANEL);
 		table.padding(Insets.of(5));
 		FlowLayout header = tableRow();
 		for (Column column : columns) {
-			List<Component> tips = headerTips(column);
+			List<Component> tips = headerTips(column, sortable);
 			if (sortable) {
 				header.child(sortHeader(column, tips));
 				continue;
@@ -90,7 +87,7 @@ final class JournalTable {
 				header.child(title);
 				continue;
 			}
-			// row high + both, so the whole cell shows it
+			// both, so whole cell shows it
 			FlowLayout cell = UIContainers.horizontalFlow(Sizing.fixed(column.total()), Sizing.fixed(ROW_HEIGHT));
 			cell.verticalAlignment(VerticalAlignment.CENTER);
 			cell.child(title);
@@ -106,25 +103,40 @@ final class JournalTable {
 		return table;
 	}
 
-	// what a column counts, null = says it already
-	private static List<Component> headerTips(Column column) {
-		List<String> lines = switch (column.title()) {
-			case "Corpses" -> List.of("Looted / in the shaft", "L Lapis, U Umber, T Tungsten, V Vanguard");
-			case "Lapis" -> List.of("Lapis corpses looted");
-			case "Mined" -> List.of("Gems in Fine, metal as " + SettingsList.label(Surveyor.MONEY.settings().metalTierUsed()));
-			case "Spawn" -> List.of("Mining time until the shaft spawned");
-			case "Eff." -> List.of("Blocks you broke against nonstop mining", "From your first gem block, no Gemstone Spread",
+	// every column, the footer says hover one
+	private static List<Component> headerTips(Column column, boolean shafts) {
+		String underRate = "- under " + JournalStats.MIN_RATE_MILLIS / 60_000 + " minutes";
+		List<String> lines = switch (column.key()) {
+			case "date", "start" -> List.of("When the session started");
+			case "length" -> List.of("From its start to your last shaft or mining", "Breaks included");
+			case "shafts" -> List.of("Shafts you finished");
+			case "spawn" -> shafts ? List.of("Mining time until the shaft spawned", "Bar: against the slowest in this session")
+					: List.of("Mining time per shaft you spawned", "Only mining in the Dwarven Mines counts", "Bar: against the slowest listed");
+			case "rate" -> List.of("Shafts per hour, breaks left out", underRate);
+			case "powder" -> List.of("Glacite Powder from shafts", "Corpse loot plus the bonus for leaving");
+			case "lapis" -> List.of("Lapis corpses looted");
+			case "coins" -> shafts ? List.of("Net coins from this shaft", "Keys and campfires taken off")
+					: List.of("Net coins from shafts and from mining outside them", "Keys and campfires taken off");
+			case "coinRate" -> List.of("Coins per hour, breaks left out", underRate);
+			case "number" -> List.of("The order you entered them in");
+			case "shaft" -> List.of("Type, then its layout: 1, 2 or crystal", "The details show the scoreboard's id");
+			case "time" -> List.of("When you entered");
+			case "inside" -> List.of("Time from entering to leaving");
+			case "corpses" -> List.of("Looted / in the shaft", "L Lapis, U Umber, T Tungsten, V Vanguard");
+			case "mined" -> List.of("Gems in Fine, metal as " + SettingsList.label(Surveyor.MONEY.settings().metalTierUsed()));
+			case "eff" -> List.of("Blocks you broke against nonstop mining", "From your first gem block, no Gemstone Spread",
 					"Under " + Efficiency.MIN_BLOCKS + " blocks shows -");
+			case "campfire" -> List.of("Campfires you placed, with your Cold at each");
 			default -> null;
 		};
 		if (lines == null) return null;
 		List<Component> tips = new ArrayList<>();
 		tips.add(Component.literal("§f" + column.title()));
 		lines.forEach(line -> tips.add(Component.literal("§7" + line)));
+		if (shafts) tips.add(Component.literal("§8Click to sort"));
 		return tips;
 	}
 
-	// active column: white + arrow, if the arrow fits
 	private FlowLayout sortHeader(Column column, List<Component> tips) {
 		FlowLayout cell = new HoverFlow(Sizing.fixed(column.total()), Sizing.fixed(ROW_HEIGHT), HoverFlow.ROW);
 		cell.verticalAlignment(VerticalAlignment.CENTER);
@@ -142,7 +154,7 @@ final class JournalTable {
 		}
 		LabelComponent title = cell(column, text);
 		cell.child(title);
-		// both, so the whole cell shows it
+		// both, so whole cell shows it
 		if (tips != null) {
 			cell.tooltip(tips);
 			title.tooltip(tips);
@@ -154,7 +166,7 @@ final class JournalTable {
 		return cell;
 	}
 
-	// 1st click best/biggest first, 2nd flips, 3rd back to played order
+	// 3rd click = played order
 	private void sortShafts(String key) {
 		if (!key.equals(shaftSort)) {
 			shaftSort = key;
@@ -174,7 +186,7 @@ final class JournalTable {
 		return label;
 	}
 
-	// text + a bar, slowest = full bar
+	// slowest = full bar
 	static FlowLayout barCell(Column column, Long millis, long slowest) {
 		FlowLayout cell = UIContainers.horizontalFlow(Sizing.fixed(column.total()), Sizing.content());
 		cell.verticalAlignment(VerticalAlignment.CENTER);

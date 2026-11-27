@@ -1,6 +1,5 @@
 package dev.skysurveyor.hud;
 
-// toast age that stops while paused (mod screen open)
 public final class ToastClock {
 	private long age;
 	private long last = -1;

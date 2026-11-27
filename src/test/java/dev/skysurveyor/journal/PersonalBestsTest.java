@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 class PersonalBestsTest {
-	// made up shafts, not game data
+	// made up
 	private static final PersonalBests.Coins COINS = entry -> entry.exitPowder() * 1000.0;
 
 	private static JournalEntry shaft(long session, int minute, String id, long powder, Long spawn, List<Corpse> corpses) {
@@ -91,8 +91,14 @@ class PersonalBestsTest {
 		assertEquals("Coins / Jasper shaft", PersonalBests.name(new Def("shaft_coins", "JASP", null, null), names));
 		assertEquals("Jasper shafts / h", PersonalBests.name(new Def("session_rate", "JASP", null, null), names));
 		assertEquals("Shafts / session", PersonalBests.name(new Def("session_shafts", null, null, null), names));
-		assertEquals("Vanguard dry", PersonalBests.name(new Def("drystreak", "FAIR", null, null), names));
-		assertEquals("Jasper dry", PersonalBests.name(new Def("drystreak", null, null, null), names));
+		assertEquals("Vanguard drystreak", PersonalBests.name(new Def("drystreak", "FAIR", null, null), names));
+		assertEquals("Jasper drystreak", PersonalBests.name(new Def("drystreak", null, null, null), names));
+		// typed names stay, old default only where it was one
+		assertEquals("Jasper dry", PersonalBests.name(new Def("drystreak", null, null, "Jasper dry"), names));
+		assertEquals("Jasper dry", PersonalBests.oldName(new Def("drystreak", null, null, null), names));
+		assertEquals("Vanguard dry", PersonalBests.oldName(new Def("drystreak", "FAIR", null, null), names));
+		assertNull(PersonalBests.oldName(new Def("drystreak", null, null, "My streak"), names));
+		assertNull(PersonalBests.oldName(new Def("shaft_gems", null, null, null), names));
 		assertEquals("My PB", PersonalBests.name(new Def("shaft_coins", null, null, "My PB"), names));
 	}
 }

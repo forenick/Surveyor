@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
-// a throwing listener must not stop the next one or reach vanilla
+// a throwing listener cant stop the next or reach vanilla
 class LiveTrackerTest {
 	private static final String WOW = "§5§lWOW! §aYou found a §bGlacite Mineshaft portal!";
 

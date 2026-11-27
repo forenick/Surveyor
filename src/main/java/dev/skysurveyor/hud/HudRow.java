@@ -2,9 +2,9 @@ package dev.skysurveyor.hud;
 
 import java.util.List;
 
-// one drawn row of a box. text null = graph only, graph null = text only
-// right != null = 2 columns: text left, right at the right edge, alignment ignored (drops line)
-// rule = thin line above. indent = px before the left text
+// text null = graph only, graph null = text only
+// right != null = 2 columns, align ignored
+// rule = thin line above. indent = px before the text
 // sizes = display choices from docs/mockups/hud-drops-v1.html
 public record HudRow(String text, HudGraph graph, String right, boolean rule, int indent) {
 	public static final int COLUMN_GAP = 10;

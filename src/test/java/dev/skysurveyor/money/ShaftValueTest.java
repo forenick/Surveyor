@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-// round made up prices so every number can be worked by hand, not real ones
+// made up round prices, worked by hand
 class ShaftValueTest {
 	private static final double TAX = 1 - 1.125 / 100;
 	private static final Map<String, ItemPrice> PRICES = Map.ofEntries(
@@ -217,12 +217,12 @@ class ShaftValueTest {
 		assertFalse(LiveMoney.freshForSnapshot(PriceBook.EMPTY, at));
 	}
 
-	// bin sources down for days, bazaar fine: the cached bin isnt saved as that days price
+	// bins down for days: cached bin isnt saved as that days price
 	@Test
 	void snapshotsLeaveOldBinsOut() {
 		long at = 1_000_000_000L;
 		long end = at + 3 * 24 * 60 * 60_000L + 60_000;
-		// made up npc prices, the live book always has them from the item list
+		// made up npc prices, live book gets them from the item list
 		PriceBook book = PriceBook.EMPTY.withBins(Map.of("CAGED_WISP", 60_000_000.0, "FINE_JADE_GEM", 1.0), at)
 				.withBazaar(Map.of("FINE_JADE_GEM", bz(28_000, 30_000)), at + 3 * 24 * 60 * 60_000L)
 				.withNpc(Map.of("CAGED_WISP", 50_000.0, "FINE_JADE_GEM", 3_000.0));
@@ -336,7 +336,7 @@ class ShaftValueTest {
 		assertEquals(0, ironman.total(Part.KEYS), 1e-6, "ironman keys still cost nothing");
 		assertEquals(0, ironman.total(Part.CAMPFIRES), 1e-6);
 
-		// insta-buy shafts save the craft prices too, so the setting can change later
+		// insta-buy shafts save craft prices too, setting can change later
 		Map<String, ItemPrice> saved = ShaftValue.snapshot(entry(), prices::get, MoneySettings.DEFAULTS, IDS, PATTERNS);
 		for (String id : List.of("ENCHANTED_UMBER", "BEJEWELED_HANDLE", "ENCHANTED_TUNGSTEN", "TUNGSTEN_KEY", "REFINED_UMBER")) {
 			assertTrue(saved.containsKey(id), id);

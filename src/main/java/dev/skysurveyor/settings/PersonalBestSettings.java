@@ -9,7 +9,7 @@ import com.google.gson.JsonObject;
 import dev.skysurveyor.journal.PersonalBests;
 import dev.skysurveyor.journal.PersonalBests.Def;
 
-// "personalBests" in config.json, the Stats tabs list in order. names never rename
+// "personalBests" in config.json, names never rename
 public record PersonalBestSettings(List<Def> list) {
 	public static final PersonalBestSettings DEFAULTS = new PersonalBestSettings(PersonalBests.DEFAULTS);
 
@@ -17,7 +17,7 @@ public record PersonalBestSettings(List<Def> list) {
 		list = List.copyOf(list);
 	}
 
-	// null = default. by hand, a broken entry is skipped, the rest still load
+	// null = default, broken entry skipped
 	static PersonalBestSettings read(JsonElement json) {
 		if (!json.isJsonObject() || !json.getAsJsonObject().has("list") || !json.getAsJsonObject().get("list").isJsonArray()) return null;
 		List<Def> list = new ArrayList<>();

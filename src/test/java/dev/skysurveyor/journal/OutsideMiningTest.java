@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-// counts from recording 5 (research/09)
+// counts from rec 5 (research/09)
 class OutsideMiningTest {
 	private final List<JournalEntry> entries = new ArrayList<>();
 	private final List<MiningEntry> mining = new ArrayList<>();
@@ -89,7 +89,7 @@ class OutsideMiningTest {
 		assertTrue(mining.isEmpty());
 	}
 
-	// synthetic: 140 glacite from before the shaft got compacted in it, the shaft counted its enchanted glacite
+	// synthetic: 140 glacite from before got compacted in the shaft
 	@Test
 	void shaftCompactionShortfallComesOffOutsideAdds() {
 		hit(0);
@@ -113,7 +113,7 @@ class OutsideMiningTest {
 		assertEquals(Map.of("Glacite", 60L), mining.getLast().items());
 	}
 
-	// synthetic: 24 of the 412 flawed came from compacting rough, the tail ratio uses 2,000 rough to 388 flawed
+	// synthetic: 24 of 412 flawed from compacting rough, tail ratio 2,000 rough to 388 flawed
 	@Test
 	void tailRatioLeavesOutCompactedFlawed() {
 		hit(0);
@@ -184,7 +184,7 @@ class OutsideMiningTest {
 		assertEquals(List.of(priced), file.read());
 	}
 
-	// recording 6 at 0:01.8 + 0:37.4: compacted glacite comes off, 27 short in the 1st msg comes off the 2nd
+	// rec 6 at 0:01.8 + 0:37.4: compacted glacite off, 27 short in the 1st off the 2nd
 	@Test
 	void compactionInSacksIsntCountedTwice() {
 		hit(0);
@@ -199,7 +199,7 @@ class OutsideMiningTest {
 		assertEquals(Map.of("Enchanted Glacite", 21L, "Glacite", 21L), mining.get(1).items());
 	}
 
-	// recording 6 at 28:21.4, mined in its window here so it isnt skipped for that
+	// rec 6 at 28:21.4, mined in its window so not skipped for that
 	@Test
 	void supercraftWithItsInputsRemovedStillCountsNothing() {
 		hit(0);
@@ -213,8 +213,8 @@ class OutsideMiningTest {
 		assertEquals(Map.of("Flawed Jade Gemstone", 151L, "Rough Jade Gemstone", 513L), mining.getFirst().items());
 	}
 
-	// sum of the sacks msgs outside shafts by hand: glacite 79,666 in, 79,200 out, hard stone 8,761 in, 8,640 out
-	// JADE_1 compacted 453 hard stone more than it got, those come off the hard stone after it
+	// hand sums outside shafts: glacite 79,666 in, 79,200 out, hard stone 8,761 in, 8,640 out
+	// JADE_1 compacted 453 hard stone more than it got, off the next
 	@Test
 	void recordingSix() throws IOException {
 		Map<String, Long> reported = totals(replayed("2026-11-17_19-16-17.jsonl"), false);
@@ -226,7 +226,7 @@ class OutsideMiningTest {
 		assertEquals(null, reported.get("Fine Jade Gemstone"));
 	}
 
-	// replay totals match the sacks msgs outside shafts by hand (research/09)
+	// matches hand sums outside shafts (research/09)
 	@Test
 	void recordingFive() throws IOException {
 		List<MiningEntry> replayed = replayed("2026-11-15_16-10-29.jsonl");

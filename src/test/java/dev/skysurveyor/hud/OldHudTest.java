@@ -16,7 +16,7 @@ import dev.skysurveyor.OldSaves;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class OldHudTest {
-	// v1 x/y -> anchors, v2 visibility -> show in. HudTest checks those conversions
+	// v1 x/y -> anchors, v2 visibility -> show in (HudTest checks)
 	private static final Map<String, Set<String>> CONVERTED = Map.of("boxes[]", Set.of("x", "y", "visibility"));
 
 	@TestFactory

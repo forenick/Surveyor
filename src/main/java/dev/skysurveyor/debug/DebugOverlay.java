@@ -14,11 +14,11 @@ import dev.skysurveyor.money.PriceBook;
 import dev.skysurveyor.screen.ScreenParts;
 import dev.skysurveyor.util.Guard;
 
-// debug overlay, top left, not in hud.json. only draws
+// top left, not in hud.json. only draws
 public final class DebugOverlay {
 	private static final int REFRESH_TICKS = 4;
 	private static final int PADDING = 3;
-	// display choice, long event texts get cut
+	// display choice, long texts get cut
 	private static final int MAX_WIDTH = 260;
 	private static final int BACKGROUND = 0xA0000000;
 

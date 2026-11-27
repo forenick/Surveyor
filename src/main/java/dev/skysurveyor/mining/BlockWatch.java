@@ -13,31 +13,30 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 
-// sees a block u were hitting turn into another block. reads the clients world only, sends nothing
-// hypixel breaks blocks server side (gap between hits = 13 ticks on jasper, research/11), so no client prediction to trip on
+// read only, sends nothing
+// hypixel breaks server side, no prediction mess
 public final class BlockWatch {
-	// gone = touching blocks that went w/ it (gemstone spread, unconfirmed)
+	// gone = spread i think (unconfirmed)
 	public interface Listener {
 		void onBreak(BlockPos pos, String block, int ticks, boolean clean, List<String> gone);
 	}
 
-	// crosshair left it, server can still finish the break. first value, tune on a recording
+	// server may still finish it. first guess, tune later
 	private static final int LATE_TICKS = 10;
-	// own breaks kept this long so they dont count as spread of the next block
+	// else they count as the next blocks spread
 	private static final int OWN_TICKS = 20;
-	// game minimum, research/11 section 8. a block can still go after fewer ticks on it: in boost 57 of 62 pristine msgs
-	// w/o a counted block had one (recording 7), so hypixel keeps the progress of an earlier touch or finishes it late.
-	// under this the time says nothing, and a touched block next to one that just went is its spread
+	// game min (research/11 s8)
+	// blocks can go faster, hypixel keeps old progress (rec 7)
 	private static final int MIN_TICKS = 4;
 
 	private static final class Target {
 		final BlockPos pos;
 		final Block block;
 		final int since;
-		// refreshed while held, so neighbours that went before it arent spread
+		// refreshed while held, else early neighbours = spread
 		Block[] around;
 		int lastHit;
-		// false = looked away and came back, time says nothing
+		// false = looked away, time useless
 		boolean clean = true;
 
 		Target(BlockPos pos, Block block, int since, Block[] around) {
@@ -55,7 +54,6 @@ public final class BlockWatch {
 	private final Listener listener;
 	private final List<Target> left = new ArrayList<>();
 	private final Deque<Own> own = new ArrayDeque<>();
-	// went this tick, not counted yet
 	private final List<Target> went = new ArrayList<>();
 	private Target target;
 	private int tick;
@@ -64,14 +62,14 @@ public final class BlockWatch {
 		this.listener = listener;
 	}
 
-	// LiveTracker world change, before this ticks
+	// before tick()
 	public void reset() {
 		target = null;
 		left.clear();
 		own.clear();
 	}
 
-	// AttackBlockCallback: once per new target in survival, fabric only fires it every tick in creative
+	// once per block in survival, every tick in creative
 	public void onAttack(Level level, BlockPos pos) {
 		if (target != null && target.pos.equals(pos)) {
 			target.lastHit = tick;
@@ -79,7 +77,7 @@ public final class BlockWatch {
 		}
 		if (target != null) left.add(target);
 		Block block = level.getBlockState(pos).getBlock();
-		// back on a block from a moment ago: same target, else it would count twice
+		// same target again, else counts twice
 		for (Iterator<Target> it = left.iterator(); it.hasNext();) {
 			Target old = it.next();
 			if (!old.pos.equals(pos)) continue;
@@ -93,16 +91,15 @@ public final class BlockWatch {
 		target = new Target(pos.immutable(), block, tick, around(level, pos));
 	}
 
-	// end of the client tick, after packets and the attack
+	// after packets + attack
 	public void onTick(Minecraft client) {
 		ClientLevel level = client.level;
 		if (level == null) {
 			tick++;
 			return;
 		}
-		// still on it: vanillas own flag, the callback doesnt come again
+		// callback wont fire again, use vanillas flag
 		if (target != null && client.gameMode != null && client.gameMode.isDestroying()) target.lastHit = tick;
-		// button released or looked away
 		if (target != null && target.lastHit < tick) {
 			left.add(target);
 			target = null;
@@ -123,13 +120,13 @@ public final class BlockWatch {
 				it.remove();
 			}
 		}
-		// longest held first, so a short touch next to it is its spread and not a 2nd block of urs
+		// longest first, else spread counts as ur block
 		went.sort((a, b) -> Integer.compare(ticks(b), ticks(a)));
 		List<BlockPos> counted = new ArrayList<>();
 		for (Target old : went) {
 			int ticks = ticks(old);
 			if (ticks < MIN_TICKS && touches(old.pos, counted)) continue;
-			// went the tick the crosshair moved on = still a clean time
+			// moved on same tick, still clean
 			report(level, old, ticks, old.clean && ticks >= MIN_TICKS && tick - old.lastHit <= 1);
 			counted.add(old.pos);
 		}
@@ -138,7 +135,6 @@ public final class BlockWatch {
 		tick++;
 	}
 
-	// still on a block after this tick, counts as mining
 	public boolean holding() {
 		return target != null;
 	}
@@ -147,7 +143,7 @@ public final class BlockWatch {
 		return ticks(target) >= MIN_TICKS;
 	}
 
-	// ticks u were on it, the one it went in counted
+	// incl the tick it went
 	private static int ticks(Target target) {
 		return target.lastHit - target.since + 1;
 	}
@@ -190,7 +186,7 @@ public final class BlockWatch {
 		return target != null && target.pos.equals(pos);
 	}
 
-	// the 26 around it, null = air
+	// 26 neighbours, null = air
 	private static Block[] around(Level level, BlockPos center) {
 		Block[] blocks = new Block[26];
 		int i = 0;
@@ -202,7 +198,6 @@ public final class BlockWatch {
 		return blocks;
 	}
 
-	// f.e. magenta_stained_glass
 	private static String id(Block block) {
 		return BuiltInRegistries.BLOCK.getKey(block).getPath();
 	}

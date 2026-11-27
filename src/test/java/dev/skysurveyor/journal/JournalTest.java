@@ -67,7 +67,7 @@ class JournalTest {
 		assertEquals(60_000, entries.get(0).searchMillis());
 	}
 
-	// recording 8 PERI_C: last hit, 2 warps, next hit 12.5 s later
+	// rec 8 PERI_C: last hit, 2 warps, next hit 12.5 s later
 	@Test
 	void aWarpEndsTheGap() {
 		at(0).hit(true);
@@ -238,7 +238,7 @@ class JournalTest {
 		assertEquals(entries, file.read());
 	}
 
-	// recording 2, by hand in research/06: 379.1 Fine reported, ~385 total
+	// rec 2, by hand in research/06: 379.1 Fine reported, ~385 total
 	@Test
 	void jadeShaftGems() throws IOException {
 		Path recording = RecordingReplay.RECORDINGS.resolve("2026-11-08_22-41-09.jsonl");
@@ -253,7 +253,7 @@ class JournalTest {
 		assertTrue(jade.fineEquivalent() > 382 && jade.fineEquivalent() < 386, "total " + jade.fineEquivalent());
 	}
 
-	// recording 6 at 16:16.3 + 17:22.4 in JADE_1: 5,650 hard stone in, 5,760 compacted
+	// rec 6 at 16:16.3 + 17:22.4 in JADE_1: 5,650 hard stone in, 5,760 compacted
 	@Test
 	void compactedHardStoneIsntAnotherDrop() {
 		at(0).tracker.onWorldChange(now);
@@ -275,7 +275,7 @@ class JournalTest {
 		assertEquals(5_760L, jade.sacksRemoved().get("Hard Stone"));
 	}
 
-	// hand sums: hard stone 47,931 in, 48,384 compacted, so none mined. enchanted 88, none from corpses
+	// hand sums: hard stone 47,931 in, 48,384 compacted = none mined. enchanted 88, none from corpses
 	@Test
 	void recording6JadeShaft() throws IOException {
 		Path recording = RecordingReplay.RECORDINGS.resolve("2026-11-17_19-16-17.jsonl");
@@ -305,7 +305,7 @@ class JournalTest {
 		assertEquals(Map.of(), fair.sacksAdded());
 	}
 
-	// lapis looted 9:53.3, tab list still not looted at 9:53.5, left 9:56.3. exit 1,250 = 1,000 + 250 for it
+	// lapis looted 9:53.3, tab still not at 9:53.5, left 9:56.3. exit 1,250 = 1,000 + 250 for it
 	@Test
 	void recording6LootedLapisBeforeTheTabListFlipped() throws IOException {
 		Path recording = RecordingReplay.RECORDINGS.resolve("2026-11-17_19-16-17.jsonl");
@@ -340,17 +340,17 @@ class JournalTest {
 		assertEquals(5759 + 4791, aqua.corpsePowder());
 
 		String text = String.join("\n", SummaryText.lines(aqua, null, null, MoneySettings.DEFAULTS));
-		assertTrue(text.contains("§b§lAQUA_C  §7inside §f14s"), text);
+		assertTrue(text.contains("§3§lAquamarine crystal  §7inside §f14s"), text);
 		assertTrue(text.contains("§9Lapis 2/2§7, §fTungsten 0/1"), text);
 		assertTrue(text.contains("§7Powder §f+12,060 §8(corpses 10,550, exit 1,510)"), text);
 		assertTrue(text.contains("§7Coins §8no prices yet"), text);
 
-		// sacks minus the 1st corpse's onyx + citrine, the 2nd corpse came after the last sacks msg (research/07)
+		// sacks minus 1st corpse's onyx + citrine, 2nd came after the last sacks msg (research/07)
 		assertEquals(Map.of("Enchanted Glacite", 2L, "Flawed Sapphire Gemstone", 40L, "Flawed Amethyst Gemstone", 40L,
 				"Rough Amber Gemstone", 40L, "Rough Topaz Gemstone", 40L, "Rough Jade Gemstone", 40L), aqua.otherDrops());
 	}
 
-	// recording 4 (research/08), by hand
+	// rec 4 (research/08), by hand
 	@Test
 	void recording4SpawnTimes() throws IOException {
 		Path recording = RecordingReplay.RECORDINGS.resolve("2026-11-11_17-16-21.jsonl");
@@ -378,14 +378,14 @@ class JournalTest {
 	}
 
 	private void replay(Path recording) throws IOException {
-		// recordings have no block hits, spawns never timed
+		// recs have no block hits, spawns never timed
 		for (ShaftEvent event : RecordingReplay.replay(recording)) journal.onEvent(event, 0);
 	}
 
 	@Test
 	void turkishLocaleStillFindsTheShaftGem() {
 		Locale before = Locale.getDefault();
-		// "Citrine" uppercases to "CİTRİNE" here
+		// turkish locale: "Citrine" uppercases to "CİTRİNE" lol
 		Locale.setDefault(Locale.forLanguageTag("tr-TR"));
 		try {
 			at(0).tracker.onWorldChange(now);

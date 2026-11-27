@@ -10,7 +10,7 @@ import dev.skysurveyor.detection.ShaftEvent.SacksChanged;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-// recording 8 PERI_C: lapis loot w/ flawed citrine x40 + peridot x20, next sacks msg lists neither, ends "+60 other items."
+// rec 8 PERI_C: lapis loot w/ flawed citrine x40 + peridot x20, next sacks msg only "+60 other items."
 class HiddenSacksItemsTest {
 	private static Shaft looted() {
 		Shaft shaft = new Shaft(0);

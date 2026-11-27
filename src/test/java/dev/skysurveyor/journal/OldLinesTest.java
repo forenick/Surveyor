@@ -18,7 +18,7 @@ import dev.skysurveyor.OldSaves;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-// mining, breaks + stash files load like LiveJournal reads them, nothing lost. journal.jsonl: OldJournalTest
+// load like LiveJournal, nothing lost. journal.jsonl: OldJournalTest
 class OldLinesTest {
 	private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
 

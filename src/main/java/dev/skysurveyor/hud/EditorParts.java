@@ -4,10 +4,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.function.Consumer;
 
+import io.wispforest.owo.ui.base.BaseUIComponent;
 import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.LabelComponent;
-import io.wispforest.owo.ui.component.SmallCheckboxComponent;
-import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.Color;
@@ -17,8 +16,10 @@ import io.wispforest.owo.ui.core.OwoUIGraphics;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.Surface;
 import io.wispforest.owo.ui.core.VerticalAlignment;
+import io.wispforest.owo.ui.util.UISounds;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -29,17 +30,17 @@ import dev.skysurveyor.hud.HudLayout.Align;
 import dev.skysurveyor.screen.HoverFlow;
 import dev.skysurveyor.screen.PackButton;
 import dev.skysurveyor.screen.ScreenParts;
+import dev.skysurveyor.screen.Switch;
 
 import static dev.skysurveyor.screen.ScreenParts.label;
 
-// hud editor looks: buttons, icons, rows, chips. editor + its pages + menu
 final class EditorParts {
-	// opaque, boxes behind it bled through the text
+	// opaque, boxes bled through
 	static final int PANEL_FILL = 0xFF141414;
 	static final int PANEL_OUTLINE = 0x30FFFFFF;
 	static final Surface PANEL = Surface.flat(PANEL_FILL).and(Surface.outline(PANEL_OUTLINE));
 	static final Surface DIVIDER = (graphics, c) -> graphics.fill(c.x(), c.y(), c.x() + c.width(), c.y() + 1, 0x1CFFFFFF);
-	// action buttons / choices + line rows. fits 480x270
+	// fits 480x270
 	static final int BUTTON = 16;
 	static final int CHOICE = 14;
 	static final int MENU_SWATCH = 10;
@@ -50,7 +51,7 @@ final class EditorParts {
 	static final int RANGE_TEXT = 0xAAAAAA;
 	static final String[] COLOR_NAMES = {"Black", "Dark Blue", "Dark Green", "Dark Aqua", "Dark Red",
 			"Dark Purple", "Gold", "Gray", "Dark Gray", "Blue", "Green", "Aqua", "Red", "Light Purple", "Yellow", "White"};
-	// 8 wide pixel icons, same in every font
+	// pixel icons, same in every font
 	static final String[] RESET_ICON = {
 			"..XXXX.X",
 			".X....XX",
@@ -78,6 +79,7 @@ final class EditorParts {
 			".......X",
 			"....XXX."};
 	private static final Identifier REMOVE_ICON = Identifier.withDefaultNamespace("player_list/remove_player");
+	private static final Identifier CHECK_ICON = icon("check_icon");
 
 	interface Icon {
 		void draw(GuiGraphicsExtractor graphics, int x, int y, int height);
@@ -115,7 +117,7 @@ final class EditorParts {
 		return button;
 	}
 
-	// owo draws the message too, so empty msg + narrator name
+	// owo draws the msg too, so empty + narrator name
 	static ButtonComponent drawnButton(String name, Consumer<ButtonComponent> action) {
 		ButtonComponent button = new DrawnButton(ScreenParts.strip(name), action);
 		button.horizontalSizing(Sizing.content(4));
@@ -135,7 +137,7 @@ final class EditorParts {
 		return button;
 	}
 
-	// 8 wide icon + text. text "" = icon only
+	// text "" = icon only
 	static ButtonComponent iconTextButton(Font font, Icon icon, String text, String name, Consumer<ButtonComponent> action) {
 		ButtonComponent button = drawnButton(text.isEmpty() ? name : text, action);
 		button.horizontalSizing(Sizing.fixed(text.isEmpty() ? CHOICE + 2 : 5 + 8 + 4 + font.width(text) + 5));
@@ -182,30 +184,65 @@ final class EditorParts {
 		return heading;
 	}
 
-	// own label w/ a gap, clicking it ticks the box too. text null = box only
-	static FlowLayout check(String text, boolean on, Consumer<Boolean> set) {
+	// switch + its name, the name clicks too
+	static FlowLayout toggle(String text, boolean on, Consumer<Boolean> set) {
 		FlowLayout row = UIContainers.horizontalFlow(Sizing.content(), Sizing.content());
 		row.gap(4);
 		row.verticalAlignment(VerticalAlignment.CENTER);
 		row.margins(Insets.vertical(1));
-		SmallCheckboxComponent box = UIComponents.smallCheckbox(null);
-		box.checked(on);
-		box.onChanged().subscribe(set::accept);
-		row.child(box);
-		if (text != null) {
-			LabelComponent name = label(text);
-			name.cursorStyle(CursorStyle.HAND);
-			name.mouseDown().subscribe((click, doubled) -> {
-				if (click.button() != 0) return false;
-				box.checked(!box.checked());
-				return true;
-			});
-			row.child(name);
-		}
+		Switch toggle = new Switch(on, false, set::accept);
+		row.child(toggle);
+		LabelComponent name = label(text);
+		name.cursorStyle(CursorStyle.HAND);
+		name.mouseDown().subscribe((click, doubled) -> {
+			if (click.button() != 0) return false;
+			toggle.toggle();
+			return true;
+		});
+		row.child(name);
 		return row;
 	}
 
-	// breadcrumb link, left click only
+	static Icon texture(Identifier texture) {
+		return (graphics, x, y, h) -> graphics.blit(RenderPipelines.GUI_TEXTURED, texture, x, y + (h - 8) / 2, 0, 0, 8, 8, 8, 8);
+	}
+
+	static Identifier icon(String name) {
+		return Identifier.fromNamespaceAndPath("skysurveyor", "textures/gui/" + name + ".png");
+	}
+
+	// small box for the dense line list, green tick = on, never an X
+	static final class TickBox extends BaseUIComponent {
+		static final int SIZE = 10;
+		private final Consumer<Boolean> changed;
+		private boolean on;
+
+		TickBox(boolean on, Consumer<Boolean> changed) {
+			this.on = on;
+			this.changed = changed;
+			cursorStyle(CursorStyle.HAND);
+			sizing(Sizing.fixed(SIZE), Sizing.fixed(SIZE));
+		}
+
+		@Override
+		public boolean onMouseDown(MouseButtonEvent click, boolean doubled) {
+			if (click.button() != 0) return super.onMouseDown(click, doubled);
+			on = !on;
+			UISounds.playButtonSound();
+			changed.accept(on);
+			super.onMouseDown(click, doubled);
+			return true;
+		}
+
+		@Override
+		public void draw(OwoUIGraphics graphics, int mouseX, int mouseY, float partialTicks, float delta) {
+			graphics.fill(x, y, x + SIZE, y + SIZE, hovered ? 0xFFFFFFFF : 0xFF8B8B8B);
+			graphics.fill(x + 1, y + 1, x + SIZE - 1, y + SIZE - 1, 0xFF000000);
+			if (on) graphics.blit(RenderPipelines.GUI_TEXTURED, CHECK_ICON, x + 1, y + 1, 0, 0, 8, 8, 8, 8);
+		}
+	}
+
+	// left click only
 	static FlowLayout crumb(String text, Runnable action) {
 		FlowLayout crumb = new HoverFlow(Sizing.content(), Sizing.content(), HOVER);
 		crumb.padding(Insets.horizontal(1));
@@ -241,6 +278,21 @@ final class EditorParts {
 		return option == Align.CENTER ? "Centre" : Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
 	}
 
+	// name, then what it adds in grey, wrapped
+	static FlowLayout menuEntry(String text, String note, int width, Runnable action) {
+		HoverFlow entry = new HoverFlow(Sizing.fixed(width), Sizing.content(), HOVER, FlowLayout.Algorithm.VERTICAL);
+		entry.padding(Insets.of(2, 2, 3, 3));
+		entry.child(label(text));
+		LabelComponent grey = label("§7" + note);
+		grey.horizontalSizing(Sizing.fixed(width - 6));
+		entry.child(grey);
+		entry.mouseDown().subscribe((click, doubled) -> {
+			action.run();
+			return true;
+		});
+		return entry;
+	}
+
 	static final class HoverRow extends HoverFlow {
 		HoverRow() {
 			super(Sizing.fill(100), Sizing.content(), HOVER);
@@ -250,9 +302,12 @@ final class EditorParts {
 		}
 	}
 
-	// small clickable text, hover drawn over it. keys + options in the value list
 	static final class Chip extends FlowLayout {
+		// faint edge like the calculator's chips, display choice
+		static final int PAD = 3;
+		private static final int EDGE = 0x30FFFFFF;
 		private final LabelComponent label;
+		private boolean outlined;
 
 		Chip(String text, int color, Runnable action) {
 			super(Sizing.content(), Sizing.content(), Algorithm.HORIZONTAL);
@@ -271,9 +326,17 @@ final class EditorParts {
 			label.color(Color.ofRgb(color));
 		}
 
+		// reads as a button
+		Chip outlined() {
+			outlined = true;
+			padding(Insets.of(2, 1, PAD, PAD));
+			return this;
+		}
+
 		@Override
 		public void draw(OwoUIGraphics graphics, int mouseX, int mouseY, float partialTicks, float delta) {
 			super.draw(graphics, mouseX, mouseY, partialTicks, delta);
+			if (outlined) graphics.drawRectOutline(x, y, width, height, EDGE);
 			if (isInBoundingBox(mouseX, mouseY)) graphics.fill(x, y, x + width, y + height, HOVER);
 		}
 	}

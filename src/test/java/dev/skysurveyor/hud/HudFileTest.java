@@ -128,7 +128,7 @@ class HudFileTest {
 		assertEquals(wrongType, read(dir.resolve("hud.json.20261117-120000.bad")));
 	}
 
-	// what a deep rule did before HudExpr had limits
+	// deep rule before HudExpr had limits
 	@Test
 	void stackOverflowIsMovedAway(@TempDir Path dir) throws IOException {
 		write(dir.resolve("hud.json"), EDITED);

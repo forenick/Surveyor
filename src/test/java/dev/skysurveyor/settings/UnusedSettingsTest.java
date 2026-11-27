@@ -21,8 +21,8 @@ import dev.skysurveyor.settings.Setting.Choice;
 import dev.skysurveyor.settings.SummarySettings.Show;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class UnusedSettingsTest {
 	private static final Settings IRONMAN = Settings.DEFAULTS.withMoney(MoneySettings.DEFAULTS.withIronman(true));
@@ -59,7 +59,7 @@ class UnusedSettingsTest {
 		assertEquals("Not used while the toast is off", setting("Toast time").unused(show(Show.OFF)));
 	}
 
-	// made up round prices, npc ones on a few items so ironman has something to value
+	// made up round prices, a few npc ones so ironman has something to value
 	private static final Map<String, ItemPrice> PRICES = Map.ofEntries(
 			Map.entry("FLAWLESS_JADE_GEM", new ItemPrice(2_400_000.0, 2_600_000.0, null)),
 			Map.entry("FINE_JADE_GEM", new ItemPrice(28_000.0, 30_000.0, null, 19_200.0)),
@@ -103,7 +103,7 @@ class UnusedSettingsTest {
 		return out;
 	}
 
-	// every value a dimmed setting can take gives the same coins, so dimming tells the truth
+	// dimmed setting = same coins for every value
 	@Test
 	void dimmedMoneySettingsChangeNothing() {
 		List<Object> base = values(IRONMAN);
@@ -113,13 +113,15 @@ class UnusedSettingsTest {
 		}
 	}
 
-	// and w/o ironman the same settings do change coins, so the fixture can tell
+	// w/o ironman they do change coins, so the fixture can tell
 	@Test
 	void fixtureSeesTheSettingsWithoutIronman() {
 		for (Setting setting : SettingsList.CATEGORIES.getFirst().settings()) {
 			if (setting.unused(IRONMAN) == null) continue;
 			List<Settings> variants = variants(setting, Settings.DEFAULTS);
-			assertNotEquals(values(variants.getFirst()), values(variants.getLast()), setting.name());
+			// some choice moves a number. insta-sell or npc only differs where an npc pays more
+			List<?> first = values(variants.getFirst());
+			assertTrue(variants.stream().anyMatch(v -> !values(v).equals(first)), setting.name());
 		}
 	}
 
@@ -128,6 +130,7 @@ class UnusedSettingsTest {
 			case Choice<?> choice -> choices(choice, base);
 			case Setting.Number number -> List.of(number.set().apply(base, number.min()), number.set().apply(base, 50.0));
 			case Setting.Toggle toggle -> List.of(toggle.set().apply(base, false), toggle.set().apply(base, true));
+			case Setting.Action action -> List.of(base);
 		};
 	}
 

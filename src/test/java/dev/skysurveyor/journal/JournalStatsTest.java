@@ -18,7 +18,7 @@ import dev.skysurveyor.detection.TextPatterns;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-// nicks real journal 2026-11-11 (recording 4, saved by 0.2.0)
+// nicks real journal 11-11 (rec 4, saved by 0.2.0)
 class JournalStatsTest {
 	private static List<JournalEntry> realJournal() throws IOException, URISyntaxException {
 		Path path = Path.of(JournalStatsTest.class.getResource("/journal-2026-11-11.jsonl").toURI());

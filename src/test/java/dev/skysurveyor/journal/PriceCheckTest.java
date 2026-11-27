@@ -73,7 +73,7 @@ class PriceCheckTest {
 		assertFalse(check.onEvent(new SacksChanged(30, List.of(), List.of(new ItemCount("Glacite", 64)), 0, 0), 20_000));
 	}
 
-	// recording 5: short shafts have no sacks msg, the 2 long jasper ones get one every ~30s
+	// rec 5: short shafts get no sacks msg, the 2 long jasper ones one every ~30s
 	@Test
 	void recordingFive() throws IOException {
 		Path recording = RecordingReplay.RECORDINGS.resolve("2026-11-15_16-10-29.jsonl");

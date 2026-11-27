@@ -12,7 +12,6 @@ import dev.skysurveyor.hud.HudRenderer.Bounds;
 
 // client thread
 public final class HudPlace {
-	// side of the other box this one sits on
 	public enum Side {
 		BELOW, ABOVE, RIGHT, LEFT;
 
@@ -39,7 +38,6 @@ public final class HudPlace {
 		return parent;
 	}
 
-	// box moves when mover does
 	public static boolean follows(Box box, Box mover, List<Box> boxes) {
 		// parent() is null on a loop, so this ends
 		for (Box up = parent(box, boxes); up != null; up = parent(up, boxes)) {
@@ -56,7 +54,7 @@ public final class HudPlace {
 		return null;
 	}
 
-	// every shown box + the ones they hang on. a hidden box takes no room: boxes stuck to it take its place
+	// hidden box takes no room, ones stuck to it take its place
 	public static Map<Box, Bounds> place(List<Box> boxes, Function<Box, Size> sizes, Predicate<Box> shown, int screenWidth,
 			int screenHeight) {
 		Map<Box, Bounds> placed = new IdentityHashMap<>();
@@ -98,7 +96,7 @@ public final class HudPlace {
 		return bounds;
 	}
 
-	// box at bounds, stuck to parent at parentBounds. across = which edges line up
+	// across = which edges line up
 	public static void stick(Box box, Box parent, Side side, Anchor across, Bounds parentBounds, Bounds bounds, int screenWidth,
 			int screenHeight) {
 		// along: own anchors kept as the spot w/o the other box
@@ -118,7 +116,6 @@ public final class HudPlace {
 		}
 	}
 
-	// own anchors again, at bounds
 	public static void free(Box box, Bounds bounds, int screenWidth, int screenHeight) {
 		clear(box);
 		box.anchorX = Anchor.forPosition(bounds.x(), bounds.width(), screenWidth);
@@ -127,7 +124,7 @@ public final class HudPlace {
 		box.offsetY = box.anchorY.offset(bounds.y(), bounds.height(), screenHeight);
 	}
 
-	// other box gone: across back to the screen spot saved when it stuck
+	// across back to the screen spot saved when it stuck
 	static void unlink(Box box) {
 		if (box.stickSide != null && box.freeAnchor != null && box.freeOffset != null) {
 			if (box.stickSide.vertical()) {

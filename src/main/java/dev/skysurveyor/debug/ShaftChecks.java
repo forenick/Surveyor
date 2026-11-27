@@ -9,7 +9,7 @@ import dev.skysurveyor.detection.Corpse;
 import dev.skysurveyor.detection.CorpseLoot;
 import dev.skysurveyor.detection.Shaft;
 
-// the mods own sanity checks on a shaft u left. a failed one = a "check" mark in the recording. one line per check
+// failed check = a "check" mark in the recording. one line per check
 public final class ShaftChecks {
 	private ShaftChecks() {
 	}
@@ -20,7 +20,7 @@ public final class ShaftChecks {
 		return failed;
 	}
 
-	// tab list LOOTED vs loot msgs. leaving right after a loot = tab 1 short, thats normal (journal/CorpseCounts)
+	// tab LOOTED vs loot msgs. leaving right after a loot = tab 1 short, normal (journal/CorpseCounts)
 	static void corpseLoots(List<Corpse> corpses, List<CorpseLoot> loots, List<String> failed) {
 		Map<String, int[]> counts = new LinkedHashMap<>();
 		for (Corpse corpse : corpses) {

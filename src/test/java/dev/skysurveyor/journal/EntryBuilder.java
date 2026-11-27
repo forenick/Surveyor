@@ -8,7 +8,7 @@ import dev.skysurveyor.detection.CorpseLoot;
 import dev.skysurveyor.mining.MiningStats;
 import dev.skysurveyor.money.ItemPrice;
 
-// tests only. defaults = a plain 1 min jade shaft, nothing found
+// defaults = plain 1 min jade shaft, nothing found
 public final class EntryBuilder {
 	private int version = JournalEntry.VERSION;
 	private long sessionId;
@@ -38,6 +38,9 @@ public final class EntryBuilder {
 	private List<Integer> keysSaved;
 	private MiningStats mining;
 	private FossilYield fossil;
+	private Boolean fiesta;
+	private Long flaskMillis;
+	private String spawnBlock;
 
 	public static EntryBuilder entry() {
 		return new EntryBuilder();
@@ -51,13 +54,25 @@ public final class EntryBuilder {
 				.pristineProcs(e.pristineProcs()).pristineItems(e.pristineItems()).sacksAdded(e.sacksAdded())
 				.sacksRemoved(e.sacksRemoved()).gems(e.gems()).crystals(e.crystals()).otherDrops(e.otherDrops())
 				.prices(e.prices()).campfireColds(e.campfireColds()).metal(e.metal()).keysSaved(e.keysSaved()).mining(e.mining())
-				.fossil(e.fossil());
+				.fossil(e.fossil()).fiesta(e.fiesta(), e.flaskMillis()).spawnBlock(e.spawnBlock());
 	}
 
 	public JournalEntry build() {
 		return new JournalEntry(version, sessionId, shaftId, enteredAt, durationMillis, exit, exitPowder, searchMillis, corpses,
 				extraCorpses, loots, mayhemBuffs, campfiresAt, coldAtExit, scrapFound, pristineProcs, pristineItems, sacksAdded,
-				sacksRemoved, gems, crystals, otherDrops, prices, campfireColds, metal, keysSaved, mining, fossil);
+				sacksRemoved, gems, crystals, otherDrops, prices, campfireColds, metal, keysSaved, mining, fossil, fiesta, flaskMillis,
+				spawnBlock);
+	}
+
+	public EntryBuilder fiesta(Boolean on, Long flask) {
+		fiesta = on;
+		flaskMillis = flask;
+		return this;
+	}
+
+	public EntryBuilder spawnBlock(String value) {
+		spawnBlock = value;
+		return this;
 	}
 
 	public EntryBuilder fossil(FossilYield value) {

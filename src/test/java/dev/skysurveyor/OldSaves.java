@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-// old-saves/<version>/ = real files that release wrote. add the new versions files every release
+// real files each release wrote, add one every release
 public final class OldSaves {
 	public static final Path ROOT = Path.of("src/test/resources/old-saves");
 
@@ -50,7 +50,7 @@ public final class OldSaves {
 		}
 	}
 
-	// missing or different = writes <name>.new next to it, check it by hand + rename
+	// writes <name>.new, check by hand + rename
 	public static void assertExpected(Path dir, String name, String actual) {
 		Path file = dir.resolve(name);
 		try {
@@ -67,7 +67,7 @@ public final class OldSaves {
 		}
 	}
 
-	// every key in old is still in now w/ the same value. new keys are fine
+	// old keys kept w/ the same value, new ones fine
 	public static void assertKept(JsonElement old, JsonElement now, String where, Map<String, Set<String>> convertedKeys) {
 		if (old.isJsonObject()) {
 			assertTrue(now != null && now.isJsonObject(), where + " is gone or not an object anymore");
@@ -88,7 +88,7 @@ public final class OldSaves {
 		}
 	}
 
-	// "0.2.x" < "0.5.3" < "0.16.0" < "0.22.0-alpha.8" < "0.22.0-alpha.10" < "0.22.0-beta.1" < "0.22.0"
+	// 0.2.x < 0.16.0 < 0.22.0-alpha.8 < alpha.10 < beta.1 < 0.22.0
 	static final Comparator<Path> BY_VERSION = Comparator.comparing(dir -> dir.getFileName().toString(), OldSaves::compareVersions);
 
 	static int compareVersions(String a, String b) {
@@ -96,7 +96,7 @@ public final class OldSaves {
 		String[] y = b.split("-", 2);
 		int c = compareCore(x[0].split("\\."), y[0].split("\\."));
 		if (c != 0) return c;
-		// semver: pre-release before its release
+		// semver: prerelease first
 		if (x.length != y.length) return x.length == 1 ? 1 : -1;
 		return x.length == 1 ? 0 : comparePre(x[1].split("\\."), y[1].split("\\."));
 	}
@@ -109,7 +109,7 @@ public final class OldSaves {
 		return 0;
 	}
 
-	// "alpha" < "beta", numbers by value, numbers before words
+	// alpha < beta, numbers by value + before words
 	private static int comparePre(String[] x, String[] y) {
 		for (int i = 0; i < Math.max(x.length, y.length); i++) {
 			if (i >= x.length) return -1;

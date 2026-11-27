@@ -27,7 +27,7 @@ import dev.skysurveyor.detection.ShaftEvent.Supercraft;
 import dev.skysurveyor.detection.ShaftEvent.WarpFailed;
 import dev.skysurveyor.detection.ShaftEvent.Warping;
 
-// hypixel sends corpse loot as 1 msg per line, hence the state
+// hypixel sends corpse loot 1 msg per line, hence the state
 public final class ChatParser {
 	private final TextPatterns patterns;
 	private LootBlock loot;
@@ -37,7 +37,7 @@ public final class ChatParser {
 		this.patterns = patterns;
 	}
 
-	// world change, a block cut off by a warp or disconnect never finishes
+	// warp or dc cuts a block off, it never finishes
 	void reset() {
 		loot = null;
 		crystalNext = false;
@@ -73,7 +73,7 @@ public final class ChatParser {
 				}
 				return null;
 			}
-			// other msgs can land in between, keep the block open
+			// other msgs can land in between
 		}
 
 		if (crystalNext) {

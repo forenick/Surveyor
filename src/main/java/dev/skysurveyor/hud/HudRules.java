@@ -20,6 +20,8 @@ import dev.skysurveyor.hud.HudValue.Range;
 
 // typed colour rules, one a line: {value} > number or {value} &c
 public final class HudRules {
+	// guide's close call, live hud keeps it current. 1M = its starting value
+	private static volatile double closeCall = 1_000_000;
 	private static final Pattern RULE = Pattern.compile("\\s*\\{([^{}]*)}\\s*(>=|<=|!=|==|≥|≤|≠|>|<|=)\\s*(.*?)\\s*((?:&.)*)\\s*",
 			Pattern.CASE_INSENSITIVE);
 	private static final String[] COLOR_WORDS = {"black", "dark blue", "dark green", "dark aqua", "dark red", "purple",
@@ -184,7 +186,7 @@ public final class HudRules {
 		return colors;
 	}
 
-	// lines under the rules field, § coded: mistakes, then what colours now
+	// § coded: mistakes, then what colours now
 	public static List<String> hints(List<String> lines, String text, Values values) {
 		List<Rule> rules = parse(lines);
 		List<Node> nodes = HudBoxText.nodes(text);
@@ -230,8 +232,23 @@ public final class HudRules {
 		return switch (value) {
 			case SPAWN_TIMER -> List.of(tag(value) + " > " + tag(HudValue.AVERAGE_SPAWN) + " &c");
 			case SHAFT_COLD -> List.of(tag(value) + " <= " + HudColors.COLD_RED + " &c", tag(value) + " <= " + HudColors.COLD_YELLOW + " &e");
+			// last minute, display choice
+			case FREEZE_IN -> List.of(tag(value) + " < 1:00 &c");
+			// red < 0, yellow up to the typed close call band
+			case SHAFT_GAIN, CAMPFIRE_GAIN -> {
+				String band = HudFormat.format(HudValue.Kind.COINS, 2, closeCall());
+				yield List.of(tag(value) + " >= " + band + " &a", tag(value) + " < 0 &c", tag(value) + " < " + band + " &e");
+			}
 			default -> List.of();
 		};
+	}
+
+	private static double closeCall() {
+		return closeCall;
+	}
+
+	public static void closeCall(double value) {
+		closeCall = value;
 	}
 
 	private static String tag(HudValue value) {

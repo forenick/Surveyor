@@ -11,7 +11,7 @@ import dev.skysurveyor.detection.ShaftEvent.Warping;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-// recording 5 at 924849 + 982992, both outside a shaft
+// rec 5 at 924849 + 982992, both outside a shaft
 class WarpFailedTest {
 	private final ChatParser parser = new ChatParser(TextPatterns.defaults());
 

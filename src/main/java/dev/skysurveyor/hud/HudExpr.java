@@ -31,7 +31,7 @@ public final class HudExpr {
 	public record Num(double value, Type type, Integer decimals, Double minutes) implements Node {
 	}
 
-	// target = tag name, f.e. "jasper", null for values w/o one
+	// target null = values w/o one
 	public record Val(HudValue value, Range range, String format, String target) implements Node {
 		public Val(HudValue value, Range range, String format) {
 			this(value, range, format, value.defaultTarget());
@@ -72,7 +72,7 @@ public final class HudExpr {
 	private static final Pattern NAME = Pattern.compile("([a-z_]+)((?::[a-z_]+)*)", Pattern.CASE_INSENSITIVE);
 	private static final Pattern OPTIONS = Pattern.compile("(?::[a-z_]+)+", Pattern.CASE_INSENSITIVE);
 	// display choice, not a game number. real tags are ~25 chars
-	// parse + eval recurse, these keep a hand edit or share code far from a stack overflow
+	// parse + eval recurse, caps stop a stack overflow
 	static final int MAX_CHARS = 500;
 	static final int MAX_TOKENS = 200;
 	static final int MAX_DEPTH = 30;
@@ -82,7 +82,7 @@ public final class HudExpr {
 			Map.entry("alltime", "all_time"), Map.entry("total", "all_time"), Map.entry("all", "all_time"),
 			Map.entry("ever", "all_time"), Map.entry("now", "shaft"), Map.entry("this", "shaft"),
 			Map.entry("current", "shaft"), Map.entry("last", "shaft"), Map.entry("sess", "session"));
-	// parsed once per text, the HUD redraws every 4 ticks. synced, hud.json repair parses on the IO thread
+	// synced, hud.json repair parses on io too
 	private static final Map<String, Parsed> CACHE = new LinkedHashMap<>(64, 0.75f, true) {
 		@Override
 		protected boolean removeEldestEntry(Map.Entry<String, Parsed> eldest) {
@@ -111,7 +111,7 @@ public final class HudExpr {
 		return parsed;
 	}
 
-	// bare {pb} = 1st pb in the list, which can change, so its part of the key
+	// bare {pb} = 1st in the list, can change, so in the key
 	static String cacheKey(String src) {
 		return HudValue.PERSONAL_BEST.defaultTarget() + "\n" + src;
 	}
@@ -366,7 +366,7 @@ public final class HudExpr {
 		return guess == null ? "" : ". Did you mean :" + guess + "?";
 	}
 
-	// 2 typos at most, or the start of it
+	// 2 typos max or the start, first guess
 	static String near(String word, List<String> words) {
 		String best = null;
 		int bestDistance = 3;
@@ -478,7 +478,7 @@ public final class HudExpr {
 			// same kind / same kind = a plain number
 			default -> plain(b.type()) ? base.with(v, a.type(), a.unit()) : base;
 		};
-		// counts in maths show whole or w/ decimals, whatever comes out
+		// counts in maths: whole or decimals, whatever comes out
 		return plain(r.type()) ? r.with(v, Type.NUMBER, r.unit()) : r;
 	}
 
@@ -492,7 +492,7 @@ public final class HudExpr {
 		};
 	}
 
-	// a number format on a time or coins = a plain number, times in secs
+	// number format on time/coins = plain number, secs
 	static Result format(Result r, String format) {
 		if (r.type() == Type.TEXT) throw new Error("text has no :" + format);
 		List<String> own = switch (r.type()) {
@@ -532,7 +532,7 @@ public final class HudExpr {
 		return format == null ? 0 : Math.max(0, HudFormat.names(kind).indexOf(format));
 	}
 
-	// same key = same number, formats + brackets left out. what a rule matches on
+	// what a rule matches on, formats + brackets left out
 	public static String key(Node node) {
 		return switch (node) {
 			case Num n -> Double.toString(n.value());
@@ -543,7 +543,7 @@ public final class HudExpr {
 		};
 	}
 
-	// as a player would type it, default range + formats left out
+	// default range + formats left out
 	public static String plain(Node node) {
 		return switch (node) {
 			case Num n -> n.type() == Type.TIME ? HudFormat.thresholdText(Kind.TIME, n.value()) : HudFormat.thresholdText(Kind.COINS, n.value());

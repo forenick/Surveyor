@@ -16,6 +16,8 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
+import dev.skysurveyor.calc.Fiesta;
+import dev.skysurveyor.calc.FiestaText;
 import dev.skysurveyor.detection.EventText;
 import dev.skysurveyor.detection.RecordingReplay;
 import dev.skysurveyor.detection.RecordingReplay.LiveCheck;
@@ -34,6 +36,7 @@ import dev.skysurveyor.journal.JournalEntry;
 import dev.skysurveyor.journal.MiningEntry;
 import dev.skysurveyor.journal.OutsideMining;
 import dev.skysurveyor.journal.SummaryText;
+import dev.skysurveyor.mining.MiningNow;
 import dev.skysurveyor.recorder.RecordingFiles;
 import dev.skysurveyor.settings.MoneySettings;
 import dev.skysurveyor.util.Format;
@@ -41,7 +44,7 @@ import dev.skysurveyor.util.Format;
 // dev tool, not in the jar. ./gradlew replay --args="<recording> [--raw] [--cold] [--marks]"
 public final class Replay {
 	private static final String INDENT = "          ";
-	// live + replay entry of the same shaft, enteredAt off by a ms or so
+	// live vs replay enteredAt off by a ms or so
 	private static final long SAME_SHAFT_MILLIS = 2000;
 
 	private record LiveEntry(String shaft, long entered, Long search) {
@@ -56,6 +59,9 @@ public final class Replay {
 	private final List<MiningEntry> mining = new ArrayList<>();
 	private final OutsideMining outside = new OutsideMining(TextPatterns.defaults(), tracker::inMiningArea, journal::activeSession,
 			mining::add);
+	// no election data in recs, drops + tab list only
+	private final Fiesta fiesta = new Fiesta(TextPatterns.defaults());
+	private final MiningNow meter = new MiningNow(tracker::inMiningArea);
 	private long now;
 	private long shaftEnteredAt = -1;
 	// runs of pristine procs, one line each
@@ -136,11 +142,22 @@ public final class Replay {
 			int entryCount = entries.size();
 			recordEvents.clear();
 			int miningCount = mining.size();
+			if (type.equals("block_break")) {
+				meter.onBreak(now, record.get("block").getAsString(), record.get("ticks").getAsInt(), record.get("clean").getAsBoolean(), 0);
+			}
+			if (type.equals("tablist")) {
+				List<String> lines = new ArrayList<>();
+				record.getAsJsonArray("lines").forEach(line -> lines.add(line.getAsString()));
+				fiesta.onTabList(now, lines);
+			}
 			RecordingReplay.feed(record, tracker, t -> {
 				journal.onBlockHit(t);
 				outside.onBlockHit(t);
+				meter.onHit(t);
 			});
 			for (ShaftEvent event : recordEvents) {
+				meter.onEvent(event, now);
+				if (event instanceof ShaftEvent.SacksChanged sacks) fiesta.onSacks(now, sacks.added());
 				journal.onEvent(event, now);
 				outside.onEvent(event, now);
 				print(event);
@@ -148,6 +165,7 @@ public final class Replay {
 			if (type.equals("world_change")) {
 				journal.onWorldChange(now);
 				outside.onWorldChange(now);
+				meter.onWorldChange();
 			}
 			for (MiningEntry entry : mining.subList(miningCount, mining.size())) printMining(entry);
 			if (!wasSearching && journal.searchRunning()) line("spawn timer started");
@@ -199,6 +217,8 @@ public final class Replay {
 			// no prices in a replay
 			if (!clean.isEmpty() && !clean.startsWith("Coins")) System.out.println(INDENT + "| " + clean);
 		}
+		String spawn = entry.searchMillis() == null ? null : meter.spawnBlock();
+		System.out.println(INDENT + "| Mining Fiesta " + FiestaText.debug(fiesta.reading(now), null, now) + (spawn == null ? "" : ", spawned on " + spawn));
 	}
 
 	private void printMining(MiningEntry entry) {
@@ -237,7 +257,7 @@ public final class Replay {
 		}
 	}
 
-	// no slot or use key in recordings: every stack drop counts as used
+	// no slot or use key in recs, every drop = used
 	private void feedEffects(JsonObject record, String type) {
 		boolean running = onSkyblock;
 		effects.tick(now, running);

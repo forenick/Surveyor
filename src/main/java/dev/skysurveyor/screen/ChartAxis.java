@@ -3,7 +3,6 @@ package dev.skysurveyor.screen;
 import java.util.ArrayList;
 import java.util.List;
 
-// stats bar charts: step, top + bottom, bar widths. plain java
 final class ChartAxis {
 	// display choice
 	static final int MAX_STEPS = 4;
@@ -11,17 +10,16 @@ final class ChartAxis {
 	static final double[] SPAWN_STEPS = {5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600};
 	// 1, 2, 5 x 10^n coins
 	static final double[] COIN_STEPS = coinSteps();
-	// display choice: bars up to 24 wide, gap grows w/ them
+	// display choice
 	static final int BAR_MAX = 24;
-	// left of the 1st bar
 	static final int LEFT = 2;
 
 	private ChartAxis() {
 	}
 
-	// bars under 0 hang down from the 0 line
+	// under 0 hangs down from 0
 	record Scale(double step, double top, double bottom) {
-		// one per step, bottom up
+		// bottom up
 		List<Double> ticks() {
 			List<Double> ticks = new ArrayList<>();
 			for (double value = bottom; value <= top + step / 2; value += step) ticks.add(value);
@@ -32,13 +30,13 @@ final class ChartAxis {
 			return Math.abs(tick) < step / 2;
 		}
 
-		// base = pixel row of the bottom, height = rows up to the top
+		// base = bottom pixel row
 		int y(double value, int base, int height) {
 			return base - (int) (height * (value - bottom) / (top - bottom));
 		}
 	}
 
-	// highest + lowest of the values, 0 always shows
+	// 0 always shows
 	static Scale scale(double highest, double lowest, double[] steps) {
 		highest = Math.max(0, highest);
 		lowest = Math.min(0, lowest);
@@ -55,7 +53,7 @@ final class ChartAxis {
 		return new Scale(step, top, bottom);
 	}
 
-	// max = how many fit, the newest ones show
+	// newest ones show
 	record Bars(int width, int gap, int max) {
 		int x(int index) {
 			return LEFT + index * (width + gap);

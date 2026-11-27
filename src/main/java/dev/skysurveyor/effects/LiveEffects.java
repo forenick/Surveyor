@@ -34,14 +34,14 @@ import dev.skysurveyor.util.Guard;
 import dev.skysurveyor.util.SafeWrite;
 import dev.skysurveyor.util.TextUtil;
 
-// reads the held item, chat, tab footer + screens the player opened. client thread
+// client thread
 public final class LiveEffects {
 	private static final Logger LOGGER = LoggerFactory.getLogger("Surveyor");
 	private static final String FILE = "effects.json";
 	private static final Gson GSON = new Gson();
 	// count drop comes a server trip after the click. display choice
 	private static final long USE_WINDOW_MILLIS = 2_000;
-	// a crash loses at most this much countdown
+	// crash loses at most this much
 	private static final long SAVE_EVERY_MILLIS = 30_000;
 
 	private final EffectText text = new EffectText(TextPatterns.defaults());
@@ -95,6 +95,11 @@ public final class LiveEffects {
 
 	public Map<Consumable, Long> left() {
 		return timers.all();
+	}
+
+	// null = not running
+	public Long left(Consumable consumable) {
+		return timers.left(consumable);
 	}
 
 	// right-click, PASS always
@@ -151,7 +156,7 @@ public final class LiveEffects {
 		return lines;
 	}
 
-	// container screens only, not ur own inventory
+	// container screens only, not ur inventory
 	private void screen(Minecraft client) {
 		if (!(client.gui.screen() instanceof AbstractContainerScreen<?> shown) || shown instanceof InventoryScreen
 				|| shown instanceof CreativeModeInventoryScreen) {

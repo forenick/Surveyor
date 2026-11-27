@@ -24,7 +24,7 @@ class ChatWatchTest {
 		assertNull(watch.unmatched("   "));
 	}
 
-	// made up lines, screen + lore patterns would call them known
+	// made up, screen + lore patterns would match them
 	@Test
 	void screenAndLorePatternsDontCount() {
 		assertEquals("Unlocked Cold Resistance II", watch.unmatched("§aUnlocked §bCold Resistance II"));

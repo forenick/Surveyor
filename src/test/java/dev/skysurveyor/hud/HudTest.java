@@ -99,13 +99,29 @@ class HudTest {
 				HudBoxText.lines(boxes.get(0), example, false));
 		assertEquals(List.of("§7Spawn: §f§l1:42", "§7Avg: §f§l1:25", "§7Efficiency: §f§l69%"), HudBoxText.lines(boxes.get(1), example, false),
 				"no colour rules on the defaults");
-		assertEquals(List.of("§a§l§a§lJade§a§l Shaft", "§7Time inside: §f2:14", "§7Corpses: §f2/4 §9Lapis§f, §6Umber§f",
-				"§7Campfires: §61", "§7Coins: §62.4M", "§7Efficiency: §f69%"), HudBoxText.lines(boxes.get(2), example, false), "title in the shafts colour");
+		assertEquals(List.of("§a§l§a§lJade 1§a§l", "§7Time inside: §f2:14", "§7Corpses: §f2/4 §9Lapis§f, §6Umber§f",
+				"§7Campfires: §61", "§7Freeze in: §b5:08", "§7Shaft gain: §f+1.5M", "§7Coins: §62.4M", "§7Efficiency: §f69%"), HudBoxText.lines(boxes.get(2), example, false), "title in the shafts colour");
 		assertEquals(List.of("§e§lSession profit", "§7Total: §614.8M", "§7Per hour: §646.8M", "§7Per shaft: §62.5M",
 				"§7Time: §f19:02", "§9Fine Jasper Gemstone §8x931", "§fGlossy Gemstone §8x13", "§9Fine Jade Gemstone §8x378",
 				"§fRefined Mineral §8x35", "§9Fine Amber Gemstone §8x83", "§77 more", "§fTungsten Key §8x3"), HudBoxText.lines(boxes.get(3), example, false), "/h once, drops last (nick, 2026-11-16)");
 		HudData noShaft = HudFixtures.live(SessionTotals.NONE, Totals.NONE, null, null, null, 0, ShaftNames.defaults());
-		assertEquals("§e§lShaft", HudBoxText.lines(boxes.get(2), noShaft, false).getFirst(), "yellow w/o a shaft");
+		assertEquals("§7Time inside: §f-", HudBoxText.lines(boxes.get(2), noShaft, false).getFirst(), "no title w/o a shaft");
+		Box old = boxes.get(2);
+		old.title = "{shaft_type} Shaft";
+		assertEquals("§a§l§a§lJade§a§l Shaft", HudBoxText.lines(old, example, false).getFirst(), "old saved title still works");
+		assertEquals("§e§lShaft", HudBoxText.lines(old, noShaft, false).getFirst(), "yellow w/o a shaft");
+	}
+
+	@Test
+	void freezeInLine() {
+		Box box = HudLayout.defaults().boxes.get(2);
+		Line freeze = box.lines.get(3);
+		assertEquals(HudValue.FREEZE_IN, freeze.hudValue());
+		HudData none = HudFixtures.live(SessionTotals.NONE, Totals.NONE, null, null, null, 0, ShaftNames.defaults());
+		assertEquals("§7Freeze in: §b-", HudBoxText.line(box, freeze, none, false), "- outside a shaft + before the cold says enough");
+		assertEquals("§7Freeze in: §b5:08", HudBoxText.line(box, freeze, none.freezeIn(308_000L), false));
+		assertEquals("§7Freeze in: §b0:49", HudBoxText.line(box, freeze, none.freezeIn(49_000L), false), "easy lines have no rules");
+		assertEquals(List.of("{freeze_in} < 1:00 &c"), HudRules.preset(HudValue.FREEZE_IN), "offered on the Advanced page");
 	}
 
 	@Test
@@ -228,7 +244,7 @@ class HudTest {
 	@Test
 	void movesLinesToAGap() {
 		Box box = HudLayout.defaults().boxes.get(2);
-		// 4 lines, as when this was written
+		// 4 lines, as when written
 		box.lines.subList(4, box.lines.size()).clear();
 		List<String> start = box.lines.stream().map(l -> l.value).toList();
 		box.moveLine(0, 2);
@@ -264,7 +280,7 @@ class HudTest {
 		assertEquals(HudHistory.LIMIT, steps);
 	}
 
-	// recording 6 AQUA_2: loot msg 9:53.3, widget shows up 9:53.5 w/ lapis not looted, never flips before leaving
+	// rec 6 AQUA_2: loot 9:53.3, widget 9:53.5 still not looted, never flips
 	@Test
 	void liveShaftCountsALootBeforeTheTabListFlips() throws Exception {
 		Path recording = RecordingReplay.RECORDINGS.resolve("2026-11-17_19-16-17.jsonl");
@@ -301,7 +317,7 @@ class HudTest {
 				new Corpse("Umber", false), new Corpse("Lapis", true), new Corpse("Lapis", true), new Corpse("Umber", false)), List.of())));
 	}
 
-	// nicks real session 2026-11-11
+	// nicks real session 11-11
 	@Test
 	void sessionValuesFromTheRealJournal() throws Exception {
 		List<JournalEntry> entries = realJournal();
@@ -427,7 +443,7 @@ class HudTest {
 				Totals.of(List.of(entries.getLast()), patterns), null, null, now, ShaftNames.defaults());
 	}
 
-	// made-up 20 min break after the last shaft, the live rates stop at 2 min of it
+	// made up 20 min break after the last shaft, rates stop at 2 min
 	@Test
 	void liveRatesLeaveBreaksOut() throws Exception {
 		List<JournalEntry> entries = realJournal();
@@ -684,7 +700,7 @@ class HudTest {
 		assertEquals(read.toJson(), HudLayout.fromJson(read.toJson()).toJson());
 	}
 
-	// reviewers probe threw StackOverflowError on every refresh
+	// reviewer probe threw StackOverflowError every refresh
 	@Test
 	void hostileTagsShowAsTypedAndTheBoxStillDraws() {
 		String chain = "{coins" + "+1".repeat(2000) + "}";
@@ -1045,7 +1061,7 @@ class HudTest {
 		assertEquals(12_000_000.0 / entries.size(), data.get(HudValue.COINS_PER_SHAFT, Range.SESSION));
 		assertEquals(2_000_000.0, data.get(HudValue.COINS_PER_SHAFT, Range.ALL_TIME));
 
-		// in a shaft: its live coins count in session, per hour + all-time, not per shaft
+		// in a shaft: live coins in session, /h + all-time, not per shaft
 		HudData inside = live(entries, end).money(new HudData.Money(2_000_000.0, 12_000_000.0, 40_000_000.0, 20, 3_000_000.0,
 				9_000_000.0, start, 0, 2_000_000.0));
 		assertEquals(17_000_000.0, inside.get(HudValue.COINS, Range.SESSION));
@@ -1151,7 +1167,7 @@ class HudTest {
 		assertEquals(json, HudLayout.fromJson(json).toJson());
 	}
 
-	// recording 3
+	// rec 3
 	@Test
 	void shaftTotalsMatchTheSavedEntry() throws Exception {
 		Path recording = RecordingReplay.RECORDINGS.resolve("2026-11-11_14-13-53.jsonl");
@@ -1295,6 +1311,10 @@ class HudTest {
 		assertNull(names.hudColor("NOPE"));
 	}
 
+	private static List<HudValue> followsShaftValues() {
+		return java.util.Arrays.stream(HudValue.values()).filter(v -> v.followsShaft(null)).toList();
+	}
+
 	@Test
 	void shaftValuesShowTheLastShaftOutside() throws Exception {
 		List<JournalEntry> entries = realJournal();
@@ -1304,6 +1324,9 @@ class HudTest {
 		assertEquals((long) last.campfiresAt().size(), data.get(HudValue.SHAFT_CAMPFIRES, null));
 		assertEquals(last.searchMillis(), data.get(HudValue.AVERAGE_SPAWN, Range.SHAFT));
 		assertNotNull(data.get(HudValue.AVERAGE_SPAWN, Range.ALL_TIME));
+		String name = ShaftNames.defaults().shaftName(last.shaftType(), last.variant());
+		assertTrue(String.valueOf(data.get(HudValue.SHAFT_NAME, null)).contains(name), "name w/ layout: " + name);
+		assertTrue(followsShaftValues().contains(HudValue.SHAFT_NAME));
 
 		Box box = new Box();
 		Line time = new Line(HudValue.SHAFT_TIME);
@@ -1416,7 +1439,7 @@ class HudTest {
 		assertEquals(moved.toJson(), HudLayout.fromJson(moved.toJson()).toJson());
 	}
 
-	// LiveHud only works pbs out while a drawn line reads one
+	// LiveHud only sums pbs while a drawn line reads one
 	@Test
 	void pbReadsAreNoted() {
 		Box plain = new Box();

@@ -7,7 +7,7 @@ import java.util.regex.Matcher;
 
 import dev.skysurveyor.detection.TextPatterns;
 
-// game text in, legacy (§ codes) everywhere
+// legacy (§ codes) everywhere
 public final class EffectText {
 	private final TextPatterns patterns;
 
@@ -15,7 +15,7 @@ public final class EffectText {
 		this.patterns = patterns;
 	}
 
-	// tab footer. count null = no count line, effects = the ones shown w/ a time
+	// count null = no count line, shown = ones w/ a time
 	public record Footer(Integer count, Map<Consumable, EffectTime> shown) {
 	}
 
@@ -26,7 +26,7 @@ public final class EffectText {
 		return legacyName == null ? null : Consumable.ofItem(patterns, TextPatterns.clean(legacyName).strip());
 	}
 
-	// from the items lore, null = none found
+	// from lore, null = none
 	public EffectTime duration(List<String> lore) {
 		if (lore == null) return null;
 		for (String line : lore) {
@@ -59,7 +59,7 @@ public final class EffectText {
 				inside = patterns.matches("effect.footer_start", line);
 				continue;
 			}
-			// blank line ends the effects part, cookie buff comes after
+			// blank line ends it, cookie buff comes after
 			if (line.isEmpty()) break;
 			Matcher c = patterns.match("effect.footer_count", line);
 			if (c != null) {

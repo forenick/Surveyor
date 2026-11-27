@@ -18,16 +18,13 @@ import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipPositione
 import net.minecraft.network.chat.Component;
 import org.joml.Vector2i;
 
-// bits the journal, settings + hud editor share
 public final class ScreenParts {
-	// journal + settings, the editors is opaque
 	public static final Surface PANEL = Surface.flat(0xE8141414).and(Surface.outline(0x30FFFFFF));
-	// tooltip frame sticks out ~3px
+	// tooltip frame sticks out ~3px i think
 	public static final int TIP_MARGIN = 5;
-	// owo's tooltips dont wrap or stay on screen. right of the mouse if it fits, else left
+	// owos dont stay on screen
 	public static final ClientTooltipPositioner FIT = (screenW, screenH, x, y, w, h) -> new Vector2i(
 			clamp(x + 12 + w <= screenW - TIP_MARGIN ? x + 12 : x - 12 - w, w, screenW), clamp(y - 12, h, screenH));
-	// 2x3 dots, drag handle of hud lines + pb rows
 	public static final Surface GRIP = (graphics, c) -> {
 		int x = c.x() + (c.width() - 3) / 2;
 		int y = c.y() + (c.height() - 5) / 2;
@@ -53,7 +50,7 @@ public final class ScreenParts {
 		return label;
 	}
 
-	// cut to width w/ "…", never mid § code. binary search, caxton shapes every width call
+	// never mid § code. binary search, caxton shapes every width call
 	public static String clip(Font font, String text, int max) {
 		if (font.width(text) <= max) return text;
 		int low = 0;
@@ -74,7 +71,7 @@ public final class ScreenParts {
 		return text.replaceAll("§.", "");
 	}
 
-	// own tooltips: smallest hovered part wins, null = none
+	// smallest hovered wins
 	public static <T> T pick(Map<UIComponent, T> tips, int mouseX, int mouseY, Predicate<UIComponent> shown) {
 		T picked = null;
 		long smallest = Long.MAX_VALUE;
@@ -89,7 +86,7 @@ public final class ScreenParts {
 		return picked;
 	}
 
-	// caxton: text set at 0 width can scroll 1st letter out, rehome next frame
+	// caxton scrolls 1st letter out at 0 width
 	public static void rehome(TextBoxComponent field) {
 		field.moveCursorToEnd(false);
 		field.moveCursorToStart(false);
@@ -102,14 +99,13 @@ public final class ScreenParts {
 		return tips;
 	}
 
-	// row + its own children, so the whole row shows it
+	// + children, whole row shows it
 	static FlowLayout withTips(FlowLayout row, List<ClientTooltipComponent> tooltip) {
 		row.tooltip(tooltip);
 		row.children().forEach(child -> child.tooltip(tooltip));
 		return row;
 	}
 
-	// every part under it
 	static void applyTooltip(UIComponent component, List<Component> tooltip) {
 		component.tooltip(tooltip);
 		if (component instanceof ParentUIComponent parent) {

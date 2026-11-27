@@ -20,7 +20,7 @@ import dev.skysurveyor.hud.HudValue.Range;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-// pre 0.23 rules turned into typed ones must colour exactly the same. oracle = the old HudColors.color, copied here
+// pre 0.23 rules as typed ones must colour the same, oracle = old HudColors.color
 class OldRulesTest {
 	@Test
 	void everyOldRuleColoursTheSame() {
@@ -87,7 +87,7 @@ class OldRulesTest {
 		return rule;
 	}
 
-	// around every limit, in what HudData holds (ms for times)
+	// around every limit, ms for times
 	private static List<Number> sweep(Line line) {
 		Kind kind = line.hudValue().kind();
 		TreeSet<Double> limits = new TreeSet<>(List.of(0.0, 1.0, -1.0, 85.0, 1_000.0, 2_000_000.0, 1e9));

@@ -12,8 +12,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import dev.skysurveyor.Surveyor;
 import dev.skysurveyor.util.Guard;
 
-// read only, times vanillas own block break/use packet for ping. we send nothing
-// client thread. sequence = the only int local, the one the packet got
+// read only, times vanillas break/use packet for ping. we send nothing
+// client thread. sequence = only int local, the packets one
 @Mixin(MultiPlayerGameMode.class)
 public abstract class MultiPlayerGameModeMixin {
 	// require 0, no ping beats a crash

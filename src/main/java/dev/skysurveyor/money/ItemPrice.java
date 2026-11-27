@@ -9,7 +9,7 @@ import com.google.gson.stream.JsonToken;
 import com.google.gson.stream.JsonWriter;
 
 // saved in journal.jsonl, never reorder. null = none
-// buyOrder = top buy order (insta-sell), sellOffer = lowest sell offer (insta-buy), npcSell from hypixels item list
+// buyOrder = insta-sell, sellOffer = insta-buy, npcSell from hypixels item list
 @JsonAdapter(ItemPrice.Json.class)
 public record ItemPrice(Double buyOrder, Double sellOffer, Double lowestBin, Double npcSell) {
 	public ItemPrice(Double buyOrder, Double sellOffer, Double lowestBin) {
@@ -20,7 +20,7 @@ public record ItemPrice(Double buyOrder, Double sellOffer, Double lowestBin, Dou
 		return buyOrder != null || sellOffer != null;
 	}
 
-	// [buyOrder, sellOffer, lowestBin, npcSell] w/o trailing nulls, 1 per item per shaft so keep it small
+	// [buyOrder, sellOffer, lowestBin, npcSell] w/o trailing nulls, keep it small
 	// 0.14.0 + 0.14.1 wrote {"buyOrder": ..} objects, still read
 	static final class Json extends TypeAdapter<ItemPrice> {
 		@Override
@@ -79,7 +79,7 @@ public record ItemPrice(Double buyOrder, Double sellOffer, Double lowestBin, Dou
 			return new ItemPrice(values[0], values[1], values[2], values[3]);
 		}
 
-		// text that isnt a number = none, not a lost line
+		// text = none, not a lost line
 		private static Double number(JsonReader in) throws IOException {
 			JsonToken token = in.peek();
 			if (token == JsonToken.NUMBER) return in.nextDouble();

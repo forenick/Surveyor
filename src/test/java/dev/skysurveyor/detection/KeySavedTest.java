@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-// resourceful text from research/02 (other mods), never recorded, so no colour codes
+// research/02 (other mods), never recorded, no colour codes
 class KeySavedTest {
 	private static final String LUCKY = "LUCKY! Your Resourceful perk saved your key from being consumed!";
 

@@ -3,7 +3,7 @@ package dev.skysurveyor.detection;
 import dev.skysurveyor.detection.ShaftEvent.ShaftEntered;
 import dev.skysurveyor.detection.ShaftEvent.ShaftLeft;
 
-// same text live + in replay, so no times (they differ by a ms)
+// no times, live + replay differ by a ms
 public final class EventText {
 	private EventText() {
 	}

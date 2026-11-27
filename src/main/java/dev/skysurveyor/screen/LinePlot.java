@@ -5,7 +5,7 @@ import io.wispforest.owo.ui.core.Color;
 import io.wispforest.owo.ui.core.OwoUIGraphics;
 import io.wispforest.owo.ui.core.Sizing;
 
-// points relative to this, no tooltip so hit boxes on top get the hover
+// no tooltip, hit boxes on top get the hover
 final class LinePlot extends BaseUIComponent {
 	private static final int DOT = 3;
 	private final int[] xs;

@@ -14,7 +14,7 @@ rarity VERY_SPECIAL = c
 rarity UNOBTAINABLE = 4
 rarity SUPREME      = 4
 
-# gems until the item list loads (hypixel item list, 2026-11-17)
+# gems till the item list loads (hypixel item list, 11-17)
 quality Rough    = COMMON
 quality Flawed   = UNCOMMON
 quality Fine     = RARE
@@ -24,7 +24,7 @@ quality Perfect  = LEGENDARY
 # not items, colour from chat (corpse loot, BYE!)
 color Glacite Powder = b
 
-# gem icon glyphs, private use chars only hypixels pack draws. from recordings 2026-11-11 to 11-15
+# gem icon glyphs, private use chars only hypixels pack draws. recs 11-11 to 11-15
 # ruby + opal not seen yet, unknown = no icon
 icon Amber      = e015
 icon Amethyst   = e008

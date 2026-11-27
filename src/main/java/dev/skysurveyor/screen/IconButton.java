@@ -14,7 +14,7 @@ import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
-// owo only centres text, so icon + text centred here. icon has its shadow baked in
+// owo only centres text. icon shadow baked in
 final class IconButton extends PackButton {
 	private static final int GAP = 3;
 	private Identifier icon;
@@ -33,7 +33,6 @@ final class IconButton extends PackButton {
 		icon = value;
 	}
 
-	// icon only = no gap
 	private int gap() {
 		return getMessage().getString().isEmpty() ? 0 : GAP;
 	}
@@ -42,13 +41,13 @@ final class IconButton extends PackButton {
 	protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
 		renderer.draw((OwoUIGraphics) graphics, this, delta);
 		Font font = Minecraft.getInstance().font;
-		// same colours as owo's own label
+		// owo label colours
 		int color = active ? 0xFFFFFFFF : 0xFFA0A0A0;
 		int x = getX() + (width - iconWidth - gap() - font.width(getMessage())) / 2;
 		int y = getY() + (height - 8) / 2;
 		graphics.blit(RenderPipelines.GUI_TEXTURED, icon, x, y, 0, 0, iconWidth, iconHeight, iconWidth, iconHeight);
 		graphics.text(font, getMessage(), x + iconWidth + GAP, y, color, textShadow);
-		// same as owos own button, tooltip() lives there. cast via Object, mixin accessor
+		// cast via Object, mixin accessor
 		var tooltip = ((AbstractWidgetAccessor) (Object) this).owo$getTooltip();
 		if (isHovered && tooltip.get() != null) {
 			graphics.setTooltipForNextFrame(font, tooltip.get().toCharSequence(Minecraft.getInstance()), DefaultTooltipPositioner.INSTANCE,

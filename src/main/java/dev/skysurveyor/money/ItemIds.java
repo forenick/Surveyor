@@ -12,7 +12,7 @@ import com.google.gson.JsonObject;
 import dev.skysurveyor.data.SkyblockItems;
 import dev.skysurveyor.detection.TextPatterns;
 
-// chat item name -> skyblock id. skyblock_items.txt first, then hypixels item list
+// skyblock_items.txt first, then hypixels item list
 public final class ItemIds {
 	private final Function<String, String> bundled;
 	private final Map<String, String> fetched;
@@ -35,7 +35,7 @@ public final class ItemIds {
 		return id != null ? id : fetched.get(name);
 	}
 
-	// v2/resources/skyblock/items. names w/ 2+ ids dropped, never price the wrong one
+	// v2/resources/skyblock/items. 2+ ids = dropped, never price the wrong one
 	public static Map<String, String> parseHypixelItems(JsonObject json) {
 		Map<String, String> ids = new HashMap<>();
 		Set<String> ambiguous = new HashSet<>();
@@ -49,7 +49,7 @@ public final class ItemIds {
 		return ids;
 	}
 
-	// id -> rarity, items w/o one left out (= common)
+	// no rarity = common, left out
 	public static Map<String, String> parseTiers(JsonObject json) {
 		Map<String, String> tiers = new HashMap<>();
 		for (JsonElement element : json.getAsJsonArray("items")) {

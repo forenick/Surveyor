@@ -5,9 +5,9 @@ import java.util.function.Function;
 
 import dev.skysurveyor.data.Ladder;
 
-// per ladder tier: items in - items out. material = last one seen, null = none of the shafts own
+// in - out per tier. material = last seen, null = none of the shafts own
 record MinedCount(String material, long[] counts) {
-	// materialOf: item -> its material if its the shafts own, else null
+	// materialOf null = not the shafts own
 	static MinedCount of(Ladder ladder, Function<String, String> materialOf, Map<String, Long> in, Map<String, Long> out) {
 		long[] counts = new long[ladder.tiers()];
 		String material = add(ladder, materialOf, in, 1, counts, null);

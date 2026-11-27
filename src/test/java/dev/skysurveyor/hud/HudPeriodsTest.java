@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class HudPeriodsTest {
 	private static final HudData OUTSIDE = HudFixtures.live(SessionTotals.NONE, Totals.NONE, null, null, null, 0, ShaftNames.defaults());
 
-	// docs/hud-periods-plan.md 1a: shaft, session, per hour, all-time. null = value has no such range
+	// hud-periods-plan.md 1a: shaft, session, per hour, all-time. null = no such range
 	private static final Map<HudValue, List<String>> TABLE = Map.ofEntries(
 			Map.entry(HudValue.SESSION_SHAFTS, Arrays.asList(null, "Shafts: ", null, "Shafts all-time: ")),
 			Map.entry(HudValue.AVERAGE_SPAWN, Arrays.asList("Spawn time this shaft: ", "Avg spawn: ", null, "Avg spawn all-time: ")),
@@ -44,9 +44,9 @@ class HudPeriodsTest {
 	private static final Map<HudValue, String> NO_RANGE = Map.ofEntries(Map.entry(HudValue.SHAFTS_PER_HOUR, "Shafts/h: "),
 			Map.entry(HudValue.SHAFTS_TODAY, "Shafts today: "), Map.entry(HudValue.SPAWN_TIMER, "Spawn: "), Map.entry(HudValue.PITY, "Pity: "),
 			Map.entry(HudValue.SINCE_LAST_SHAFT, "Since last shaft: "), Map.entry(HudValue.SESSION_TIME, "Session: "),
-			Map.entry(HudValue.SHAFT_TYPE, "Shaft: "), Map.entry(HudValue.SHAFT_TIME, "Time inside: "),
+			Map.entry(HudValue.SHAFT_TYPE, "Shaft: "), Map.entry(HudValue.SHAFT_NAME, "Shaft: "), Map.entry(HudValue.SHAFT_TIME, "Time inside: "),
 			Map.entry(HudValue.SHAFT_CORPSES, "Corpses: "), Map.entry(HudValue.SHAFT_COLD, "Cold: "),
-			Map.entry(HudValue.SHAFT_CAMPFIRES, "Campfires: "), Map.entry(HudValue.FPS, "FPS: "), Map.entry(HudValue.PING, "Ping: "), Map.entry(HudValue.EFFICIENCY, "Efficiency: "),
+			Map.entry(HudValue.SHAFT_CAMPFIRES, "Campfires: "), Map.entry(HudValue.FREEZE_IN, "Freeze in: "), Map.entry(HudValue.SHAFT_GAIN, "Shaft gain: "), Map.entry(HudValue.CAMPFIRE_GAIN, "Campfire: "), Map.entry(HudValue.KEY_CORPSES, "Keys: "), Map.entry(HudValue.FPS, "FPS: "), Map.entry(HudValue.PING, "Ping: "), Map.entry(HudValue.EFFICIENCY, "Efficiency: "),
 			Map.entry(HudValue.TPS, "TPS: "), Map.entry(HudValue.CLOCK, "Clock: "), Map.entry(HudValue.MOD_VERSION, "Surveyor "),
 			Map.entry(HudValue.MINECRAFT_VERSION, "Minecraft "), Map.entry(HudValue.PRISTINE_POTATO, "Pristine Potato: "),
 			Map.entry(HudValue.FILET_O_FORTUNE, "Filet O' Fortune: "), Map.entry(HudValue.COLD_RESISTANCE, "Cold Resistance: "),
@@ -74,7 +74,7 @@ class HudPeriodsTest {
 		assertEquals("Lapis corpses: ", looted.defaultPrefix(Range.SESSION));
 		assertEquals("Jasper drystreak: ", HudValue.DRYSTREAK.defaultPrefix(null));
 		assertEquals("Jade drystreak: ", HudValue.DRYSTREAK.defaultPrefix(null, "jade"));
-		assertEquals("PB Jasper dry: ", HudValue.PERSONAL_BEST.defaultPrefix(null, "drystreak_jasp"), "pb names unchanged");
+		assertEquals("PB Jasper drystreak: ", HudValue.PERSONAL_BEST.defaultPrefix(null, "drystreak_jasp"), "the pbs own name");
 		assertEquals(TABLE.size() + NO_RANGE.size() + 3, HudValue.values().length, "every value checked");
 		assertEquals("Shaft powder", HudValue.SESSION_POWDER.displayName());
 		assertEquals("Coins per shaft", HudValue.COINS_PER_SHAFT.displayName());
@@ -119,6 +119,10 @@ class HudPeriodsTest {
 			dry.setTarget("ruby");
 			assertEquals("Ruby drystreak: ", dry.prefix, label);
 		}
+		// pb names said "dry" till 0.27.0-alpha.39, hud.json keeps the label as text
+		assertTrue(HudValue.PERSONAL_BEST.isDefaultPrefix("PB Jasper dry: "));
+		assertTrue(HudValue.PERSONAL_BEST.isDefaultPrefix("PB Jasper drystreak: "));
+		assertFalse(HudValue.PERSONAL_BEST.isDefaultPrefix("PB Ruby dry: "), "no such pb");
 		Line typed = new Line(HudValue.COINS, "Money: ", true, 0);
 		typed.setRange(Range.PER_HOUR);
 		assertEquals("Money: ", typed.prefix, "typed stays");
@@ -164,7 +168,7 @@ class HudPeriodsTest {
 		return text.replaceAll("§.", "");
 	}
 
-	// turning Advanced on never changes the look, /h rule included
+	// Advanced on never changes the look, /h rule too
 	@Test
 	void advancedLooksTheSameForEveryDefault() {
 		for (HudValue value : HudValue.values()) {
@@ -249,7 +253,7 @@ class HudPeriodsTest {
 		assertEquals(HudValue.SHAFTS_TODAY.periods(), HudValue.SESSION_SHAFTS.periods(), "same family both ways");
 		assertEquals("Today", HudValue.SHAFTS_TODAY.period(null).name());
 		assertEquals("Per hour", HudValue.SHAFTS_PER_HOUR.period(null).name());
-		assertEquals(33, HudValue.listed().stream().filter(HudValue::inAddLine).count(), "33 rows in Add line");
+		assertEquals(38, HudValue.listed().stream().filter(HudValue::inAddLine).count(), "38 rows in Add line");
 		assertEquals(HudValue.values().length, HudValue.listed().size(), "every value listed once");
 	}
 

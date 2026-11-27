@@ -20,10 +20,9 @@ import dev.skysurveyor.money.MoneyStats.TypeCoins;
 import dev.skysurveyor.money.ShaftValue.Part;
 import dev.skysurveyor.settings.MoneySettings;
 import dev.skysurveyor.settings.MoneySettings.GemTier;
-import dev.skysurveyor.settings.MoneySettings.SellPrice;
 import dev.skysurveyor.util.Format;
 
-// stats tooltips as §-coded lines, "" = small gap, items cut until it fits maxHeight
+// §-coded lines, "" = small gap, items cut to fit maxHeight
 public final class CoinBreakdown {
 	public static final String SHIFT_HINT = "§7Hold §fShift §7for the short version";
 	// vanilla tooltip line, 2 px under the title
@@ -43,7 +42,7 @@ public final class CoinBreakdown {
 		return fit(MOST_ITEMS, maxHeight, items -> detailedWith(money, perHour, timeMillis, beforeOutside, tax, items));
 	}
 
-	// session coins tile, tax null = none taken off, breakMillis = not counted per hour
+	// tax null = none taken off, breakMillis = not counted per hour
 	public static List<String> session(MoneyStats money, Double perHour, long breakMillis, Double tax, MoneySettings settings,
 			int maxHeight) {
 		return fit(MOST_ITEMS, maxHeight, items -> sessionWith(money, perHour, breakMillis, tax, settings, items, true));
@@ -96,7 +95,6 @@ public final class CoinBreakdown {
 		return lines;
 	}
 
-	// gem tier + sell price the coins used
 	private static String pricing(MoneySettings settings) {
 		if (settings.isIronman()) return "§7Ironman: NPC sell prices";
 		return "§7Gems as " + gemTierName(settings) + ", " + sellName(settings);
@@ -107,10 +105,14 @@ public final class CoinBreakdown {
 	}
 
 	public static String sellName(MoneySettings settings) {
-		return settings.sellPrice() == SellPrice.INSTA_SELL ? "insta-sell" : "sell offer";
+		return switch (settings.sellPrice()) {
+			case INSTA_SELL -> "insta-sell";
+			case SELL_OFFER -> "sell offer";
+			case BEST -> "insta-sell or NPC";
+		};
 	}
 
-	// earned + this = before tax, what hypixels sell screens show
+	// earned + this = hypixels sell screens
 	private static String taxLine(double tax) {
 		return "§7Bazaar tax taken off: " + Coins.format(tax);
 	}
@@ -120,7 +122,6 @@ public final class CoinBreakdown {
 				.flatMap(m -> m.values().stream()).filter(i -> i.coins() == null).count();
 	}
 
-	// session tables outside row
 	public static List<String> outside(MoneyStats money, int maxHeight) {
 		return fit(MOST_ITEMS * 2, maxHeight, items -> {
 			List<String> lines = new ArrayList<>();
@@ -147,7 +148,7 @@ public final class CoinBreakdown {
 		return rows;
 	}
 
-	// parts w/ items, minus ones that round to 0 w/ every item priced
+	// minus ones rounding to 0 w/ all priced
 	private static List<Part> shownParts(MoneyStats money) {
 		List<Part> parts = new ArrayList<>();
 		for (Part part : Part.values()) {
@@ -160,7 +161,6 @@ public final class CoinBreakdown {
 		return parts;
 	}
 
-	// fewer items until it fits
 	private static List<String> fit(int most, int maxHeight, IntFunction<List<String>> build) {
 		List<String> lines = List.of();
 		for (int items = most; items >= 0; items--) {
@@ -273,7 +273,7 @@ public final class CoinBreakdown {
 		return lines;
 	}
 
-	// share null = no shaft type made coins
+	// share null = no type made coins
 	public static List<String> shaftType(String name, TypeCoins type, Double share, Function<String, String> variantNames) {
 		List<String> lines = new ArrayList<>();
 		lines.add("§f" + name + " shafts");
@@ -294,7 +294,7 @@ public final class CoinBreakdown {
 		if (type.variants().size() > 1) {
 			gap(lines);
 			lines.add("§fPer variant §8(avg)");
-			type.variants().forEach((variant, avg) -> lines.add("§7" + variantNames.apply(variant) + " " + coins(avg.each())
+			type.variants().forEach((variant, avg) -> lines.add(variantNames.apply(variant) + " " + coins(avg.each())
 					+ " §8(" + avg.shafts() + (avg.shafts() == 1 ? " shaft)" : " shafts)")));
 		}
 		return lines;
@@ -322,12 +322,12 @@ public final class CoinBreakdown {
 		return rows;
 	}
 
-	// biggest first either way, no price last
+	// biggest first, unpriced last
 	private static void addRows(List<String> lines, List<Row> rows, int items, String indent, boolean withCoins, boolean ironman) {
 		if (items == 0) return;
 		List<Row> sorted = rows.stream().sorted(Comparator.comparing((Row r) -> r.coins() == null)
 				.thenComparing(r -> r.coins() == null ? 0 : -Math.abs(r.coins()))).toList();
-		// a "1 more" line would take the same room as the item
+		// "1 more" takes the same room lol
 		int shown = sorted.size() <= items + 1 ? sorted.size() : items;
 		for (Row row : sorted.subList(0, shown)) {
 			String coins = !withCoins ? "" : " " + coinsOrNoPrice(row.coins(), ironman);
@@ -362,7 +362,7 @@ public final class CoinBreakdown {
 		return percent == 0 ? "<1%" : percent + "%";
 	}
 
-	// mined 1 decimal like fine gems, raw metal stays whole
+	// 1 decimal like fine gems, raw metal whole
 	public static String count(Part part, String item, double count) {
 		boolean decimal = part == Part.MINED || part == Part.MINED_METAL && Ladder.metal(item) == null;
 		if (decimal) return Format.decimal(count);

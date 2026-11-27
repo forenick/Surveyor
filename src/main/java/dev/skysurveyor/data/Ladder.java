@@ -7,14 +7,14 @@ import java.util.Map;
 
 import dev.skysurveyor.util.Resources;
 
-// a materials tiers, low to high. base = how many of the lowest tier make one
+// tiers low to high. base = lowest tier per one
 public record Ladder(String key, List<String> names, List<Long> base) {
 	public static final String GEM = "gem";
 	private static final String MATERIAL = "{gem}";
 	// compaction only, never a shafts own
 	private static final String COMPACT = "compact.";
 
-	// one tier up: what into, how many of the tier below make one
+	// per = how many of the tier below
 	public record Step(String into, long per) {
 	}
 
@@ -48,7 +48,7 @@ public record Ladder(String key, List<String> names, List<Long> base) {
 	private static synchronized Map<String, Ladder> defaults() {
 		if (defaults == null) {
 			List<String> lines = Resources.lines("/skysurveyor/ladders.txt");
-			// gem maths needs it, fail loud not w/ wrong counts
+			// gem maths needs it, fail loud
 			if (lines == null) throw new IllegalStateException("skysurveyor/ladders.txt missing");
 			defaults = parse(lines);
 			if (!defaults.containsKey(GEM)) throw new IllegalStateException("skysurveyor/ladders.txt has no gem ladder");
@@ -60,12 +60,12 @@ public record Ladder(String key, List<String> names, List<Long> base) {
 		return defaults().get(GEM);
 	}
 
-	// metal shafts only, null = gem or unknown shaft
+	// null = gem or unknown shaft
 	public static Ladder metalOf(String shaftType) {
 		return shaftType == null ? null : defaults().get(shaftType);
 	}
 
-	// by the lowest tiers name, f.e. "Tungsten"
+	// f.e. "Tungsten"
 	public static Ladder metal(String metal) {
 		for (Ladder ladder : defaults().values()) {
 			if (ladder.isMetal() && ladder.names.getFirst().equals(metal)) return ladder;
@@ -73,7 +73,7 @@ public record Ladder(String key, List<String> names, List<Long> base) {
 		return null;
 	}
 
-	// metal ladder w/ this item at any tier, f.e. "Enchanted Umber". null = none
+	// f.e. "Enchanted Umber". null = none
 	public static Ladder metalOfItem(String item) {
 		for (Ladder ladder : defaults().values()) {
 			if (ladder.isMetal() && ladder.tier(item, null) != null) return ladder;
@@ -81,7 +81,7 @@ public record Ladder(String key, List<String> names, List<Long> base) {
 		return null;
 	}
 
-	// tier above item on any ladder, null = top tier or on none
+	// null = top tier or on none
 	public static Step compactsInto(String item) {
 		for (Ladder ladder : defaults().values()) {
 			Step step = ladder.stepUp(item);
@@ -98,7 +98,7 @@ public record Ladder(String key, List<String> names, List<Long> base) {
 		return null;
 	}
 
-	// what {gem} stands for if item is this tier, the item itself for plain names. null = not this tier
+	// what {gem} stands for. null = not this tier
 	private String material(int tier, String item) {
 		String name = names.get(tier);
 		int at = name.indexOf(MATERIAL);
@@ -117,7 +117,7 @@ public record Ladder(String key, List<String> names, List<Long> base) {
 		return names.size();
 	}
 
-	// material = gem name, ignored by metals. null = no tier
+	// material ignored by metals. null = no tier
 	public Integer tier(String item, String material) {
 		for (int i = 0; i < names.size(); i++) {
 			if (name(i, material).equals(item)) return i;
@@ -134,12 +134,11 @@ public record Ladder(String key, List<String> names, List<Long> base) {
 		return base.get(tier);
 	}
 
-	// how many of from make one of to
 	public double per(int from, int to) {
 		return (double) base(to) / base(from);
 	}
 
-	// counts per tier, worth in units of one tier. whole ratios, so gems stay bit for bit what GemYield did
+	// whole ratios, keeps gems bit for bit like old GemYield
 	public double in(long[] counts, int unit) {
 		double total = 0;
 		for (int i = 0; i < counts.length; i++) {

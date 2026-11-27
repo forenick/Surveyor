@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-// lobby + friend lines from Recordings/, names swapped. party + co-op unconfirmed
+// lobby + friend lines from recs, names swapped. party + co-op unconfirmed
 class PrivateChatTest {
 	private final TextPatterns patterns = TextPatterns.defaults();
 

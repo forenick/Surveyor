@@ -11,6 +11,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.ToLongFunction;
+import java.util.function.UnaryOperator;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -27,7 +28,7 @@ import dev.skysurveyor.settings.SummarySettings;
 import dev.skysurveyor.util.DataFolder;
 import dev.skysurveyor.util.Guard;
 
-// summary only goes to local chat or a toast, nothing sent to the server
+// local chat or toast only, nothing sent
 public final class LiveJournal {
 	private static final Logger LOGGER = LoggerFactory.getLogger("Surveyor");
 
@@ -58,6 +59,7 @@ public final class LiveJournal {
 	private Consumer<ToastText> toasts = text -> {
 	};
 	private final List<Consumer<JournalEntry>> entryListeners = new ArrayList<>();
+	private UnaryOperator<JournalEntry> stamp = entry -> entry;
 
 	public LiveJournal(BooleanSupplier inMiningArea, LiveMoney money, LiveSettings settings) {
 		journal = new Journal(TextPatterns.defaults(), inMiningArea, this::onEntry);
@@ -71,6 +73,11 @@ public final class LiveJournal {
 
 	public void onToast(Consumer<ToastText> listener) {
 		toasts = listener;
+	}
+
+	// fiesta etc, before its saved
+	public void stampEntries(UnaryOperator<JournalEntry> stamp) {
+		this.stamp = stamp;
 	}
 
 	public void addEntryListener(Consumer<JournalEntry> listener) {
@@ -88,10 +95,9 @@ public final class LiveJournal {
 				() -> Resume.activity(journal, breaks, entries, mining, paused));
 	}
 
-	// client thread list + its file
 	private static final class Saved<T> {
 		final List<T> list = new ArrayList<>();
-		// read w/o failing, client thread
+		// client thread
 		boolean complete;
 		private JsonLinesFile<T> file;
 
@@ -101,7 +107,7 @@ public final class LiveJournal {
 				list.addAll(0, loaded);
 				complete = !file.failed();
 				LOGGER.info("Loaded {} entries from {}", loaded.size(), file.path());
-				// entries stay loaded if resuming throws
+				// entries stay loaded if resume throws
 				Guard.run("resume " + file.path().getFileName(), after);
 			}));
 		}
@@ -112,11 +118,11 @@ public final class LiveJournal {
 		}
 	}
 
-	// each part guarded, one bug doesnt stop the others
+	// each part guarded
 	public void onEvent(ShaftEvent event) {
 		boolean wasRunning = journal.searchRunning();
 		long now = System.currentTimeMillis();
-		// before the journal, a shaft left reads it
+		// before the journal, shaft left reads it
 		Guard.run("mining meter", () -> meter.onEvent(event, now));
 		Guard.run("journal", () -> journal.onEvent(event, now));
 		Guard.run("outside mining", () -> outside.onEvent(event, now));
@@ -152,12 +158,11 @@ public final class LiveJournal {
 		}
 	}
 
-	// a block u were hitting went (mining/BlockWatch). spread = touching blocks that went w/ it
 	public void onBlockBreak(String block, int ticks, boolean clean, List<String> gone) {
 		meter.onBreak(System.currentTimeMillis(), block, ticks, clean, MiningMeter.spread(block, gone));
 	}
 
-	// every tick on the same block, so a slow block isnt a pause
+	// every tick, so a slow block isnt a pause
 	public void onStillMining() {
 		meter.onHit(System.currentTimeMillis());
 	}
@@ -166,17 +171,17 @@ public final class LiveJournal {
 		return meter.boosting();
 	}
 
-	// the hud line: this shaft or this tunnel loop, whole percent. null = -. client thread
+	// null = -. client thread
 	public Long efficiency(long now) {
 		return meter.percent(now);
 	}
 
-	// the hud line chart, oldest 1st. client thread
+	// oldest 1st. client thread
 	public List<Double> efficiencyTrack(long now) {
 		return meter.track(now);
 	}
 
-	// after the trackers world change, so the shaft left already has its numbers
+	// after the trackers world change
 	public void onWorldChange() {
 		journal.onWorldChange(System.currentTimeMillis());
 		outside.onWorldChange(System.currentTimeMillis());
@@ -187,7 +192,7 @@ public final class LiveJournal {
 		if (!wasRunning && journal.searchRunning()) LOGGER.info("Spawn timer started");
 	}
 
-	// only goes up, change = new entries. client thread only
+	// only goes up. client thread
 	public int entryCount() {
 		return entries.size();
 	}
@@ -200,7 +205,7 @@ public final class LiveJournal {
 		return List.copyOf(entries.subList(from, entries.size()));
 	}
 
-	// changes when the file loads (loaded entries go in front). client thread only
+	// changes on file load. client thread
 	public JournalEntry firstEntry() {
 		return entries.isEmpty() ? null : entries.getFirst();
 	}
@@ -218,7 +223,7 @@ public final class LiveJournal {
 		return trailing(entries, JournalEntry::sessionId, session);
 	}
 
-	// sessions are saved in order, so its entries are the last ones
+	// saved in order, so its entries are last
 	private static <T> List<T> trailing(List<T> list, ToLongFunction<T> sessionId, Journal.Session session) {
 		if (session == null) return List.of();
 		int first = list.size();
@@ -226,7 +231,7 @@ public final class LiveJournal {
 		return List.copyOf(list.subList(first, list.size()));
 	}
 
-	// only goes up, change = new entries. client thread only
+	// only goes up. client thread
 	public int miningCount() {
 		return mining.size();
 	}
@@ -235,7 +240,7 @@ public final class LiveJournal {
 		return List.copyOf(mining.subList(from, mining.size()));
 	}
 
-	// changes when the file loads (loaded entries go in front). client thread only
+	// changes on file load. client thread
 	public MiningEntry firstMining() {
 		return mining.isEmpty() ? null : mining.getFirst();
 	}
@@ -244,12 +249,12 @@ public final class LiveJournal {
 		return trailing(mining, MiningEntry::sessionId, session);
 	}
 
-	// items that went to the material stash in that session. client thread only
+	// client thread
 	public long stashed(long sessionId) {
 		return Stash.grew(stashed, sessionId);
 	}
 
-	// only goes up, change = a new break. client thread only
+	// only goes up. client thread
 	public int breakCount() {
 		return paused.size();
 	}
@@ -258,12 +263,12 @@ public final class LiveJournal {
 		return List.copyOf(paused);
 	}
 
-	// changes when the file loads (loaded entries go in front). client thread only
+	// changes on file load. client thread
 	public BreakEntry firstBreak() {
 		return paused.isEmpty() ? null : paused.getFirst();
 	}
 
-	// saved + the one going on now, for live rates. client thread only
+	// incl the one going on now. client thread
 	public List<BreakEntry> sessionBreaks(Journal.Session session, long now) {
 		if (session == null) return List.of();
 		List<BreakEntry> list = new ArrayList<>(trailing(paused, BreakEntry::sessionId, session));
@@ -276,7 +281,7 @@ public final class LiveJournal {
 		return journal.spawnTimerMillis(now);
 	}
 
-	// file name -> lines it couldnt read, for bug reports
+	// for bug reports
 	public Map<String, Integer> skippedLines() {
 		Map<String, Integer> skipped = new LinkedHashMap<>();
 		for (Saved<?> part : List.of(saved, savedMining, savedStash, savedBreaks)) {
@@ -298,18 +303,19 @@ public final class LiveJournal {
 		}
 	}
 
-	// keeps prices fresh while mining, fetches only whats stale
+	// fetches only whats stale
 	private void onMining(MiningEntry found) {
 		savedMining.add(Guard.get("mining prices", () -> money.withPrices(found), () -> found.withPrices(Map.of())));
 		money.refresh();
 	}
 
-
-
-	// called from inside journal.onEvent, a throw here would leave the journal half done
+	// inside journal.onEvent, a throw leaves it half done
 	private void onEntry(JournalEntry finished) {
 		JournalEntry mined = Guard.get("entry mining", () -> finished.withMining(meter.shaftStats(finished.enteredAt(), finished.endedAt())), () -> finished);
-		JournalEntry entry = Guard.get("entry prices", () -> money.withPrices(mined), () -> mined.withPrices(Map.of()));
+		// only ur own portal, like the spawn timer
+		JournalEntry spawned = mined.searchMillis() == null ? mined : mined.withSpawnBlock(meter.spawnBlock());
+		JournalEntry stamped = Guard.get("entry stamp", () -> stamp.apply(spawned), () -> spawned);
+		JournalEntry entry = Guard.get("entry prices", () -> money.withPrices(stamped), () -> stamped.withPrices(Map.of()));
 		saved.add(entry);
 		Guard.each("entry listener", entryListeners, entry);
 		SummarySettings.Show show = settings.get().summary().show();

@@ -4,12 +4,18 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.annotations.SerializedName;
 
-// "journal" in config.json, names never rename
-public record JournalSettings(boolean byDay, ChartType spawnChart, ChartType coinChart) {
-	// journal groups sessions by day, nicks pick (2026-11-12)
-	public static final JournalSettings DEFAULTS = new JournalSettings(true, ChartType.BARS, ChartType.BARS);
+import dev.skysurveyor.journal.StatsRange;
 
-	// stats tab charts
+// "journal" in config.json, names never rename
+// statsRange since 0.27.0-alpha.39, missing or odd = all-time
+public record JournalSettings(boolean byDay, ChartType spawnChart, ChartType coinChart, StatsRange statsRange) {
+	// by day, nick 11-12. all-time = what stats always opened on
+	public static final JournalSettings DEFAULTS = new JournalSettings(true, ChartType.BARS, ChartType.BARS, StatsRange.ALL_TIME);
+
+	public JournalSettings {
+		if (statsRange == null) statsRange = StatsRange.ALL_TIME;
+	}
+
 	public enum ChartType {
 		@SerializedName("bars")
 		BARS("Bars"),
@@ -40,25 +46,36 @@ public record JournalSettings(boolean byDay, ChartType spawnChart, ChartType coi
 		}
 	}
 
-	// null = default. by hand not gson, a weird value is its default, never a failed load
+	// by hand not gson, weird = default
 	static JournalSettings read(JsonElement json) {
 		if (!json.isJsonObject()) return null;
 		JsonObject journal = json.getAsJsonObject();
 		boolean byDay = journal.has("byDay") && journal.get("byDay").isJsonPrimitive() ? journal.get("byDay").getAsBoolean()
 				: DEFAULTS.byDay;
 		return new JournalSettings(byDay, ChartType.read(journal, "spawnChart", DEFAULTS.spawnChart),
-				ChartType.read(journal, "coinChart", DEFAULTS.coinChart));
+				ChartType.read(journal, "coinChart", DEFAULTS.coinChart), range(journal.get("statsRange"), DEFAULTS.statsRange));
+	}
+
+	// saved by enum name. missing, odd or a later mod's range = fallback
+	static StatsRange range(JsonElement json, StatsRange fallback) {
+		if (json == null || !json.isJsonPrimitive()) return fallback;
+		StatsRange saved = StatsRange.ofSaved(json.getAsString());
+		return saved == null ? fallback : saved;
 	}
 
 	public JournalSettings withByDay(boolean value) {
-		return new JournalSettings(value, spawnChart, coinChart);
+		return new JournalSettings(value, spawnChart, coinChart, statsRange);
 	}
 
 	public JournalSettings withSpawnChart(ChartType value) {
-		return new JournalSettings(byDay, value, coinChart);
+		return new JournalSettings(byDay, value, coinChart, statsRange);
 	}
 
 	public JournalSettings withCoinChart(ChartType value) {
-		return new JournalSettings(byDay, spawnChart, value);
+		return new JournalSettings(byDay, spawnChart, value, statsRange);
+	}
+
+	public JournalSettings withStatsRange(StatsRange value) {
+		return new JournalSettings(byDay, spawnChart, coinChart, value);
 	}
 }

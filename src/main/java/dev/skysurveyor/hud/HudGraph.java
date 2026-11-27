@@ -38,7 +38,7 @@ public sealed interface HudGraph {
 		}
 	}
 
-	// columns oldest left. heights + line 0..1 of the chart, line null = none
+	// oldest left, 0..1 of the chart, line null = none
 	record Chart(List<Column> columns, Double line) implements HudGraph {
 		public static final int HEIGHT = 16;
 		public static final int COLUMN = 4;
@@ -79,19 +79,19 @@ public sealed interface HudGraph {
 	record Column(double height, int argb) {
 	}
 
-	// points oldest left, 0.69 = 69%. usual = dashed line, null = none. low..high = bottom..top row
+	// 0.69 = 69%. usual = dashed, null = none
 	record Line(List<Double> points, Double usual, int argb, double low, double high) implements HudGraph {
 		public static final int HEIGHT = 16;
 		// as wide as 12 spawn chart columns
 		public static final int WIDTH = 59;
-		// display choice: at least 20 points tall, so a steady shaft isnt a wild line
+		// display choice, else a steady shaft looks wild. first guess
 		public static final double MIN_SPAN = 0.2;
 
 		public Line {
 			points = List.copyOf(points);
 		}
 
-		// scaled to its own points + the usual, like the spawn chart scales to its shafts
+		// own points + usual, like the spawn chart
 		public static Line of(List<Double> points, Double usual, int argb) {
 			double low = usual == null ? Double.MAX_VALUE : usual;
 			double high = usual == null ? -Double.MAX_VALUE : usual;
@@ -117,13 +117,12 @@ public sealed interface HudGraph {
 			return WIDTH;
 		}
 
-		// row from the top for a value
 		public int y(double value) {
 			double part = high > low ? (value - low) / (high - low) : 0.5;
 			return HEIGHT - 1 - (int) Math.round(Math.clamp(part, 0, 1) * (HEIGHT - 1));
 		}
 
-		// row at column x of a WIDTH wide line, points spread evenly
+		// points spread evenly
 		public int yAt(int x) {
 			if (points.size() == 1) return y(points.getFirst());
 			double at = x * (points.size() - 1) / (double) (WIDTH - 1);

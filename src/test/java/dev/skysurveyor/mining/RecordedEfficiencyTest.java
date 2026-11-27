@@ -20,12 +20,12 @@ import dev.skysurveyor.detection.TextPatterns;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-// Docs/efficiency-design.md section 3: research/11s E (spread + whole time inside) from real recording lines
-// the recordings have no block breaks, so blocks come from sacks. numbers from Docs/research/calc-prototype/efficiency.py
+// efficiency-design.md s3: research/11 E (spread + whole time inside)
+// blocks from sacks, no breaks in these recs. numbers from efficiency.py
 class RecordedEfficiencyTest {
-	// base drops a block, research/11 section 2 (wiki 3 to 5, fits recording 1)
+	// research/11 s2 (wiki 3 to 5, fits rec 1)
 	private static final double BASE_DROPS = 4;
-	// game minimum, research/11 section 8. shorter gaps are the crosshair passing a block
+	// game min (research/11 s8), shorter = crosshair passing
 	private static final int MIN_TICKS = 4;
 
 	private record Mined(String id, long seconds, long boostSeconds, int ticks, int boostTicks, double blocks, double efficiency) {
@@ -116,7 +116,7 @@ class RecordedEfficiencyTest {
 				.map(e -> e.getKey().replace("Flawed ", "").replace(" Gemstone", "")).orElse(null);
 	}
 
-	// size of a single proc: average of the msgs under 1.5x the lower halfs median
+	// proc size: avg of msgs under 1.5x the lower halfs median, trust me
 	private static double procSize(List<Long> procs) {
 		List<Long> sorted = procs.stream().sorted().toList();
 		List<Long> lower = sorted.subList(0, Math.max(1, sorted.size() / 2));

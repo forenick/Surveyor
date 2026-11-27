@@ -11,11 +11,11 @@ import com.google.gson.JsonObject;
 import dev.skysurveyor.detection.RecordingReplay;
 import dev.skysurveyor.detection.TextPatterns;
 
-// replay --marks: every mark w/ the lines around it, what claude reads first
+// replay --marks, claude reads this first
 final class Marks {
-	// lines before + after each mark
+	// before + after each mark
 	static final int AROUND = 10;
-	// action bar, scoreboard etc. every half second would push the useful lines out
+	// action bar + scoreboard spam would push the useful lines out
 	private static final Set<String> CONTEXT = Set.of("chat", "live", "live_entry", "error", "mark", "title", "subtitle", "world_change",
 			"screen", "screen_close", "settings");
 	private static final int MAX_TEXT = 160;

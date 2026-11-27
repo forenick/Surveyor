@@ -3,13 +3,14 @@ package dev.skysurveyor.journal;
 import java.util.ArrayList;
 import java.util.List;
 
+import dev.skysurveyor.data.ShaftNames;
 import dev.skysurveyor.detection.Shaft.ExitReason;
 import dev.skysurveyor.money.CoinBreakdown;
 import dev.skysurveyor.money.Coins;
 import dev.skysurveyor.money.ShaftValue;
 import dev.skysurveyor.util.Format;
 
-// shaft toast, nicks short card (Docs/mockups/toast-v1.html)
+// nicks short card (Docs/mockups/toast-v1.html)
 public record ToastText(String title, List<Row> rows) {
 	// hud drops line too
 	public static final String NO_PRICES = "no prices yet";
@@ -17,9 +18,9 @@ public record ToastText(String title, List<Row> rows) {
 	public record Row(String label, String value) {
 	}
 
-	// session already incl entry, null = no session row. value null = no prices yet
+	// session incl entry, null = no session row. value null = no prices yet
 	public static ToastText of(JournalEntry entry, Journal.Session session, ShaftValue value, boolean ironman) {
-		String title = "§e" + (entry.shaftId() == null ? "Mineshaft" : entry.shaftId()) + "  §f"
+		String title = (entry.shaftId() == null ? "§eMineshaft" : ShaftNames.defaults().coloredName(entry.shaftId())) + "  §f"
 				+ Format.duration(entry.durationMillis()) + exit(entry.exitReason());
 		List<Row> rows = new ArrayList<>();
 		String corpses = SummaryText.corpses(entry);
@@ -27,7 +28,7 @@ public record ToastText(String title, List<Row> rows) {
 		if (value == null) {
 			rows.add(new Row("Coins", "§8" + NO_PRICES));
 		} else if (value.lines().stream().allMatch(line -> line.coins() == null)) {
-			// a gold 0 would read as worth nothing
+			// gold 0 reads as worthless
 			if (!value.lines().isEmpty()) rows.add(new Row("Coins", CoinBreakdown.noPrice(ironman)));
 		} else {
 			double net = value.net();
@@ -45,9 +46,9 @@ public record ToastText(String title, List<Row> rows) {
 		};
 	}
 
-	// editor + settings preview, numbers made up
+	// editor + settings preview, made up numbers
 	public static ToastText example() {
-		return new ToastText("§eJASP_1  §f4m 12s", List.of(
+		return new ToastText("§dJasper 1  §f4m 12s", List.of(
 				new Row("Corpses", "§9Lapis 2/2§7, §fUmber 1/1"),
 				new Row("Coins", "§6+1.2M"),
 				new Row("Session", "§f5 shafts§7, avg spawn §f1m 30s")));

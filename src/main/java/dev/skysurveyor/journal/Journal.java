@@ -10,13 +10,13 @@ import dev.skysurveyor.detection.ShaftEvent.ShaftEntered;
 import dev.skysurveyor.detection.ShaftEvent.ShaftLeft;
 import dev.skysurveyor.detection.TextPatterns;
 
-// only the finder gets "WOW!", other peoples portals arent timed
+// only the finder gets "WOW!", others portals arent timed
 public final class Journal {
 	// default, not a game number
 	public static final long SESSION_GAP_MILLIS = 15 * 60_000L;
 
 	// nicks pick, just > 32s pickobulus cd (research/08)
-	// also how long a found portal can sit unentered
+	// also how long a found portal can sit
 	public static final long PAUSE_MILLIS = 40_000L;
 
 	public record Session(long id, int shafts, int timedSpawns, long searchMillis) {
@@ -39,7 +39,7 @@ public final class Journal {
 	private boolean searching;
 	private long searchMillis;
 	private long lastMiningAt;
-	// gap ends at a world change, a warp isnt searching (recording 8 PERI_C)
+	// warp isnt searching (rec 8 PERI_C)
 	private boolean warped;
 	private long portalFoundAt = -1;
 	private Long timedSearch;
@@ -54,12 +54,11 @@ public final class Journal {
 		return session;
 	}
 
-	// last block hit, ability or shaft activity of the session
 	public long lastActivity() {
 		return lastActivity;
 	}
 
-	// session only really ends at the next activity
+	// session only ends at the next activity
 	public Session activeSession(long now) {
 		return session == null || now - lastActivity > SESSION_GAP_MILLIS ? null : session;
 	}
@@ -75,7 +74,7 @@ public final class Journal {
 		lastActivity = last.endedAt();
 	}
 
-	// saved activity after the last shaft, f.e. mining outside shafts
+	// f.e. mining outside shafts
 	public void resumeActivity(long sessionId, long at) {
 		if (session != null && session.id() == sessionId && at > lastActivity) lastActivity = at;
 	}
@@ -84,7 +83,7 @@ public final class Journal {
 		return searching;
 	}
 
-	// null once session ran out, next activity drops that timer anyway
+	// null once session ran out
 	public Long spawnTimerMillis(long now) {
 		if (activeSession(now) == null) return null;
 		if (searching) return searchMillis + Math.max(0, gap(now));
@@ -135,19 +134,19 @@ public final class Journal {
 		timedSearch = null;
 	}
 
-	// hits on the garden, hub etc dont start or keep a session, clock skips them
+	// garden, hub etc dont count, clock skips them
 	private void mining(long now) {
 		touch(now);
 		// spawn timer asks the tab list only
 		if (!clock.inMines()) return;
-		// mining between finding and entering belongs to neither search
+		// found to entered = neither search
 		if (portalFoundAt >= 0 && now - portalFoundAt <= PAUSE_MILLIS) return;
 		if (searching) {
 			searchMillis += gap(now);
 		} else {
 			searching = true;
 			searchMillis = 0;
-			// found portal not entered in time isnt part of the next shaft
+			// unentered portal isnt part of the next shaft
 			timedSearch = null;
 		}
 		lastMiningAt = now;

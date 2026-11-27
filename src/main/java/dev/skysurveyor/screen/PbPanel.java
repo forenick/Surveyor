@@ -44,9 +44,8 @@ import dev.skysurveyor.money.MoneyStats;
 import static dev.skysurveyor.screen.ScreenParts.applyTooltip;
 import static dev.skysurveyor.screen.ScreenParts.label;
 
-// stats tab personal bests: the list, edit mode + drag, the builder card
 final class PbPanel {
-	// the builders picks, saved on Done. original null = new, found again by value (list can change under it)
+	// original null = new, found by value
 	private static final class Draft {
 		final Def original;
 		Stat stat;
@@ -71,9 +70,9 @@ final class PbPanel {
 	private static final Identifier OPEN_ARROW = Identifier.fromNamespaceAndPath("skysurveyor", "textures/gui/open_arrow.png");
 	private static final PersonalBests.Coins PB_COINS = PersonalBests.Coins.of(entry -> MoneyStats.net(Surveyor.MONEY.value(entry)),
 			Surveyor.MONEY::value);
-	// display choice: text 8 + 2 each side, the hud editors choices are 14
+	// display choice, text 8 + 2 each side
 	private static final int SMALL_BUTTON = 12;
-	// least width, measured past it
+	// min, measured past it
 	private static final int BUILDER_KEY = 52;
 	// display choices
 	private static final int CARD_MAX = 250;
@@ -83,6 +82,8 @@ final class PbPanel {
 
 	private final JournalScreen screen;
 	private boolean editing;
+	// reset asks twice, one build long
+	private boolean resetArmed;
 	private Draft draft;
 	// "value" or "shaft", null = none open
 	private String dropdown;
@@ -91,16 +92,16 @@ final class PbPanel {
 	private TextBoxComponent homeField;
 	private LabelComponent previewLabel;
 	private String previewName;
-	// name doesnt change it, only the builder rebuild does
+	// only builder rebuild changes it
 	private PersonalBests.Result previewResult;
 	private List<JournalEntry> entries = List.of();
 	private List<SessionSummary> sessions = List.of();
-	// builder + edit clicks rebuild the tab, same range + prices = same results
+	// same range + prices = same results
 	private final Map<Def, PersonalBests.Result> cache = new HashMap<>();
 	private List<Object> cacheKey = List.of();
 	private final List<FlowLayout> rows = new ArrayList<>();
 	private final List<FlowLayout> grips = new ArrayList<>();
-	// the list the rows were built from, drag indexes point into it
+	// drag indexes point here
 	private List<Def> shown = List.of();
 	private int drag = -1;
 	private int gap = -1;
@@ -121,12 +122,12 @@ final class PbPanel {
 		return editing;
 	}
 
-	// not under the players hands while one is open
+	// not under ur hands
 	boolean busy() {
 		return draft != null || dropdown != null || drag >= 0;
 	}
 
-	// esc on the stats tab: dropdown, then builder, then edit mode. false = nothing open
+	// false = nothing open
 	boolean stepBack() {
 		if (draft != null && dropdown != null) {
 			dropdown = null;
@@ -142,7 +143,6 @@ final class PbPanel {
 		return true;
 	}
 
-	// tab switch
 	void closeBuilder() {
 		draft = null;
 		dropdown = null;
@@ -157,14 +157,13 @@ final class PbPanel {
 		previewLabel = null;
 	}
 
-	// journal changed under it
 	void forget() {
 		cache.clear();
 		cacheKey = List.of();
 		previewResult = null;
 	}
 
-	// caxton: text set at 0 width can scroll 1st letter out, rehome next frame
+	// caxton scrolls 1st letter out at 0 width
 	void rehome() {
 		if (homeField == null) return;
 		ScreenParts.rehome(homeField);
@@ -183,11 +182,10 @@ final class PbPanel {
 		return cache.computeIfAbsent(def, d -> PersonalBests.best(d, entries, sessions, PB_COINS));
 	}
 
-	// under the totals, entries + sessions = the stats range
 	void addTo(FlowLayout totals, List<JournalEntry> entries, List<SessionSummary> sessions) {
 		this.entries = entries;
 		this.sessions = sessions;
-		// both ends, so new shafts + loaded older ones count as a change
+		// both ends, new + older loaded both count
 		List<Object> key = Arrays.asList(entries.size(), entries.isEmpty() ? null : entries.getFirst(),
 				entries.isEmpty() ? null : entries.getLast(), sessions.size(), Surveyor.MONEY.changes());
 		if (!key.equals(cacheKey)) {
@@ -216,7 +214,6 @@ final class PbPanel {
 		for (Def def : list) {
 			PersonalBests.Result result = result(def);
 			String defName = PersonalBests.name(def, names);
-			// metal record only once u have metal shafts
 			if (!editing && def.type() == Stat.SHAFT_METAL && result.value() == null && def.shaft() == null) continue;
 			if (editing) {
 				totals.child(editRow(def, defName, text(def, result, defName)));
@@ -224,8 +221,9 @@ final class PbPanel {
 			}
 			Runnable open = result.entry() != null ? () -> screen.openShaft(result.entry())
 					: result.session() != null ? () -> screen.openSession(result.session()) : null;
-			String target = result.entry() != null ? result.entry().shaftId() : result.session() != null ? sessionName(result.session()) : null;
-			totals.child(record(defName, text(def, result, defName), open, target));
+			String target = result.entry() != null ? names.coloredName(result.entry().shaftId()) : result.session() != null ? sessionName(result.session()) : null;
+			String longest = shortStreak(def, result, defName) ? "§7Longest §f" + Math.round(result.value()) : null;
+			totals.child(record(defName, text(def, result, defName), open, target, longest));
 		}
 		if (editing) {
 			FlowLayout buttons = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
@@ -235,17 +233,22 @@ final class PbPanel {
 				draft = new Draft(null, new Def(Stat.SHAFT_COINS.id(), null, null, null));
 				rebuild();
 			}));
+			boolean armed = resetArmed;
+			resetArmed = false;
 			if (!list.equals(PersonalBests.DEFAULTS)) {
-				buttons.child(smallButton("§fReset", "Back to the default list", () -> {
-					save(PersonalBests.DEFAULTS);
-					rebuild();
-				}));
+				// no undo here, so twice like the other resets
+				buttons.child(smallButton(armed ? "§cReally reset?" : "§cReset",
+						armed ? "Click again to bring back the default list. This can't be undone" : "Back to the default list", () -> {
+							if (armed) save(PersonalBests.DEFAULTS);
+							else resetArmed = true;
+							rebuild();
+						}));
 			}
 			totals.child(buttons);
 		}
 	}
 
-	// null result value = "-". same text as the hud line, plus colours
+	// same text as the hud line
 	private String text(Def def, PersonalBests.Result result, String key) {
 		Stat stat = def.type();
 		if (stat == null || result.value() == null) return null;
@@ -254,6 +257,8 @@ final class PbPanel {
 		// scale 4: tier word would wrap the label to 3 lines
 		int room = screen.statsLeftRoom() - 20;
 		if (stat == Stat.SHAFT_METAL && font().width(key + " " + text) > room) text = result.entry().metal().amount(tier);
+		// scale 4 too, longest goes in the hover
+		if (shortStreak(def, result, key)) text = String.valueOf(result.current());
 		String color = switch (stat) {
 			case SHAFT_COINS, SESSION_COINS, SESSION_COIN_RATE -> Math.round(result.value()) < 0 ? "§c" : "§6";
 			case SHAFT_POWDER, SESSION_POWDER, SHAFT_COLD -> "§b";
@@ -264,6 +269,12 @@ final class PbPanel {
 		return color + text.replace(" avg", " §7avg").replace(" (longest", " §7(longest");
 	}
 
+	private boolean shortStreak(Def def, PersonalBests.Result result, String key) {
+		if (def.type() == null || def.type().per() != Per.STREAK || result.value() == null || result.current() == null) return false;
+		String text = HudData.pbText(def, result, Surveyor.MONEY.settings().metalTierUsed().tier());
+		return font().width(key + " " + text) > screen.statsLeftRoom() - 20;
+	}
+
 	private FlowLayout editRow(Def def, String key, String value) {
 		FlowLayout row = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
 		row.gap(3);
@@ -271,7 +282,7 @@ final class PbPanel {
 		FlowLayout grip = UIContainers.horizontalFlow(Sizing.fixed(7), Sizing.fixed(9));
 		grip.surface(ScreenParts.GRIP);
 		grip.cursorStyle(CursorStyle.MOVE);
-		grip.tooltip(Component.literal("§7Drag to move"));
+		grip.tooltip(Component.literal("§fDrag to move"));
 		row.child(grip);
 		grips.add(grip);
 		FlowLayout name = new HoverFlow(Sizing.expand(), Sizing.content(), HoverFlow.ROW);
@@ -280,7 +291,7 @@ final class PbPanel {
 		keyLabel.horizontalSizing(Sizing.expand());
 		name.child(keyLabel);
 		name.child(label(value == null ? "§8-" : value));
-		applyTooltip(name, List.of(Component.literal("§7Click to change it")));
+		applyTooltip(name, List.of(Component.literal("§f" + key), Component.literal("§8Click to change it")));
 		name.mouseDown().subscribe((event, doubleClick) -> {
 			draft = new Draft(def, def);
 			rebuild();
@@ -296,12 +307,11 @@ final class PbPanel {
 		return row;
 	}
 
-	// vanilla button look, as low as the text lets it
 	private ButtonComponent smallButton(String text, String tip, Runnable action) {
 		ButtonComponent button = PackButton.button(Component.literal(text), b -> action.run());
 		button.verticalSizing(Sizing.fixed(SMALL_BUTTON));
 		button.horizontalSizing(Sizing.fixed(font().width(text) + 8));
-		applyTooltip(button, List.of(Component.literal("§7" + tip)));
+		applyTooltip(button, List.of(Component.literal("§f" + tip)));
 		return button;
 	}
 
@@ -309,7 +319,7 @@ final class PbPanel {
 		FlowLayout button = new HoverFlow(Sizing.content(), Sizing.content(), HoverFlow.SMALL);
 		button.padding(Insets.of(1, 1, 2, 2));
 		button.child(label(text));
-		applyTooltip(button, List.of(Component.literal("§7" + tip)));
+		applyTooltip(button, List.of(Component.literal("§f" + tip)));
 		button.mouseDown().subscribe((event, doubleClick) -> {
 			action.run();
 			return true;
@@ -317,7 +327,6 @@ final class PbPanel {
 		return button;
 	}
 
-	// on top of the stats tab, only while one is open
 	void buildBuilder(FlowLayout root) {
 		if (draft == null) return;
 		int width = screen.width;
@@ -342,7 +351,6 @@ final class PbPanel {
 		card.padding(Insets.of(6));
 		card.gap(3);
 		card.positioning(Positioning.relative(50, 35));
-		// clicks on the card stay on it
 		card.mouseDown().subscribe((event, doubleClick) -> {
 			if (dropdown == null) return true;
 			dropdown = null;
@@ -414,7 +422,7 @@ final class PbPanel {
 		row.gap(3);
 		row.verticalAlignment(VerticalAlignment.CENTER);
 		LabelComponent label = label("§7" + key);
-		// all keys, so every row lines up
+		// so rows line up
 		int widest = List.of("Value", "Per", "Best is", "Shaft", "Name").stream().mapToInt(font()::width).max().orElse(0);
 		label.horizontalSizing(Sizing.fixed(TableColumns.atLeast(BUILDER_KEY, widest)));
 		row.child(label);
@@ -484,7 +492,7 @@ final class PbPanel {
 		int listWidth = Math.max(dropdownAnchor.width(), DROPDOWN_MIN);
 		int top = dropdownAnchor.y() + dropdownAnchor.height();
 		int room = screen.height - JournalScreen.PADDING - top;
-		// owo cant content-size a vertical scroll, so rows + headings measured
+		// owo cant content-size a vertical scroll, idk why
 		int needed = items.children().stream().mapToInt(c -> c instanceof HoverFlow ? DROPDOWN_ITEM : DROPDOWN_HEADING).sum();
 		KeptScroll scroll = screen.scroll(Sizing.fixed(listWidth), Sizing.fixed(Math.max(40, Math.min(needed, room - 4))), items);
 		FlowLayout panel = UIContainers.verticalFlow(Sizing.content(), Sizing.content());
@@ -514,7 +522,7 @@ final class PbPanel {
 		rebuild();
 	}
 
-	// caxton cancels onValueChange, polled every tick
+	// caxton cancels onValueChange, poll
 	void updatePreview() {
 		if (previewLabel == null || draft == null) return;
 		String typed = nameField == null ? draft.name : nameField.getValue();
@@ -541,7 +549,7 @@ final class PbPanel {
 		rebuild();
 	}
 
-	// drag a grip in edit mode, like the HUD editors lines. true = grabbed one
+	// true = grabbed one
 	boolean grab(MouseButtonEvent click) {
 		if (!editing || draft != null || click.button() != 0) return false;
 		for (int i = 0; i < grips.size(); i++) {
@@ -594,7 +602,8 @@ final class PbPanel {
 		graphics.fill(from.x(), y - 1, from.x() + from.width(), y + 1, 0xFFFFFF55);
 	}
 
-	private static FlowLayout record(String key, String value, Runnable open, String target) {
+	// extra null = none
+	private static FlowLayout record(String key, String value, Runnable open, String target, String extra) {
 		FlowLayout row = open == null ? UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content())
 				: new HoverFlow(Sizing.fill(100), Sizing.content(), HoverFlow.ROW);
 		row.gap(4);
@@ -609,11 +618,16 @@ final class PbPanel {
 			arrow.margins(Insets.top(-1));
 			arrow.child(UIComponents.texture(OPEN_ARROW, 0, 0, 3, 5, 3, 5).blend(true));
 			row.child(arrow);
-			applyTooltip(row, List.of(Component.literal("§7Open " + (target == null ? "shaft" : target))));
+			List<Component> tip = new ArrayList<>(List.of(Component.literal("§f" + key)));
+			if (extra != null) tip.add(Component.literal(extra));
+			tip.add(Component.literal("§8Click to open " + (target == null ? "the shaft" : target)));
+			applyTooltip(row, tip);
 			row.mouseDown().subscribe((event, doubleClick) -> {
 				open.run();
 				return true;
 			});
+		} else if (extra != null) {
+			applyTooltip(row, List.of(Component.literal("§f" + key), Component.literal(extra)));
 		}
 		return row;
 	}

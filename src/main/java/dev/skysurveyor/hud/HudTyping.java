@@ -5,7 +5,6 @@ import java.util.regex.Pattern;
 
 import dev.skysurveyor.hud.HudValue.Range;
 
-// what a click in the value list types at the cursor
 public final class HudTyping {
 	public record Edit(String text, int cursor) {
 	}

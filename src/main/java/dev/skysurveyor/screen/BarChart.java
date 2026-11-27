@@ -23,12 +23,11 @@ import dev.skysurveyor.settings.JournalSettings.ChartType;
 
 import static dev.skysurveyor.screen.ScreenParts.label;
 
-// stats tab: one bar per session, oldest left. the maths is ChartAxis
 final class BarChart {
 	record Bar(SessionSummary session, double value, int argb, List<Component> tooltip) {
 	}
 
-	// what a chart shows besides its bars. average null = no line
+	// average null = no line
 	record Look(ChartType type, int lineArgb, double[] steps, DoubleFunction<String> axisText, Double average, int averageArgb,
 			String legend, List<String> averageTip, String empty) {
 	}
@@ -43,7 +42,7 @@ final class BarChart {
 	private BarChart() {
 	}
 
-	// room = the columns inner width, height = the screens. click on a bar opens its session
+	// room = column inner width
 	static FlowLayout of(Font font, List<Bar> all, Look look, int room, int screenHeight, Consumer<SessionSummary> open) {
 		FlowLayout wrapper = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
 		if (all.isEmpty()) {
@@ -100,7 +99,7 @@ final class BarChart {
 			int barHeight = Math.max(1, Math.abs(zero - end));
 			BoxComponent box;
 			if (look.type() == ChartType.LINE) {
-				// invisible column, easy to hover
+				// invisible, easy to hover
 				box = new HoverFlow.Box(Sizing.fixed(barWidth + barGap), Sizing.fixed(base - PLOT_TOP + 1), HoverFlow.ROW);
 				box.color(Color.ofArgb(0));
 				box.positioning(Positioning.absolute(bars.x(i) - barGap / 2, PLOT_TOP));
@@ -123,7 +122,7 @@ final class BarChart {
 			int averageY = scale.y(Math.clamp(average, scale.bottom(), scale.top()), base, plotHeight);
 			plot.child(line(averageY, look.averageArgb()));
 			if (!averageTips.isEmpty()) {
-				// 1 px line is too thin to hover
+				// 1 px too thin to hover
 				BoxComponent band = UIComponents.box(Sizing.fill(100), Sizing.fixed(5));
 				band.color(Color.ofArgb(0));
 				band.positioning(Positioning.absolute(0, averageY - 2));
@@ -144,7 +143,7 @@ final class BarChart {
 		if (shown.size() > 1) {
 			String lastText = "§8" + JournalScreen.day(shown.getLast().session().start());
 			int lastX = left + (shown.size() - 1) * (barWidth + barGap) + barWidth - font.width(lastText);
-			// display choice: room between the two dates
+			// display choice
 			if (lastX > left + font.width(firstText) + 6) {
 				LabelComponent last = label(lastText);
 				last.positioning(Positioning.absolute(lastX, 1));

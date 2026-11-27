@@ -8,13 +8,13 @@ import dev.skysurveyor.data.Ladder;
 import dev.skysurveyor.detection.Shaft;
 import dev.skysurveyor.util.Format;
 
-// the shafts own metal (TUNG_1 tungsten, UMBE_1 umber), counted like GemYield. no pristine, no tail
+// TUNG_1 tungsten, UMBE_1 umber, like GemYield. no pristine, no tail
 public record MetalYield(String metal, long raw, long enchanted, long refined) {
 	public static final int RAW = 0;
 	public static final int ENCHANTED = 1;
 	public static final int REFINED = 2;
 
-	// raw per one of a tier, tungsten + umber same ratios
+	// tungsten + umber same ratios
 	public static double rawPer(int tier) {
 		return Ladder.metalOf("TUNG").base(tier);
 	}
@@ -38,7 +38,7 @@ public record MetalYield(String metal, long raw, long enchanted, long refined) {
 		return Ladder.metal(metal);
 	}
 
-	// in units of one tier, f.e. 301.3 enchanted
+	// f.e. 301.3 enchanted
 	public double in(int tier) {
 		return in(ladder(), tier);
 	}
@@ -47,7 +47,7 @@ public record MetalYield(String metal, long raw, long enchanted, long refined) {
 		return ladder == null ? 0 : ladder.in(new long[] {raw, enchanted, refined}, tier);
 	}
 
-	// no ladder for this metal anymore, each tier by its item name
+	// no ladder anymore = each tier by name
 	public Map<String, Long> items() {
 		Map<String, Long> items = new LinkedHashMap<>();
 		if (raw > 0) items.put(metal, raw);
@@ -56,7 +56,7 @@ public record MetalYield(String metal, long raw, long enchanted, long refined) {
 		return items;
 	}
 
-	// raw whole, others 1 decimal like fine gems. f.e. "301.3 Enchanted Tungsten"
+	// raw whole, others 1 decimal. f.e. "301.3 Enchanted Tungsten"
 	public String text(int tier) {
 		Ladder ladder = ladder();
 		if (ladder == null) {
@@ -65,7 +65,6 @@ public record MetalYield(String metal, long raw, long enchanted, long refined) {
 		return amount(ladder, tier) + " " + ladder.name(tier, null);
 	}
 
-	// like text, names in hypixels look
 	public String styledText(int tier, ItemNames names) {
 		Ladder ladder = ladder();
 		if (ladder == null) {
@@ -74,13 +73,13 @@ public record MetalYield(String metal, long raw, long enchanted, long refined) {
 		return names.styled(ladder.name(tier, null), amount(ladder, tier));
 	}
 
-	// stats record, tier only like "391.0 Fine". f.e. "301.3 Enchanted", "48,531 Tungsten"
+	// f.e. "301.3 Enchanted", "48,531 Tungsten"
 	public String shortText(int tier) {
 		if (ladder() == null || tier == RAW) return amount(RAW) + " " + metal;
 		return amount(tier) + (tier == ENCHANTED ? " Enchanted" : " Refined");
 	}
 
-	// no name, f.e. "301.3". null ladder = raw count
+	// f.e. "301.3". null ladder = raw count
 	public String amount(int tier) {
 		Ladder ladder = ladder();
 		return ladder == null ? Format.number(raw) : amount(ladder, tier);

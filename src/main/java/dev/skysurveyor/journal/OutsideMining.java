@@ -21,11 +21,11 @@ import dev.skysurveyor.detection.ShaftEvent.ShaftLeft;
 import dev.skysurveyor.detection.ShaftEvent.Supercraft;
 import dev.skysurveyor.detection.TextPatterns;
 
-// sacks gains while mining in the dwarven mines, not in a shaft (research/09)
-// only msgs w/ mining in their window, so stash pickups, crafts etc when idle dont count
-// removed ignored, sell sacks or withdrawing isnt income lost. only compaction comes off (Compaction)
+// mines sacks gains outside shafts (research/09)
+// only msgs w/ mining in their window, idle pickups + crafts dont count
+// removed ignored, selling isnt lost income. only compaction comes off
 public final class OutsideMining {
-	// msg comes a moment after its window, display choice
+	// msg lags its window, display choice
 	private static final long SLACK_MILLIS = 2_000L;
 
 	private final TextPatterns patterns;
@@ -34,9 +34,9 @@ public final class OutsideMining {
 	private final Consumer<MiningEntry> listener;
 	private final Map<String, Long> pristineSinceSacks = new LinkedHashMap<>();
 	private final Map<String, Long> crafted = new HashMap<>();
-	// owed carries on for the whole game, a leftover compacted later was counted here too
+	// owed carries all game, later compacted leftovers were counted here
 	private final Compaction compaction = new Compaction();
-	// per gem, rough + flawed reported outside, for the tails rough
+	// per gem rough + flawed, for the tails rough
 	private final Map<String, long[]> reported = new HashMap<>();
 
 	public OutsideMining(TextPatterns patterns, BooleanSupplier inMiningArea, LongFunction<Journal.Session> session,
@@ -59,9 +59,9 @@ public final class OutsideMining {
 				crafted.clear();
 			}
 			case ShaftLeft left -> {
-				// mining from before the shaft doesnt count for later msgs
+				// mining before the shaft doesnt count for later msgs
 				clock.reset();
-				// leftovers from before the shaft compacted in it, counted out here first
+				// leftovers compacted in the shaft, counted out first
 				compaction.owe(left.shaft().compactionOwed());
 			}
 			case Pristine pristine -> {
@@ -76,7 +76,7 @@ public final class OutsideMining {
 		}
 	}
 
-	// gem -> fine equivalent, biggest first
+	// biggest first
 	public static Map<String, Double> fineGems(List<MiningEntry> mining, TextPatterns patterns) {
 		Map<String, Double> gems = new HashMap<>();
 		for (MiningEntry entry : mining) GemYield.fineByGem(entry.items(), patterns).forEach((gem, fine) -> gems.merge(gem, fine, Double::sum));
@@ -86,7 +86,7 @@ public final class OutsideMining {
 		return sorted;
 	}
 
-	// last secs before it never show in sacks (research/06, 07)
+	// last secs never show in sacks (research/06, 07)
 	public void onWorldChange(long now) {
 		if (!clock.inShaft() && !pristineSinceSacks.isEmpty() && clock.minedSince(now - Journal.PAUSE_MILLIS)) {
 			Map<String, Long> tail = tail();
@@ -107,13 +107,12 @@ public final class OutsideMining {
 		crafted.clear();
 		pristineSinceSacks.clear();
 		if (items.isEmpty() || !clock.minedSince(windowStart(sacks, now))) return;
-		// tail ratio from the mix as mined, like GemYield
+		// tail ratio from gross mix, like GemYield
 		Compaction.beforeCompacting(items, compacted).forEach(this::remember);
 		items = compaction.net(items, compacted);
 		if (!items.isEmpty()) emit(now, items, false);
 	}
 
-	// mining since then = the msgs items came from mining
 	static long windowStart(SacksChanged sacks, long now) {
 		return now - sacks.windowSeconds() * 1000L - SLACK_MILLIS;
 	}
@@ -125,7 +124,7 @@ public final class OutsideMining {
 				null));
 	}
 
-	// pristine = flawed only, rough from what this gem gave so far (like GemYield)
+	// pristine = flawed only, rough by this gems ratio
 	private Map<String, Long> tail() {
 		Map<String, Long> tail = new LinkedHashMap<>();
 		pristineSinceSacks.forEach((item, flawed) -> {

@@ -10,7 +10,6 @@ import dev.skysurveyor.journal.JournalStats.SessionSummary;
 import dev.skysurveyor.mining.Efficiency;
 import dev.skysurveyor.money.MoneyStats;
 
-// the Stats tabs personal bests, built from a list the player can change
 public final class PersonalBests {
 	public enum Per {
 		SHAFT("Per shaft"),
@@ -38,9 +37,9 @@ public final class PersonalBests {
 		SHAFT_INSIDE("shaft_inside", Per.SHAFT, "Time inside", false),
 		SHAFT_CORPSES("shaft_corpses", Per.SHAFT, "Corpses", false),
 		SHAFT_LAPIS("shaft_lapis", Per.SHAFT, "Lapis", false),
-		// coldest = lowest, cold is negative
+		// cold is negative, lowest = coldest
 		SHAFT_COLD("shaft_cold", Per.SHAFT, "Cold", true),
-		// own blocks against nonstop, shafts w/ 5 min of mining (mining/Efficiency.record)
+		// shafts w/ 5 min of mining (Efficiency.record)
 		SHAFT_EFFICIENCY("shaft_efficiency", Per.SHAFT, "Efficiency", false),
 		SESSION_SHAFTS("session_shafts", Per.SESSION, "Shafts", false),
 		SESSION_RATE("session_rate", Per.SESSION, "Shafts / h", false),
@@ -91,7 +90,7 @@ public final class PersonalBests {
 			};
 		}
 
-		// same name in the other per, f.e. coins / shaft <-> coins / session
+		// f.e. coins / shaft <-> coins / session
 		public Stat in(Per other) {
 			for (Stat stat : values()) {
 				if (stat.per == other && stat.displayName.equals(displayName)) return stat;
@@ -107,7 +106,7 @@ public final class PersonalBests {
 		}
 	}
 
-	// saved as is. shaft = type code f.e. JASP, any variant. best "lowest"/"highest", null = the stats own. name null = made up
+	// saved as is. shaft = type code f.e. JASP. best null = stats own, name null = made up
 	public record Def(String stat, String shaft, String best, String name) {
 		public static final String LOWEST = "lowest";
 		public static final String HIGHEST = "highest";
@@ -129,10 +128,10 @@ public final class PersonalBests {
 		}
 	}
 
-	// most wanted shaft, Docs/Text File.md
+	// most wanted shaft (Docs/Text File.md)
 	public static final String DEFAULT_DRY = "JASP";
 
-	// nicks pick (2026-11-14): fastest spawn, fastest session + lapis / shaft gone
+	// nicks pick (11-14): fastest spawn, fastest session + lapis / shaft gone
 	public static final List<Def> DEFAULTS = List.of(new Def("session_rate", null, null, null),
 			new Def("session_shafts", null, null, null), new Def("shaft_powder", null, null, null),
 			new Def("shaft_gems", null, null, null), new Def("shaft_efficiency", null, null, null), new Def("shaft_metal", null, null, null),
@@ -150,7 +149,7 @@ public final class PersonalBests {
 			return total;
 		}
 
-		// mining outside shafts, null = none or no price
+		// null = none or no price
 		default Double outside(List<MiningEntry> mining) {
 			return null;
 		}
@@ -170,7 +169,7 @@ public final class PersonalBests {
 		}
 	}
 
-	// value null = nothing counts yet. streaks: value = longest, entry = the shaft that ended it (null = still going)
+	// value null = nothing yet. streaks: entry = shaft that ended it, null = still going
 	public record Result(Double value, JournalEntry entry, SessionSummary session, Long current) {
 		static final Result NONE = new Result(null, null, null, null);
 	}
@@ -178,13 +177,13 @@ public final class PersonalBests {
 	private PersonalBests() {
 	}
 
-	// stable id for HUD lines, from what it counts. survives renames + reordering
+	// survives renames + reordering
 	public static String key(Def def) {
 		String shaft = def.shaftOrDefault();
 		return def.stat() + (shaft == null ? "" : "_" + shaft.toLowerCase(java.util.Locale.ROOT)) + (def.best() == null ? "" : "_" + def.best());
 	}
 
-	// the shaft ur in counts for a drystreak, its own type ends it
+	// shaft ur in counts, its own type ends it
 	public static long liveDry(long saved, String type, boolean inShaft, String inShaftType) {
 		if (!inShaft) return saved;
 		return type.equals(inShaftType) ? 0 : saved + 1;
@@ -202,7 +201,8 @@ public final class PersonalBests {
 		if (stat == null) return "?";
 		String shaft = def.shaftOrDefault() == null ? null : names.name(def.shaftOrDefault());
 		return switch (stat.per()) {
-			case STREAK -> shaft + " dry";
+			// same word as the hud line (review 11-27)
+			case STREAK -> shaft + " drystreak";
 			case SHAFT -> stat.displayName() + " / " + (shaft == null ? "" : shaft + " ") + "shaft";
 			case SESSION -> {
 				String base = stat.displayName();
@@ -210,6 +210,12 @@ public final class PersonalBests {
 				yield stat.isRate() ? base : base + " / session";
 			}
 		};
+	}
+
+	// "Jasper dry" till 0.27.0-alpha.39, hud lines saved "PB Jasper dry: ". null = name never changed
+	public static String oldName(Def def, ShaftNames names) {
+		if (def.name() != null && !def.name().isBlank() || def.type() != Stat.DRYSTREAK) return null;
+		return names.name(def.shaftOrDefault()) + " dry";
 	}
 
 	public static Result best(Def def, List<JournalEntry> entries, List<SessionSummary> sessions, Coins coins) {
@@ -233,7 +239,7 @@ public final class PersonalBests {
 	private record Best<T>(T item, double value) {
 	}
 
-	// first one wins a tie
+	// first wins a tie
 	private static <T> Best<T> best(List<T> items, boolean lowest, Function<T, Double> valueOf) {
 		Best<T> best = null;
 		for (T item : items) {
@@ -248,13 +254,13 @@ public final class PersonalBests {
 		return shaft == null || shaft.equals(entry.shaftType());
 	}
 
-	// null = this shaft doesnt count, f.e. no gems in a metal shaft
+	// null = doesnt count, f.e. gems in a metal shaft
 	static Double shaftValue(Stat stat, JournalEntry entry, Coins coins) {
 		return switch (stat) {
 			case SHAFT_COINS -> coins.shaft(entry);
 			case SHAFT_POWDER -> (double) JournalStats.powder(entry);
 			case SHAFT_GEMS -> entry.gems() == null || entry.gems().fineEquivalent() <= 0 ? null : entry.gems().fineEquivalent();
-			// raw count, tungsten and umber alike
+			// raw, tungsten and umber alike
 			case SHAFT_METAL -> entry.metal() == null ? null : entry.metal().in(MetalYield.RAW);
 			case SHAFT_SPAWN -> entry.searchMillis() == null ? null : (double) entry.searchMillis();
 			case SHAFT_INSIDE -> (double) entry.durationMillis();
@@ -269,7 +275,7 @@ public final class PersonalBests {
 	static Double sessionValue(Stat stat, SessionSummary session, String shaft, Coins coins) {
 		List<JournalEntry> counted = shaft == null ? session.entries() : session.entries().stream().filter(e -> matches(e, shaft)).toList();
 		if (counted.isEmpty()) return null;
-		// rates need a few shafts in the session, so 1 lucky spawn isnt a record
+		// so 1 lucky spawn isnt a record
 		boolean rateOk = session.shafts() >= JournalStats.MIN_SHAFTS_FOR_RATE_RECORD;
 		return switch (stat) {
 			case SESSION_SHAFTS -> (double) counted.size();
@@ -289,13 +295,13 @@ public final class PersonalBests {
 		};
 	}
 
-	// all shafts = whole session w/ outside, one shaft type = only those shafts
+	// all = whole session w/ outside, a type = only those shafts
 	private static Double sessionCoins(SessionSummary session, List<JournalEntry> counted, String shaft, Coins coins) {
 		Double shafts = coins.session(counted);
 		return shaft == null ? MoneyStats.plus(shafts, coins.outside(session.mining())) : shafts;
 	}
 
-	// shafts before the first one count as a streak too
+	// shafts before the first count too
 	static Result drystreak(List<JournalEntry> entries, String shaft) {
 		long count = 0;
 		long longest = 0;
@@ -318,7 +324,7 @@ public final class PersonalBests {
 		return new Result((double) longest, ended, null, count);
 	}
 
-	// for tests + the builders list
+	// tests + builders list
 	public static List<Stat> stats(Per per) {
 		List<Stat> out = new ArrayList<>();
 		for (Stat stat : Stat.values()) {

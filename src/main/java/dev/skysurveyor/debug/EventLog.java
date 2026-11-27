@@ -9,7 +9,7 @@ import dev.skysurveyor.detection.ShaftEvent;
 import dev.skysurveyor.detection.ShaftEvent.ColdChanged;
 import dev.skysurveyor.detection.ShaftEvent.FossilEssence;
 
-// last events, unmatched chat + errors for /sv debug log. any thread
+// for /sv debug log. any thread
 public final class EventLog {
 	// display choice
 	public static final int SIZE = 200;
@@ -24,7 +24,7 @@ public final class EventLog {
 	private final Deque<Line> lines = new ArrayDeque<>();
 	private int unmatched;
 
-	// fossil bars come 2 to 3 per block, cold every few secs. theyd push the shaft events + errors out
+	// fossil bars come 2-3 per block, cold every few secs, would push the rest out
 	public static boolean keeps(ShaftEvent event) {
 		return !(event instanceof FossilEssence || event instanceof ColdChanged);
 	}
@@ -49,7 +49,7 @@ public final class EventLog {
 		return null;
 	}
 
-	// since start, not just whats still kept
+	// since start, not just whats kept
 	public synchronized int unmatched() {
 		return unmatched;
 	}

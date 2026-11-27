@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import io.wispforest.owo.ui.component.TextBoxComponent;
+import io.wispforest.owo.ui.component.UIComponents;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.ScrollContainer;
 import io.wispforest.owo.ui.container.UIContainers;
@@ -14,7 +15,9 @@ import io.wispforest.owo.ui.core.Positioning;
 import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.Surface;
 import io.wispforest.owo.ui.core.UIComponent;
+import io.wispforest.owo.ui.core.VerticalAlignment;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 
 import dev.skysurveyor.hud.EditorParts.Chip;
 import dev.skysurveyor.hud.EditorParts.HoverRow;
@@ -29,10 +32,10 @@ import static dev.skysurveyor.hud.EditorParts.spacer;
 import static dev.skysurveyor.screen.ScreenParts.label;
 import static dev.skysurveyor.screen.ScreenParts.strip;
 
-// beside the advanced page, own scroll. keys on top, values below, a click types into the page's field
 final class ValueList {
 	// display choice
 	private static final int FORMAT_TEXT = 0x6A6A6A;
+	private static final Identifier SEARCH_ICON = EditorParts.icon("search_icon");
 	private static final int FORMAT_OFF = 0x333333;
 
 	private final EditHudScreen screen;
@@ -111,7 +114,13 @@ final class ValueList {
 		search.verticalSizing(Sizing.fixed(CHOICE));
 		search.setHint(Component.literal("Search"));
 		screen.tip(search, "Search values by name");
-		panel.child(search);
+		// magnifier like settings
+		FlowLayout searchRow = UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content());
+		searchRow.gap(3);
+		searchRow.verticalAlignment(VerticalAlignment.CENTER);
+		searchRow.child(UIComponents.texture(SEARCH_ICON, 0, 0, 8, 8, 8, 8));
+		searchRow.child(search);
+		panel.child(searchRow);
 
 		content = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content());
 		content.padding(Insets.right(3));
@@ -131,7 +140,7 @@ final class ValueList {
 		return key;
 	}
 
-	// list width minus padding + scrollbar room
+	// minus padding + scrollbar
 	private int inner() {
 		return screen.listWidth() - 8 - 3;
 	}
@@ -221,7 +230,7 @@ final class ValueList {
 		if (mineGroup != null && !text.equals(mineSource)) fillMine(text);
 	}
 
-	// tags in the text as written, a rule typed from these always matches
+	// tags as written, rules from these always match
 	private void fillMine(String text) {
 		mineSource = text;
 		mineGroup.clearChildren();
@@ -241,7 +250,7 @@ final class ValueList {
 		}
 	}
 
-	// beside the panel, same height. sizes known after layout
+	// sizes known after layout
 	void fit(UIComponent beside) {
 		int width = screen.width;
 		boolean panelRight = beside.x() > width / 2;

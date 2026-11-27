@@ -19,18 +19,18 @@ import dev.skysurveyor.settings.MoneySettings;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-// chat + sacks lines from recording 6, counts in the made up sacks msgs are made up
+// chat + sacks lines from rec 6, counts in the made up msgs made up
 class RareDropTest {
 	private static final TextPatterns PATTERNS = TextPatterns.defaults();
 	private static final String CITRINE = "§6§lRARE DROP! §9 Fine Citrine Gemstone §b(§b+105 Magic Find§b)";
 	private static final String PERIDOT = "§6§lRARE DROP! §9 Fine Peridot Gemstone §b(§b+103 Magic Find§b)";
 	private static final String JEWEL = "§6§lRARE DROP! §9Glacite Jewel §b(§b+103 Magic Find§b)";
-	// recording 6 at 16:40.4, cut down
+	// rec 6 at 16:40.4, cut down
 	private static final String SACKS = "§6[Sacks] §a+621§e items§e.§8 (Last 14s.)";
 	private static final String FINE_CITRINE = "§a  +2 §e Fine Citrine Gemstone§8 (Gemstones Sack)§a";
 	private static final String FINE_PERIDOT = "§a  +1 §e Fine Peridot Gemstone§8 (Gemstones Sack)§a";
 	private static final String FLAWED_CITRINE = "§a  +80 §e Flawed Citrine Gemstone§8 (Gemstones Sack)§a";
-	// round made up prices, not real ones
+	// made up round prices
 	private static final Map<String, ItemPrice> PRICES = Map.of(
 			"FLAWLESS_CITRINE_GEM", new ItemPrice(8_000_000.0, 8_400_000.0, null),
 			"GLACITE_JEWEL", new ItemPrice(20_000.0, 21_000.0, null));
@@ -53,7 +53,7 @@ class RareDropTest {
 		tracker.onChat(now, SACKS, List.of("§aAdded items:\n" + String.join("\n", lines)));
 	}
 
-	// like AMET_1 + FAIR_1 in recording 6: left before any sacks msg
+	// like AMET_1 + FAIR_1 in rec 6: left before any sacks msg
 	@Test
 	void shortShaftKeepsItsRareDrops() {
 		enter("AMET_1");
@@ -73,7 +73,7 @@ class RareDropTest {
 		assertEquals(1, value.unpriced().size(), "peridot has no price here");
 	}
 
-	// like JADE_1 in recording 6: the sacks msg after the chat line has the same items
+	// like JADE_1 in rec 6: next sacks msg has the same items
 	@Test
 	void sacksCopyCountedOnce() {
 		enter("JADE_1");
@@ -85,7 +85,7 @@ class RareDropTest {
 		assertEquals(Map.of("Fine Citrine Gemstone", 2L, "Fine Peridot Gemstone", 1L), entry().otherDrops());
 	}
 
-	// sacks has 1 more than chat said (f.e. a corpse that never made it into the loot block), that one still counts
+	// sacks has 1 more than chat (f.e. corpse missing from the loot block), still counts
 	@Test
 	void sacksExtraStillCounts() {
 		enter("JADE_1");

@@ -13,6 +13,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import dev.skysurveyor.detection.TextPatterns;
 import dev.skysurveyor.hud.HudData;
+import dev.skysurveyor.mining.MiningStats;
 import dev.skysurveyor.money.ItemPrice;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -58,7 +59,7 @@ class JournalFileTest {
 		assertEquals(text, Files.readString(path, StandardCharsets.UTF_8), "read never changes the file");
 	}
 
-	// these threw past the per line catch + failed the whole load: empty journal for the run
+	// threw past the per line catch, whole load failed = empty journal
 	@Test
 	void badValuesOnlyLoseTheirOwnLine(@TempDir Path dir) throws IOException {
 		Path path = dir.resolve("journal.jsonl");
@@ -82,6 +83,28 @@ class JournalFileTest {
 		assertEquals(List.of("JADE_1", "JADE_1", "PERI_1", "AMBE_1"), file.load().join().stream().map(JournalEntry::shaftId).toList());
 	}
 
+	// 0.27.0-alpha.3: fiesta, flaskMillis, spawnBlock behind fossil, boostBlocks last in mining
+	@Test
+	void newFieldsGoLastAndComeBack(@TempDir Path dir) throws IOException {
+		Path path = dir.resolve("journal.jsonl");
+		Files.writeString(path, JADE + "\n", StandardCharsets.UTF_8);
+		JournalFile file = new JournalFile(path, Runnable::run);
+		JournalEntry old = file.load().join().getFirst();
+		assertEquals(null, old.fiesta());
+		assertEquals(null, old.flaskMillis());
+		assertEquals(null, old.spawnBlock());
+		MiningStats mining = new MiningStats(700_000, 60_000, 1_000, 100, "green_stained_glass", 11.0, 4.0, 140_000, 0, 11.0, 380);
+		file.append(EntryBuilder.from(old.withPrices(null)).shaftId("PERI_1").mining(mining).fiesta(true, 420_000L)
+				.spawnBlock("green_stained_glass").build());
+		String line = Files.readAllLines(path, StandardCharsets.UTF_8).get(1);
+		assertTrue(line.endsWith(",\"boostBlocks\":380},\"fiesta\":true,\"flaskMillis\":420000,\"spawnBlock\":\"green_stained_glass\"}"), line);
+		JournalEntry back = file.load().join().get(1);
+		assertEquals(true, back.fiesta());
+		assertEquals(420_000L, back.flaskMillis());
+		assertEquals("green_stained_glass", back.spawnBlock());
+		assertEquals(380, back.mining().boostBlocks());
+	}
+
 	record Probe(String name) {
 		Probe {
 			if (name.equals("boom")) throw new IllegalStateException("boom");
@@ -99,7 +122,7 @@ class JournalFileTest {
 		assertFalse(file.failed(), "skipped lines arent a failed read");
 	}
 
-	// first run hint waits on this, a player w/ shafts must never see it
+	// first run hint waits on this, never for a player w/ shafts
 	@Test
 	void unreadableFileCountsAsFailed(@TempDir Path dir) throws IOException {
 		JournalFile missing = new JournalFile(dir.resolve("none.jsonl"), Runnable::run);

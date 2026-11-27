@@ -13,7 +13,7 @@ import dev.skysurveyor.journal.Journal;
 import dev.skysurveyor.settings.DevSettings;
 import dev.skysurveyor.settings.LiveSettings;
 
-// starts + stops the recorder for the journal session, deletes old auto recordings on start. local files only
+// deletes old auto recordings on start. local files only
 public final class AutoRecorder {
 	private static final int CHECK_TICKS = 20;
 
@@ -33,7 +33,7 @@ public final class AutoRecorder {
 
 	public void onTick(Minecraft client) {
 		if (++tick % CHECK_TICKS != 0) return;
-		// file couldnt be written, no retry every second
+		// no retry every second
 		Long failed = recorder.takeFailedAuto();
 		if (failed != null) rule.stoppedByHand(failed);
 		boolean on = settings.get().dev().autoRecord() == DevSettings.AutoRecord.MINING_AREAS;
@@ -53,13 +53,13 @@ public final class AutoRecorder {
 		}
 	}
 
-	// /sv record stop, no new auto recording until the next session
+	// no new auto recording till the next session
 	public void stoppedByHand() {
 		Journal.Session session = activeSession.apply(System.currentTimeMillis());
 		rule.stoppedByHand(session == null ? null : session.id());
 	}
 
-	// io thread, after config.json loaded (else a Forever setting reads as the default)
+	// io thread, after config.json loaded (else Forever reads as the default)
 	public void deleteOld(Path folder) {
 		int days = settings.get().dev().keepRecordings().days();
 		try {

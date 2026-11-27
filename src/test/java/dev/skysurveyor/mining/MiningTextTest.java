@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 class MiningTextTest {
-	// nicks jasper shaft of 2026-11-22 13:01 as 0.26.0-alpha.28 saved it
+	// nicks jasper 11-22 13:01 as 0.26.0-alpha.28 saved it
 	private static final MiningStats JASPER = new MiningStats(710_457, 50_722, 1255, 210, "magenta_stained_glass", 10.0, 4.0, 155_778, 0, 10.0);
 
 	@Test

@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import dev.skysurveyor.Surveyor;
 import dev.skysurveyor.util.Guard;
 
-// read only, only times the packet. vanilla still sends its own pong, we send nothing
+// read only, times the packet. vanilla sends its own pong, we send nothing
 // after ensureRunningOnSameThread = once, on client thread
 @Mixin(ClientCommonPacketListenerImpl.class)
 public abstract class ClientCommonPacketListenerMixin {

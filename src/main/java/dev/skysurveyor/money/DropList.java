@@ -17,26 +17,26 @@ import dev.skysurveyor.money.ShaftValue.Line;
 import dev.skysurveyor.money.ShaftValue.Part;
 import dev.skysurveyor.util.Format;
 
-// hud drops line: what the coins are made of. items + spent add up to the lines net
-// items biggest first, spent = keys + campfires (negative). unpriced = items w/o a price, not rows
-// sources = the same coins per part, outside shafts as 1, each w/ its own items
+// hud drops line. items + spent = the lines net
+// spent = keys + campfires (negative). unpriced = count, not rows
+// sources = same coins per part, outside as 1
 public record DropList(List<Row> items, List<Row> spent, int unpriced, boolean ironman, boolean noPrices, List<Source> sources) {
 	public static final DropList NONE = new DropList(List.of(), List.of(), 0, false, false);
 	public static final DropList NO_PRICES = new DropList(List.of(), List.of(), 0, false, true);
-	// shaftvalues campfire item, sorted after the keys
+	// sorted after keys
 	public static final String CAMPFIRE = "Portable Campfire";
-	// journal tooltips name for it
+	// journal tooltips name
 	public static final String OUTSIDE = "Outside shafts";
 
 	public enum Kind {
 		GEM, METAL, ITEM, SOURCE, MORE, SPENT
 	}
 
-	// gems counted in fine, named fine. color = § code char, rarity for items
+	// gems in fine, named fine. color = § code char
 	public record Row(Kind kind, String name, double count, double coins, char color) {
 	}
 
-	// items biggest first, gems merged per gem inside it
+	// gems merged per gem
 	public record Source(Row row, List<Row> items) {
 		public Source {
 			items = List.copyOf(items);
@@ -71,7 +71,7 @@ public record DropList(List<Row> items, List<Row> spent, int unpriced, boolean i
 		}
 	}
 
-	// shafts + outside kept apart, by source needs it later
+	// kept apart for by source later
 	public static DropList of(List<Line> shafts, List<Line> outside, boolean ironman, TextPatterns patterns) {
 		Map<String, Sum> sums = new LinkedHashMap<>();
 		Map<String, Map<String, Sum>> bySource = new LinkedHashMap<>();
@@ -120,14 +120,14 @@ public record DropList(List<Row> items, List<Row> spent, int unpriced, boolean i
 		return new DropList(items, spent, unpriced, ironman, false, sources);
 	}
 
-	// what a list is made from, per origin. any = something to count, priced = some of it had prices
+	// any = something to count, priced = some had prices
 	public static final class Lines {
 		private final List<Line> shafts = new ArrayList<>();
 		private final List<Line> outside = new ArrayList<>();
 		private boolean any;
 		private boolean priced;
 
-		// null = no prices for it yet
+		// null = no prices yet
 		public Lines shaft(ShaftValue value) {
 			any = true;
 			if (value != null) {
@@ -137,7 +137,7 @@ public record DropList(List<Row> items, List<Row> spent, int unpriced, boolean i
 			return this;
 		}
 
-		// null = no prices for it yet
+		// null = no prices yet
 		public Lines outside(List<Line> lines) {
 			any = true;
 			if (lines != null) {
@@ -159,7 +159,7 @@ public record DropList(List<Row> items, List<Row> spent, int unpriced, boolean i
 			return sum;
 		}
 
-		// 1 line per part + item, so all-time stays small. same list after
+		// 1 line per part + item, keeps all-time small
 		public Lines summed() {
 			Lines sum = new Lines();
 			sum.shafts.addAll(sum(shafts));
@@ -212,12 +212,12 @@ public record DropList(List<Row> items, List<Row> spent, int unpriced, boolean i
 		sum.coins = MoneyStats.plus(sum.coins, line.coins());
 	}
 
-	// rows 0 = all, like shown
+	// 0 = all
 	public List<Source> shownSources(int rows) {
 		return fold(sources, rows, s -> s.row().coins(), more -> new Source(more, List.of()));
 	}
 
-	// rows 0 = all. the rest folds into "N more", 1 left over shows itself
+	// 0 = all. 1 left over shows itself, no "1 more"
 	private static <T> List<T> fold(List<T> all, int rows, ToDoubleFunction<T> coins, Function<Row, T> wrap) {
 		if (rows <= 0 || all.size() <= rows + 1) return all;
 		List<T> shown = new ArrayList<>(all.subList(0, rows));
@@ -231,7 +231,7 @@ public record DropList(List<Row> items, List<Row> spent, int unpriced, boolean i
 		return items.isEmpty() && spent.isEmpty() && unpriced == 0;
 	}
 
-	// items + spent, = the coins line
+	// = the coins line
 	public double total() {
 		double total = 0;
 		for (Row row : items) total += row.coins();
@@ -243,7 +243,7 @@ public record DropList(List<Row> items, List<Row> spent, int unpriced, boolean i
 		return fold(items, rows, Row::coins, more -> more);
 	}
 
-	// gems + metals 1 decimal under 10, raw metal stays whole. no amount on more + source rows
+	// 1 decimal under 10, raw metal whole. no amount on more + source rows
 	public static String amount(Row row) {
 		if (row.kind() == Kind.MORE || row.kind() == Kind.SOURCE) return "";
 		boolean decimal = row.kind() == Kind.GEM || row.kind() == Kind.METAL && Ladder.metal(row.name()) == null;

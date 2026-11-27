@@ -7,6 +7,7 @@ import java.util.Map;
 
 import dev.skysurveyor.data.CorpseType;
 import dev.skysurveyor.data.ItemNames;
+import dev.skysurveyor.data.ShaftNames;
 import dev.skysurveyor.detection.Shaft.ExitReason;
 import dev.skysurveyor.money.CoinBreakdown;
 import dev.skysurveyor.money.Coins;
@@ -24,11 +25,13 @@ public final class SummaryText {
 	private SummaryText() {
 	}
 
-	// session already incl entry, null = no session line. value null = no prices yet
+	// session incl entry, null = no session line. value null = no prices yet
 	public static List<String> lines(JournalEntry entry, Journal.Session session, ShaftValue value, MoneySettings money) {
 		List<String> lines = new ArrayList<>();
 		lines.add(RULE);
-		lines.add(" §b§l" + (entry.shaftId() == null ? "Mineshaft" : entry.shaftId())
+		ShaftNames names = ShaftNames.defaults();
+		// colour before §l, a colour resets bold
+		lines.add(" " + (entry.shaftId() == null ? "§b§lMineshaft" : names.colorCodeOf(entry.shaftId()) + "§l" + names.shaftName(entry.shaftId()))
 				+ "  §7inside §f" + Format.duration(entry.durationMillis()) + exit(entry.exitReason()));
 		lines.add(" §7Spawned in " + (entry.searchMillis() == null ? "§8not timed" : "§f" + Format.duration(entry.searchMillis())));
 
@@ -56,6 +59,18 @@ public final class SummaryText {
 		return lines;
 	}
 
+	// settings preview, same made up shaft as ToastText.example
+	public static List<String> example() {
+		ShaftNames names = ShaftNames.defaults();
+		return List.of(RULE,
+				" " + names.colorCodeOf("JASP_1") + "§l" + names.shaftName("JASP_1") + "  §7inside §f4m 12s",
+				" §7Spawned in §f1m 30s",
+				" §7Corpses §9Lapis 2/2§7, §fUmber 1/1",
+				" §7Coins §6+1.2M §8(gems 1.0M, corpses 420k, keys -220k)",
+				" §7Session §f5 shafts§7, avg spawn §f1m 30s",
+				RULE);
+	}
+
 	// chat + toast
 	static String session(Journal.Session session) {
 		String line = "§f" + session.shafts() + (session.shafts() == 1 ? " shaft" : " shafts");
@@ -74,7 +89,7 @@ public final class SummaryText {
 			double total = value.total(part);
 			if (Math.round(total) != 0) parts.add(PART_NAMES.get(part) + " " + Coins.format(total));
 		}
-		// 1 part = same as the total
+		// 1 part = same as total
 		if (parts.size() > 1) line += " §8(" + String.join(", ", parts) + ")";
 		int unpriced = value.unpriced().size();
 		if (unpriced > 0) line += " " + CoinBreakdown.unpriced(unpriced, ironman);
@@ -91,14 +106,16 @@ public final class SummaryText {
 
 	private static String exit(ExitReason exit) {
 		return switch (exit) {
-			case DEATH, WARP -> " §8(" + exitName(exit).toLowerCase(Locale.ROOT) + ")";
+			// same colours as the toast
+			case DEATH -> " §c(" + exitName(exit).toLowerCase(Locale.ROOT) + ")";
+			case WARP -> " §7(" + exitName(exit).toLowerCase(Locale.ROOT) + ")";
 			default -> "";
 		};
 	}
 
 	public static String exitName(ExitReason exit) {
 		return switch (exit) {
-			case BYE -> "Took the exit";
+			case BYE -> "Left by the exit";
 			case WARP -> "Warped out";
 			case DEATH -> "Froze";
 			default -> "Unknown";

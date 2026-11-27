@@ -19,8 +19,8 @@ import dev.skysurveyor.util.Guard;
 
 // read only, never cancels or edits a packet
 // after ensureRunningOnSameThread (not HEAD) = once, on client thread
-// sees chat before fabric msg events + the chat hud, a cancelling HEAD inject in another mod still hides it
-// guarded, a throw here = vanilla disconnects. chat required, rest require 0 so a moved target in a hotfix cant crash on join
+// sees chat before fabric events + chat hud. a cancelling HEAD inject elsewhere still hides it
+// guarded, a throw = vanilla disconnects. chat required, rest require 0 so a moved target cant crash on join
 @Mixin(value = ClientPacketListener.class, priority = 500)
 public abstract class ClientPacketListenerMixin {
 	private static final String ENSURE_THREAD =
@@ -42,7 +42,7 @@ public abstract class ClientPacketListenerMixin {
 		Guard.run("recorder title", () -> Surveyor.RECORDER.onTitle(packet.text(), true));
 	}
 
-	// every server switch, even same dimension (that keeps the old ClientLevel)
+	// every server switch, even same dimension (keeps the old ClientLevel)
 	@Inject(method = "handleLogin", require = 0, at = @At(value = "INVOKE", target = ENSURE_THREAD, shift = At.Shift.AFTER))
 	private void skysurveyor$onLogin(ClientboundLoginPacket packet, CallbackInfo ci) {
 		Guard.run("server change", () -> Surveyor.HUD.onServerChange());

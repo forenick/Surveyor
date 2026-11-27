@@ -18,7 +18,7 @@ import dev.skysurveyor.detection.Shaft;
 import dev.skysurveyor.detection.ShaftTracker;
 import dev.skysurveyor.settings.WaypointSettings;
 
-// vanilla gizmos, always on top = through walls (nicks exception, fixed spots only). the world only hides it
+// through walls ok: fixed spots only (nicks exception)
 public final class FossilWaypointRenderer {
 	// display choices
 	private static final int FILL_ALPHA = 0x30000000;
@@ -38,7 +38,7 @@ public final class FossilWaypointRenderer {
 		this.settings = settings;
 	}
 
-	// client tick. reads the box only to hide it, the spot stays from fossil_spots.txt
+	// box read only to hide it, spot is from fossil_spots.txt
 	public void tick(Minecraft client) {
 		ClientLevel level = client.level;
 		if (level == null || !settings.get().isFossil() || ticks++ % CHECK_TICKS != 0) return;
@@ -47,7 +47,7 @@ public final class FossilWaypointRenderer {
 				.contains(BuiltInRegistries.BLOCK.getKey(level.getBlockState(pos.set(x, y, z)).getBlock()).getPath()));
 	}
 
-	// LevelRenderEvents.BEFORE_GIZMOS, inside vanillas per frame collector
+	// BEFORE_GIZMOS, inside vanillas frame collector
 	public void render() {
 		WaypointSettings shown = settings.get();
 		if (!shown.isFossil()) return;

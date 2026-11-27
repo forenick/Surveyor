@@ -26,7 +26,7 @@ class RecordingReplayTest {
 		assertEquals(1260, aqua.exitPowder());
 		assertEquals(List.of(new Corpse("Lapis", true), new Corpse("Tungsten", false)), aqua.corpses());
 		assertEquals(1, aqua.loots().size());
-		// found + 1 owned = given, a 2nd click would be 2 owned (recordings 2, 5, 8)
+		// found + 1 owned = given, 2nd click = 2 owned (recs 2, 5, 8)
 		assertEquals(List.of("Aquamarine Crystal"), aqua.crystals());
 
 		Shaft jasper = shafts.get(1);
@@ -59,12 +59,12 @@ class RecordingReplayTest {
 		assertEquals(135_434, jade.sacksAdded().get("Rough Jade Gemstone"));
 		assertEquals(28_635, jade.sacksAdded().get("Flawed Jade Gemstone"));
 		assertEquals(1836, Math.round(jade.lastSacksAt() / 1000.0));
-		// incl unreported tail. research/06 says 25,462 but its 614 msgs add to 25,870
+		// incl unreported tail. research/06 says 25,462, its own 614 msgs add to 25,870 lol
 		assertEquals(25_870, jade.pristineItems().get("Flawed Jade Gemstone"));
 		assertEquals(614, jade.pristineProcs());
 	}
 
-	// recording 3 (2026-11-11), checked vs live log
+	// rec 3 (11-11), checked vs live log
 	@Test
 	void recording3() throws IOException {
 		List<Shaft> shafts = shafts("2026-11-11_14-13-53.jsonl");

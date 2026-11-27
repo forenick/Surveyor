@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PatternOverridesTest {
-	// research/05 campfire msg, w/ a made up hypixel rewording
+	// research/05 campfire msg, made up rewording
 	private static final String NEW_TEXT = "You set down a Portable Campfire!";
 
 	@Test
@@ -36,7 +36,7 @@ class PatternOverridesTest {
 		assertThrows(RuntimeException.class, () -> TextPatterns.builtInWith(List.of("key ([")));
 	}
 
-	// LootSummary reads quality, a missing group crashed the journal
+	// missing group crashed the journal (LootSummary reads quality)
 	@Test
 	void missingGroupThrows() {
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class,

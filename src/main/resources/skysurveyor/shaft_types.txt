@@ -1,5 +1,5 @@
 # format: CODE = Name, #RRGGBB (stats bar color) &x (HUD colour)
-# names from research/01. seen = in nicks recordings, rest from wiki/skyhanni, unconfirmed
+# names from research/01. seen = in nicks recs, rest from wiki/skyhanni, unconfirmed
 # colors are a display choice, not game data. HUD only has the 16 mc colours
 AMET = Amethyst, #9B4DCA &5         # seen
 AQUA = Aquamarine, #3FC1C9 &3       # seen

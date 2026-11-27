@@ -1,6 +1,6 @@
 package dev.skysurveyor.detection;
 
-// shafts for tests outside this package, Shaft(long) is package private
+// Shaft(long) is package private
 public final class TestShafts {
 	private TestShafts() {
 	}

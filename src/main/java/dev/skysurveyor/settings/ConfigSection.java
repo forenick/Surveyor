@@ -7,7 +7,7 @@ import java.util.function.UnaryOperator;
 
 import com.google.gson.JsonElement;
 
-// one object in config.json. read: null = default. whole: written whole + left out while default, so better defaults reach every1
+// read: null = default. whole = left out while default, better defaults reach every1
 record ConfigSection<T>(String key, Function<Settings, T> get, BiFunction<Settings, T, Settings> with, Function<JsonElement, T> read,
 		boolean whole) {
 	static final ConfigSection<MoneySettings> MONEY = gson("money", MoneySettings.class, Settings::money, Settings::withMoney,
@@ -23,8 +23,10 @@ record ConfigSection<T>(String key, Function<Settings, T> get, BiFunction<Settin
 			Settings::withEntryTitle, EntryTitleSettings::repaired);
 	static final ConfigSection<WaypointSettings> WAYPOINTS = gson("waypoints", WaypointSettings.class, Settings::waypoints,
 			Settings::withWaypoints, WaypointSettings::repaired);
-	// a new files key order + the load order, new ones go last
-	static final List<ConfigSection<?>> ALL = List.of(MONEY, JOURNAL, SUMMARY, PERSONAL_BESTS, DEV, ENTRY_TITLE, WAYPOINTS);
+	static final ConfigSection<CalculatorSettings> CALCULATOR = new ConfigSection<>("calculator", Settings::calculator,
+			Settings::withCalculator, CalculatorSettings::read, true);
+	// key + load order, new ones last
+	static final List<ConfigSection<?>> ALL = List.of(MONEY, JOURNAL, SUMMARY, PERSONAL_BESTS, DEV, ENTRY_TITLE, WAYPOINTS, CALCULATOR);
 
 	private static <T> ConfigSection<T> gson(String key, Class<T> type, Function<Settings, T> get, BiFunction<Settings, T, Settings> with,
 			UnaryOperator<T> repaired) {

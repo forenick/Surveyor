@@ -15,35 +15,31 @@ import dev.skysurveyor.journal.Breaks;
 import dev.skysurveyor.journal.Journal;
 import dev.skysurveyor.screen.ScreenParts;
 
-// the ? help card. beside the panel if it fits there, else over it. never over the toolbar
 final class EditorGuide {
-	// display choice, fits beside the panel at 960x540
+	// display choice, fits beside panel at 960x540
 	private static final int CARD_WIDTH = 330;
-	// display choice, the wider try
+	// display choice
 	private static final int CARD_WIDE = 400;
-	// before each heading, display choice
+	// display choice
 	private static final int GAP = 3;
 	// display choice
 	private static final int SCROLL_STEP = 12;
+	// short on purpose, advanced syntax lives on the Advanced page
 	private static final String TEXT = "§eHow the HUD editor works\n"
-			+ "§fBoxes §7Drag a box to move it. It snaps to the screen edges and other boxes, hold Ctrl to place it "
-			+ "freely. Drop it on the 4 px gap under or next to another box and it sticks: it moves along when that box "
-			+ "grows, shrinks or hides. Arrow keys nudge the selected box, scrolling on it resizes it. Click a box to edit it.\n"
-			+ "§fLines §7Add line shows every value, hover one to see what it counts. Click a line to change its "
-			+ "label, period, format and colours. Drag the grip to move it, untick to hide it. Some values can show a bar or a "
-			+ "chart: pick it under Show.\n"
-			+ "§fPeriods §7This shaft is the shaft you're in. Outside a shaft, the last one. Session is this session, it "
-			+ "ends after " + Journal.SESSION_GAP_MILLIS / 60_000 + " min without mining in the Dwarven Mines or shafting. "
-			+ "Per hour is this session's amount per hour, breaks over " + Breaks.BREAK_MILLIS / 60_000 + " min left out. "
-			+ "All-time is everything in your journal. In Add line, click a period under a value to add that line.\n"
-			+ "§fColours §7A box has a title, label and value colour, a line can have its own. A small square in the "
-			+ "line list means the line has its own.\n"
-			+ "§fShow in §7Picks where a box shows: in shafts, in the Mines, elsewhere. A box that wouldn't show "
-			+ "where you are now says \"hidden here\".\n"
-			+ "§fAdvanced §7On a line's page, Mode Advanced: type the whole line with &e colours, {values} and maths like "
-			+ "{coins / shafts}, plus colour rules like {cold} <= -80 &c. The list beside it types them for you.\n"
-			+ "§fPresets §7+ Preset adds a ready-made box, Reset all brings back the default boxes.\n"
-			+ "§fSaving §7Changes save by themselves. Ctrl+Z undo, Ctrl+Shift+Z redo, Esc steps back.";
+			+ "§fBoxes §7Drag a box to move it. It snaps to edges and other boxes, Ctrl places it freely. Drop it right under or "
+			+ "next to another box and it sticks to it. Scroll on a box to resize it, arrow keys nudge it. Click a box again to "
+			+ "pick the one under it.\n"
+			+ "§fLines §7Click a box, then + Add line. Hover a value to see what it counts. Click a line to change its label, "
+			+ "period, format and colours. Drag its grip to move it, untick it to hide it.\n"
+			+ "§fPeriods §7This shaft is the shaft you're in, or the last one. Session ends after "
+			+ Journal.SESSION_GAP_MILLIS / 60_000 + " min without mining or shafting. Per hour leaves out breaks over "
+			+ Breaks.BREAK_MILLIS / 60_000 + " min. All-time is your whole journal.\n"
+			+ "§fShow in §7Each box shows in shafts, in the Mines, elsewhere, or any mix. Boxes that don't show where you "
+			+ "stand are dimmed and sit under the ones that do.\n"
+			+ "§fMore §7A line can show a bar or chart (Show), have its own colours, or be typed by hand with maths and "
+			+ "colour rules (Mode, Advanced).\n"
+			+ "§fSaving §7Changes save by themselves. Ctrl+Z undoes, Esc steps back. + Preset adds a ready-made box, Reset all "
+			+ "brings back the defaults.";
 
 	private final EditHudScreen screen;
 	private boolean open;
@@ -56,7 +52,7 @@ final class EditorGuide {
 	private int y;
 	private int w;
 	private int h;
-	// screen + panel the lines were made for
+	// what the lines were wrapped for
 	private int wrap;
 	private boolean beside;
 
@@ -74,7 +70,7 @@ final class EditorGuide {
 		h = 0;
 	}
 
-	// last drawn card + frame. kept while a tip hides it
+	// kept while a tip hides it
 	boolean over(double mouseX, double mouseY) {
 		return h > 0 && mouseX >= x - 4 && mouseX < x + w + 4 && mouseY >= y - 4 && mouseY < y + h + 4;
 	}
@@ -83,7 +79,7 @@ final class EditorGuide {
 		scroll = EditorFit.clampScroll(scroll - (int) Math.round(vertical * SCROLL_STEP), height, h);
 	}
 
-	// scrolls if taller than the screen. panel null = no panel open
+	// panel null = no panel open
 	void draw(GuiGraphicsExtractor graphics, UIComponent toolbar, UIComponent panel) {
 		Font font = screen.getFont();
 		int width = screen.width;
@@ -95,7 +91,6 @@ final class EditorGuide {
 		int px = panel == null ? 0 : panelRight ? panel.x() : panel.x() + panel.width();
 		int room = panel == null ? 0 : (panelRight ? px : width - px) - 8 - 2 * ScreenParts.TIP_MARGIN - 6;
 		int full = width - 2 * ScreenParts.TIP_MARGIN - 8;
-		// frame
 		int fits = bottom - top - 8;
 		int key = Objects.hash(width, screenHeight, px, panelRight);
 		if (lines == null || wrap != key) {
@@ -151,7 +146,6 @@ final class EditorGuide {
 		h = visible;
 	}
 
-	// title, then a gap + wrapped lines per heading
 	private void wrap(Font font, int width) {
 		List<FormattedCharSequence> wrapped = new ArrayList<>();
 		int total = 0;

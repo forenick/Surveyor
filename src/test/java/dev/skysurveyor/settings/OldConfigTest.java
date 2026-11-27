@@ -3,6 +3,7 @@ package dev.skysurveyor.settings;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
@@ -15,6 +16,8 @@ import org.junit.jupiter.api.TestFactory;
 import org.junit.jupiter.api.io.TempDir;
 
 import dev.skysurveyor.OldSaves;
+import dev.skysurveyor.calc.Layouts;
+import dev.skysurveyor.journal.StatsRange;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -255,7 +258,7 @@ class OldConfigTest {
 		assertFalse(summary.has("style"));
 	}
 
-	// what 0.22.0-alpha.15 wrote on a first start, key order + layout. metalTier new at the end since 0.23.0, ownMetal since 0.24.0, chart types since 0.24.0-alpha.12, dev since 0.26.0-alpha.3, entryTitle since 0.26.0-alpha.23, waypoints since alpha.24
+	// 0.22.0-alpha.15 first start, key order + layout. new at the end: metalTier 0.23.0, ownMetal 0.24.0, charts 0.24.0-alpha.12, dev 0.26.0-alpha.3, entryTitle alpha.23, waypoints alpha.24, statsRange 0.27.0-alpha.39
 	@Test
 	void newFileLooksTheSame(@TempDir Path tmp) throws Exception {
 		new ConfigFile(tmp).reloadIfChanged();
@@ -274,7 +277,8 @@ class OldConfigTest {
 				  "journal": {
 				    "byDay": true,
 				    "spawnChart": "bars",
-				    "coinChart": "bars"
+				    "coinChart": "bars",
+				    "statsRange": "all_time"
 				  },
 				  "summary": {
 				    "show": "toast",
@@ -291,13 +295,116 @@ class OldConfigTest {
 				  },
 				  "entryTitle": {
 				    "show": true,
-				    "seconds": 5.0
+				    "seconds": 5.0,
+				    "verdict": true
 				  },
 				  "waypoints": {
 				    "fossil": true,
 				    "color": "#FF55FF"
 				  }
 				}""", Files.readString(tmp.resolve("config.json")));
+	}
+
+	// ranges since 0.27.0-alpha.39: every older file has neither key
+	@TestFactory
+	Stream<DynamicTest> oldFilesOpenOnTheOldRanges() {
+		return OldSaves.withFile("config.json").stream().map(dir -> DynamicTest.dynamicTest(dir.getFileName().toString(), () -> {
+			Path tmp = Files.createTempDirectory("old-config-range");
+			Path file = tmp.resolve("config.json");
+			Files.copy(dir.resolve("config.json"), file);
+			JsonObject old = JsonParser.parseString(Files.readString(file)).getAsJsonObject();
+			ConfigFile config = new ConfigFile(tmp);
+			config.reloadIfChanged();
+			assertEquals(StatsRange.ALL_TIME, config.get().journal().statsRange(), "stats opened on all-time");
+			assertEquals(StatsRange.LAST_5_SESSIONS, config.get().calculator().range(), "calculator on last 5 sessions");
+
+			// both picked, like a click on a chip
+			JournalSettings journal = config.get().journal();
+			config.save(ConfigSection.JOURNAL, journal, journal.withStatsRange(StatsRange.LAST_7_DAYS));
+			CalculatorSettings calculator = config.get().calculator();
+			config.save(ConfigSection.CALCULATOR, calculator, calculator.withRange(StatsRange.SINCE_PATCH));
+			JsonObject saved = JsonParser.parseString(Files.readString(file)).getAsJsonObject();
+			assertEquals("last_7_days", saved.getAsJsonObject("journal").get("statsRange").getAsString());
+			assertEquals("since_patch", saved.getAsJsonObject("calculator").get("range").getAsString());
+			// the calculator section is rewritten whole, a moved crystal key (alpha.19) is the one thing that changes
+			JsonObject kept = old.deepCopy();
+			if (kept.has("calculator") && kept.getAsJsonObject("calculator").has("typed")) {
+				JsonObject typed = kept.getAsJsonObject("calculator").getAsJsonObject("typed");
+				for (String key : List.copyOf(typed.keySet())) {
+					if (Layouts.movedCrystalKey(key) != null) typed.remove(key);
+				}
+			}
+			OldSaves.assertKept(kept, saved, "config", Map.of());
+
+			ConfigFile reloaded = new ConfigFile(tmp);
+			reloaded.reloadIfChanged();
+			assertEquals(StatsRange.LAST_7_DAYS, reloaded.get().journal().statsRange());
+			assertEquals(StatsRange.SINCE_PATCH, reloaded.get().calculator().range());
+			assertEquals(config.get().journal().byDay(), reloaded.get().journal().byDay());
+			assertEquals(calculator.typed(), reloaded.get().calculator().typed(), "typed numbers stay");
+			assertEquals(calculator.keyLoot(), reloaded.get().calculator().keyLoot());
+			assertEquals(calculator.minedShafts(), reloaded.get().calculator().minedShafts());
+			assertEquals(config.get().money(), reloaded.get().money());
+		}));
+	}
+
+	@Test
+	void rangesSaveByNameAndOddOnesFallBack(@TempDir Path tmp) throws Exception {
+		Path file = tmp.resolve("config.json");
+		Files.writeString(file, "{\"journal\": {\"byDay\": false, \"statsRange\": \"last_5_sessions\"},"
+				+ " \"calculator\": {\"typed\": {\"spawn\": 92.0}, \"range\": \"all_time\"}}");
+		ConfigFile config = new ConfigFile(tmp);
+		config.reloadIfChanged();
+		assertEquals(StatsRange.LAST_5_SESSIONS, config.get().journal().statsRange());
+		assertEquals(StatsRange.ALL_TIME, config.get().calculator().range());
+		assertFalse(byDay(config));
+		assertEquals(92.0, config.get().calculator().typed().get("spawn"));
+		long time = 1_000;
+		// display names, a later mod's range, wrong types
+		for (String odd : new String[] {"\"Since patch 0.27.3\"", "\"last_30_days\"", "3", "null", "[]", "{}", "true"}) {
+			Files.writeString(file, "{\"journal\": {\"byDay\": false, \"statsRange\": " + odd + "},"
+					+ " \"calculator\": {\"typed\": {\"spawn\": 92.0}, \"range\": " + odd + "}}");
+			Files.setLastModifiedTime(file, FileTime.fromMillis(time += 1_000));
+			config.reloadIfChanged();
+			assertEquals(StatsRange.ALL_TIME, config.get().journal().statsRange(), odd);
+			assertEquals(StatsRange.LAST_5_SESSIONS, config.get().calculator().range(), odd);
+			assertFalse(byDay(config), odd);
+			assertEquals(92.0, config.get().calculator().typed().get("spawn"), odd);
+		}
+	}
+
+	// calculator is left out while default, the range alone brings it in and takes it out again
+	@Test
+	void calculatorRangeIsOnlyWrittenOnceItDiffers(@TempDir Path tmp) throws Exception {
+		Path file = tmp.resolve("config.json");
+		ConfigFile config = new ConfigFile(tmp);
+		config.reloadIfChanged();
+		assertFalse(Files.readString(file).contains("calculator"));
+		CalculatorSettings picked = CalculatorSettings.DEFAULTS.withRange(StatsRange.LAST_7_DAYS);
+		config.save(ConfigSection.CALCULATOR, CalculatorSettings.DEFAULTS, picked);
+		JsonObject json = JsonParser.parseString(Files.readString(file)).getAsJsonObject();
+		assertEquals("last_7_days", json.getAsJsonObject("calculator").get("range").getAsString());
+		assertEquals(List.of("typed", "keyLoot", "minedShafts", "range"), List.copyOf(json.getAsJsonObject("calculator").keySet()), "new key last");
+		config.save(ConfigSection.CALCULATOR, picked, CalculatorSettings.DEFAULTS);
+		assertFalse(Files.readString(file).contains("calculator"));
+	}
+
+	// journal saves changed keys only
+	@Test
+	void statsRangeLeavesTheOtherJournalKeysAlone(@TempDir Path tmp) throws Exception {
+		Path file = tmp.resolve("config.json");
+		Files.writeString(file, "{\"journal\": {\"byDay\": false, \"later\": 1}}");
+		ConfigFile config = new ConfigFile(tmp);
+		config.reloadIfChanged();
+		JournalSettings before = config.get().journal();
+		config.save(ConfigSection.JOURNAL, before, before.withCoinChart(JournalSettings.ChartType.LINE));
+		assertFalse(Files.readString(file).contains("statsRange"), "not written till picked");
+		config.save(ConfigSection.JOURNAL, before, before.withStatsRange(StatsRange.SINCE_PATCH));
+		JsonObject journal = JsonParser.parseString(Files.readString(file)).getAsJsonObject().getAsJsonObject("journal");
+		assertEquals("since_patch", journal.get("statsRange").getAsString());
+		assertEquals(1, journal.get("later").getAsInt());
+		assertFalse(journal.get("byDay").getAsBoolean());
+		assertEquals(List.of("byDay", "later", "coinChart", "statsRange"), List.copyOf(journal.keySet()));
 	}
 
 	// a section gson cant read keeps its last values, the others still load
@@ -323,7 +430,7 @@ class OldConfigTest {
 		assertEquals(SummarySettings.DEFAULTS, config.get().summary());
 	}
 
-	// by day is read by hand, anything odd is the default + the rest still loads
+	// by day read by hand, odd = default, the rest still loads
 	@Test
 	void oddJournalNeverFailsTheLoad(@TempDir Path tmp) throws Exception {
 		Path file = tmp.resolve("config.json");

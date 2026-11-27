@@ -30,7 +30,7 @@ public final class PatternOverrides {
 		}
 	}
 
-	// chat line to show, null = no file + none before. swaps the patterns, so client thread once chat comes in
+	// null = no file + none before. swaps patterns, client thread once chat comes
 	public static String apply(Read read) {
 		boolean had = !TextPatterns.overrides().isEmpty();
 		String kept = had ? "kept the last overrides" : "using the built-in patterns";

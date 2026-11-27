@@ -23,7 +23,7 @@ public final class JournalStats {
 	// so 1 lucky spawn isnt a record. display choice, not a game number
 	public static final int MIN_TIMED_FOR_RECORD = 3;
 
-	// nicks pick (2026-11-11), display choice, not a game number
+	// nicks pick (11-11), display choice, not a game number
 	public static final int MIN_SHAFTS_FOR_RATE_RECORD = 5;
 
 	private JournalStats() {
@@ -37,7 +37,7 @@ public final class JournalStats {
 	public record CorpseCount(int looted, int total) {
 	}
 
-	// mining = outside shafts, empty before 0.24.0-alpha.11. breaks = none before 0.24.0-alpha.18
+	// mining empty before 0.24.0-alpha.11, breaks before 0.24.0-alpha.18
 	public record SessionSummary(long id, List<JournalEntry> entries, List<MiningEntry> mining, List<BreakEntry> breaks) {
 		public SessionSummary(long id, List<JournalEntry> entries) {
 			this(id, entries, List.of(), List.of());
@@ -51,13 +51,13 @@ public final class JournalStats {
 			return id;
 		}
 
-		// last activity, coins mined after the last shaft count w/ their time
+		// last activity, so mining after the last shaft counts
 		public long end() {
 			long end = Math.max(id, entries.getLast().endedAt());
 			return mining.isEmpty() ? end : Math.max(end, mining.getLast().at());
 		}
 
-		// wall clock, breaks included
+		// wall clock, breaks incl
 		public long lengthMillis() {
 			return end() - start();
 		}
@@ -66,12 +66,12 @@ public final class JournalStats {
 			return breakMillis(end());
 		}
 
-		// not counted per hour, breaks ended by then
+		// ended by now
 		public long breakMillis(long now) {
 			return Breaks.counted(breaks, start(), Math.max(end(), now));
 		}
 
-		// what every per hour rate divides by
+		// every per hour rate divides by this
 		public long rateMillis() {
 			return rateMillis(end());
 		}
@@ -113,7 +113,7 @@ public final class JournalStats {
 		}
 	}
 
-	// corpses = with loot seen, item corpses = how many of those dropped it
+	// corpses = w/ loot seen, item corpses = ones that dropped it
 	public record Drops(int corpses, Map<String, ItemDrop> items) {
 	}
 
@@ -140,7 +140,7 @@ public final class JournalStats {
 		}
 	}
 
-	// shaft type code -> shafts since the last one, oldest first in. types never seen = every shaft
+	// never seen = every shaft
 	public static Map<String, Long> drystreaks(List<JournalEntry> entries, List<String> types) {
 		Map<String, Long> dry = new LinkedHashMap<>();
 		long since = 0;
@@ -153,7 +153,7 @@ public final class JournalStats {
 		return dry;
 	}
 
-	// finished on that day, oldest first in
+	// finished that day
 	public static long shaftsOn(List<JournalEntry> entries, LocalDate day, ZoneId zone) {
 		long count = 0;
 		for (int i = entries.size() - 1; i >= 0; i--) {
@@ -169,7 +169,7 @@ public final class JournalStats {
 		return sessions(entries, List.of(), List.of());
 	}
 
-	// sessions w/o a shaft dont show, their mining + breaks neither
+	// no shaft = not shown, its mining + breaks neither
 	public static List<SessionSummary> sessions(List<JournalEntry> entries, List<MiningEntry> mining, List<BreakEntry> breaks) {
 		Map<Long, List<JournalEntry>> bySession = new LinkedHashMap<>();
 		for (JournalEntry entry : entries) {
@@ -193,7 +193,7 @@ public final class JournalStats {
 		return grouped;
 	}
 
-	// colds only from 0.22.0 shafts on
+	// colds only from 0.22.0 on
 	public record Campfires(int placed, List<Integer> colds) {
 		public Double averageCold() {
 			return colds.isEmpty() ? null : colds.stream().mapToInt(Integer::intValue).average().orElseThrow();
@@ -223,7 +223,7 @@ public final class JournalStats {
 		return allTime(entries, List.of(), List.of());
 	}
 
-	// timeMillis = w/o breaks, what the avg rates divide by
+	// timeMillis w/o breaks, avg rates divide by it
 	public static AllTime allTime(List<JournalEntry> entries, List<MiningEntry> mining, List<BreakEntry> breaks) {
 		List<SessionSummary> sessions = sessions(entries, mining, breaks);
 		List<SessionSummary> oldestFirst = new ArrayList<>(sessions);

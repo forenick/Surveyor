@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-// fixtures = real api answers from 2026-11-12, trimmed
+// real api answers 11-12, trimmed
 class PriceBookTest {
 	static JsonObject json(String resource) throws IOException {
 		try (InputStream in = PriceBookTest.class.getResourceAsStream(resource)) {

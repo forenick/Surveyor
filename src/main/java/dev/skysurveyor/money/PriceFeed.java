@@ -31,16 +31,16 @@ import org.slf4j.LoggerFactory;
 
 import dev.skysurveyor.util.SafeWrite;
 
-// io thread only (LiveMoney), only reads public price apis, sends nothing about the player
+// io thread only (LiveMoney). reads public apis, sends nothing about u
 final class PriceFeed {
 	private static final Logger LOGGER = LoggerFactory.getLogger("Surveyor");
-	// hypixel caches bazaar 60-300s, no point asking more often
+	// hypixel caches bazaar 60-300s i think, no point asking more
 	static final long BAZAAR_MAX_AGE = 5 * 60_000L;
 	// display choice, rare drops + campfire only
 	static final long BINS_MAX_AGE = 30 * 60_000L;
 	static final long NAMES_MAX_AGE = 7 * 24 * 60 * 60_000L;
 	static final long RETRY_AFTER = 60_000L;
-	// whole download incl body, request timeout stops at the headers
+	// whole download incl body, request timeout stops at headers
 	static final long DOWNLOAD_TIMEOUT_SECONDS = 60;
 	private static final URI BAZAAR = URI.create("https://api.hypixel.net/v2/skyblock/bazaar");
 	// skyhanni + firmament use elite, hysky = skyblockers (research/03)
@@ -48,6 +48,9 @@ final class PriceFeed {
 			URI.create("https://api.eliteskyblock.com/resources/auctions/neu?mode=smooth"),
 			URI.create("https://hysky.de/api/auctions/lowestbins"));
 	private static final URI ITEMS = URI.create("https://api.hypixel.net/v2/resources/skyblock/items");
+	// changes once a term (124 h), display choice
+	static final long ELECTION_MAX_AGE = 10 * 60_000L;
+	private static final URI ELECTION = URI.create("https://api.hypixel.net/v2/resources/skyblock/election");
 
 	private final Path pricesFile;
 	private final Path itemsFile;
@@ -63,6 +66,7 @@ final class PriceFeed {
 	private volatile Map<String, String> tiers = Map.of();
 	private long namesAt;
 	private long failedAt = Long.MIN_VALUE / 2;
+	private long electionTriedAt = Long.MIN_VALUE / 2;
 
 	PriceFeed(Path folder, String version) {
 		this.pricesFile = folder.resolve("prices.json");
@@ -70,7 +74,7 @@ final class PriceFeed {
 		this.userAgent = "Surveyor/" + version;
 	}
 
-	// any thread. stops the download, queued config saves still run
+	// any thread. queued config saves still run
 	void close() {
 		closed = true;
 		CompletableFuture<?> running = download;
@@ -107,7 +111,7 @@ final class PriceFeed {
 				}
 				book = book.withNpc(PriceBook.parseBins(cached.getAsJsonObject("npc")));
 				names = Map.copyOf(loaded);
-				// caches from before 0.25.0 have no rarities, fetch again
+				// pre 0.25.0 caches have no rarities, refetch
 				namesAt = cached.has("at") && cached.has("tiers") ? cached.get("at").getAsLong() : 0;
 				if (cached.has("tiers")) {
 					Map<String, String> loadedTiers = new HashMap<>();
@@ -151,7 +155,7 @@ final class PriceFeed {
 					if (e instanceof Interrupted || e instanceof Closed) break;
 				}
 			}
-			// only when every source failed, a working fallback shouldnt pause refreshes
+			// only when all failed, working fallback shouldnt pause refreshes
 			if (last != null) failed("lowest BIN", last);
 		}
 		if (changed) writeJson(pricesFile, book.toJson());
@@ -182,7 +186,20 @@ final class PriceFeed {
 		}
 	}
 
-	// 200 w/ an error body parses to nothing, never let it wipe the cache
+	// null = asked recently or failed. failure doesnt pause prices
+	JsonObject fetchElection(long now) {
+		if (now - electionTriedAt < ELECTION_MAX_AGE) return null;
+		electionTriedAt = now;
+		try {
+			return get(ELECTION);
+		} catch (IOException | RuntimeException e) {
+			if (e instanceof Interrupted) Thread.currentThread().interrupt();
+			LOGGER.warn("Could not get the election data: {}", e.toString());
+			return null;
+		}
+	}
+
+	// 200 w/ error body parses empty, never wipe the cache
 	private static <T extends Map<?, ?>> T nonEmpty(T parsed, String what) throws IOException {
 		if (parsed.isEmpty()) throw new IOException(what + " sent no prices");
 		return parsed;

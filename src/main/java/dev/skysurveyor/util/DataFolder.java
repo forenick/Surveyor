@@ -13,7 +13,7 @@ public final class DataFolder {
 	private DataFolder() {
 	}
 
-	// old folder while it couldnt be moved, so data never splits in two
+	// old one if the move failed, data never splits
 	public static Path in(Path gameDir) {
 		Path current = gameDir.resolve(NAME);
 		if (Files.exists(current)) return current;
@@ -21,8 +21,8 @@ public final class DataFolder {
 		return old == null ? current : old;
 	}
 
-	// skips if the new folder exists so old data never overwrites newer
-	// plain move = one rename, a non-empty dir never gets half copied
+	// skip if new exists, never over newer data
+	// one rename, never half copied
 	public static String migrate(Path gameDir) throws IOException {
 		Path current = gameDir.resolve(NAME);
 		Path old = old(gameDir);

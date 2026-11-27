@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-// gaps here are made up, recording 5 has none over 43s
+// made up gaps, rec 5 has none over 43s
 class BreaksTest {
 	private static final long MINUTE = 60_000;
 	private final List<BreakEntry> breaks = new ArrayList<>();
@@ -64,7 +64,7 @@ class BreaksTest {
 	void timeInAShaftAlwaysCounts() {
 		hit(0);
 		event(30_000, new ShaftEntered(null));
-		// looting, warming at a campfire, afk: not mining but in a shaft
+		// looting, campfire, afk: in a shaft, not mining
 		event(12 * MINUTE, new ShaftLeft(null));
 		hit(13 * MINUTE);
 		assertTrue(breaks.isEmpty());
@@ -148,7 +148,7 @@ class BreaksTest {
 	void sessionRatesLeaveBreaksOut() {
 		JournalEntry first = EntryBuilder.entry().sessionId(0).enteredAt(10 * MINUTE).durationMillis(5 * MINUTE).build();
 		JournalEntry second = EntryBuilder.entry().sessionId(0).enteredAt(50 * MINUTE).durationMillis(10 * MINUTE).build();
-		// made up: 25 min selling between the shafts, 23 of it a break
+		// made up: 25 min selling, 23 of it a break
 		BreakEntry selling = new BreakEntry(1, 0, 15 * MINUTE, 40 * MINUTE);
 		SessionSummary session = JournalStats.sessions(List.of(first, second), List.of(), List.of(selling)).getFirst();
 		assertEquals(60 * MINUTE, session.lengthMillis());
@@ -156,7 +156,7 @@ class BreaksTest {
 		assertEquals(37 * MINUTE, session.rateMillis());
 		assertEquals(2 * 60.0 / 37, session.shaftsPerHour(), 1e-9);
 		assertEquals(37 * MINUTE, JournalStats.allTime(List.of(first, second), List.of(), List.of(selling)).timeMillis());
-		// a break after the last activity isnt in the session
+		// break after the last activity isnt in it
 		BreakEntry after = new BreakEntry(1, 0, 60 * MINUTE, 70 * MINUTE);
 		assertEquals(23 * MINUTE, session.withBreaks(List.of(selling, after)).breakMillis());
 	}
@@ -176,7 +176,7 @@ class BreaksTest {
 		assertEquals(List.of(entry), file.read());
 	}
 
-	// recording 5: no gap over 43s, so no breaks and the same rates
+	// rec 5: no gap over 43s, same rates
 	@Test
 	void recordingFiveHasNoBreaks() throws IOException {
 		Replayed plain = replay(-1);
@@ -189,7 +189,7 @@ class BreaksTest {
 		assertEquals(without.shaftsPerHour(), with.shaftsPerHour());
 	}
 
-	// same, w/ a made-up 10 min pause in the tunnels after the 10th shaft
+	// same + made up 10 min pause after the 10th shaft
 	@Test
 	void recordingFiveWithAMadeUpBreak() throws IOException {
 		Replayed plain = replay(-1);
@@ -210,7 +210,7 @@ class BreaksTest {
 	private record Replayed(List<JournalEntry> entries, List<MiningEntry> mining, List<BreakEntry> breaks) {
 	}
 
-	// pauseAfter = shafts before a made-up 10 min pause, -1 = none
+	// pauseAfter -1 = no pause
 	private static Replayed replay(int pauseAfter) throws IOException {
 		Path recording = RecordingReplay.RECORDINGS.resolve("2026-11-15_16-10-29.jsonl");
 		if (!Files.exists(recording)) return null;
@@ -252,7 +252,7 @@ class BreaksTest {
 		tracker.onBlockHit(at);
 	}
 
-	// no real shaft to save, the session stays up w/o it
+	// no real shaft, session stays up w/o it
 	private void event(long at, ShaftEvent event) {
 		if (!(event instanceof ShaftLeft)) journal.onEvent(event, at);
 		tracker.onEvent(event, at);

@@ -62,25 +62,33 @@ class JournalRefreshTest {
 	}
 
 	@Test
+	void opensOnTheLiveSession() {
+		List<SessionSummary> sessions = sessions(entries(2, 3));
+		assertEquals(new View(0, 2, true, true, false), JournalRefresh.opened(sessions, 100 * MINUTE));
+		// older one going = not live, overview
+		assertEquals(new View(0, 2, false, false, true), JournalRefresh.opened(sessions, 0L));
+	}
+
+	@Test
 	void newestShaftFollowsTheGrowingSession() {
 		List<JournalEntry> old = entries(2, 3);
 		List<SessionSummary> before = sessions(old);
-		View view = new View(0, 2, false, true, false);
+		View view = new View(0, 2, true, true, false);
 		List<SessionSummary> after = sessions(plus(old, entry(100, 3)));
-		assertEquals(new View(0, 3, false, true, false), JournalRefresh.after(before, after, view, 100 * MINUTE, true));
+		assertEquals(new View(0, 3, true, true, false), JournalRefresh.after(before, after, view, 100 * MINUTE, false));
 	}
 
 	@Test
 	void olderShaftStaysPicked() {
 		List<JournalEntry> old = entries(2, 3);
 		List<SessionSummary> before = sessions(old);
-		View view = new View(0, 0, false, true, false);
+		View view = new View(0, 0, true, true, false);
 		List<SessionSummary> after = sessions(plus(old, entry(100, 3)));
-		assertEquals(new View(0, 0, false, true, false), JournalRefresh.after(before, after, view, 100 * MINUTE, true));
+		assertEquals(new View(0, 0, true, true, false), JournalRefresh.after(before, after, view, 100 * MINUTE, false));
 	}
 
 	@Test
-	void sessionTabGoesNoneThenStartedThenLive() {
+	void noneThenStartedThenLive() {
 		List<JournalEntry> old = entries(2);
 		List<SessionSummary> before = sessions(old);
 		View none = JournalRefresh.opened(before, null);
@@ -89,26 +97,28 @@ class JournalRefreshTest {
 		View started = JournalRefresh.after(before, before, none, 100 * MINUTE, true);
 		assertEquals(new View(0, 1, false, false, true), started);
 		List<SessionSummary> after = sessions(plus(old, entry(100, 0)));
-		assertEquals(new View(0, 0, false, true, false), JournalRefresh.after(before, after, started, 100 * MINUTE, true));
+		assertEquals(new View(0, 0, true, true, false), JournalRefresh.after(before, after, started, 100 * MINUTE, true));
+		// clicked around meanwhile: stays on the overview
+		assertEquals(false, JournalRefresh.after(before, after, started, 100 * MINUTE, false).viewing());
 	}
 
 	@Test
-	void endedSessionStaysOpenOnTheSessionTab() {
+	void endedSessionStaysOpen() {
 		List<SessionSummary> before = sessions(entries(2, 3));
-		View live = new View(0, 1, false, true, false);
-		assertEquals(new View(0, 1, true, false, false), JournalRefresh.after(before, before, live, null, true));
+		View live = new View(0, 1, true, true, false);
+		assertEquals(new View(0, 1, true, false, false), JournalRefresh.after(before, before, live, null, false));
 	}
 
 	@Test
-	void fileLoadingLateKeepsTheTab() {
+	void fileLoadingLateOpensTheLiveSession() {
 		List<SessionSummary> empty = List.of();
 		View opened = JournalRefresh.opened(empty, null);
 		assertEquals(new View(0, -1, false, false, false), opened);
 		List<SessionSummary> loaded = sessions(entries(2, 4));
-		// overview, not the session tab: stays there, newest picked for later
-		assertEquals(new View(0, 3, false, false, false), JournalRefresh.after(empty, loaded, opened, null, false));
-		// session tab, the loaded newest session is the one going on
-		assertEquals(new View(0, 3, false, true, false), JournalRefresh.after(empty, loaded, opened, 100 * MINUTE, true));
+		// none going: overview, newest picked for later
+		assertEquals(new View(0, 3, false, false, false), JournalRefresh.after(empty, loaded, opened, null, true));
+		// the loaded newest session is the one going on
+		assertEquals(new View(0, 3, true, true, false), JournalRefresh.after(empty, loaded, opened, 100 * MINUTE, true));
 	}
 
 	@Test

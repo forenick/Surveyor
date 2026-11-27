@@ -12,7 +12,7 @@ import dev.skysurveyor.detection.ShaftEvent.SacksChanged;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-// sacks msgs from recording 6 (2026-11-17, skyblock 0.27.3)
+// sacks msgs, rec 6 (11-17, skyblock 0.27.3)
 class CompactionTest {
 	private static final String END = "\n\n§8This message can be disabled in the settings.";
 	private final ChatParser parser = new ChatParser(TextPatterns.defaults());
@@ -72,7 +72,7 @@ class CompactionTest {
 		assertEquals(expected, new Compaction().net(added(first()), compacted));
 	}
 
-	// 4,133 in, 4,160 out: 27 glacite came from earlier msgs, owed until glacite comes in again
+	// 4,133 in, 4,160 out: 27 owed till glacite comes in again
 	@Test
 	void shortfallComesOffTheNextAdds() {
 		Compaction compaction = new Compaction();
@@ -92,7 +92,7 @@ class CompactionTest {
 		assertEquals(Map.of("Hard Stone", 5L), compaction.net(Map.of("Hard Stone", 5L), Map.of()));
 	}
 
-	// 28:21.4 after supercrafting 2,814 flawed + 663 fine jade: removes are the crafts inputs, not compaction
+	// 28:21.4 after supercrafting 2,814 flawed + 663 fine jade: removes = craft inputs
 	@Test
 	void supercraftInputsArentCompaction() {
 		SacksChanged sacks = sacks("§6[Sacks] §a+3,477§e items§e, §c-278,160§e items§e.§8 (Last 7s.)",
@@ -103,14 +103,14 @@ class CompactionTest {
 		assertEquals(Map.of(), Compaction.of(sacks, Map.of("Flawed Jade Gemstone", 2_814L, "Fine Jade Gemstone", 663L)));
 	}
 
-	// synthetic, no real msg removes w/o a compacted add (withdraw or sell sacks)
+	// synthetic, removes w/o an add never recorded (withdraw, sell sacks)
 	@Test
 	void plainRemoveIsIgnored() {
 		SacksChanged sacks = new SacksChanged(30, List.of(new ItemCount("Hard Stone", 300)), List.of(new ItemCount("Glacite", 2_000)), 0, 0);
 		assertEquals(Map.of(), Compaction.of(sacks, Map.of()));
 	}
 
-	// synthetic: whether the compactor takes gems is unconfirmed (review 0.2), netted like glacite if it does
+	// synthetic, gem compactor unconfirmed (review 0.2). netted like glacite if so
 	@Test
 	void gemCompactionNetsLikeGlacite() {
 		SacksChanged sacks = new SacksChanged(30,
@@ -122,7 +122,7 @@ class CompactionTest {
 				new Compaction().net(added(sacks), compacted));
 	}
 
-	// synthetic: sell sacks or a withdraw while pristine adds flawed in the same msg
+	// synthetic: sell or withdraw + pristine flawed in one msg
 	@Test
 	void roughRemovedWithPristineFlawedIsntCompaction() {
 		SacksChanged sold = new SacksChanged(30, List.of(new ItemCount("Flawed Jade Gemstone", 3), new ItemCount("Rough Jade Gemstone", 400)),

@@ -24,7 +24,7 @@ public final class HudSnap {
 		}
 	}
 
-	// dropped on the gap next to others[other]. cross = edge shared w/ it on the other axis, null = none
+	// cross = edge shared on the other axis, null = none
 	public record Stick(int other, HudPlace.Side side, Anchor cross) {
 	}
 
@@ -113,7 +113,7 @@ public final class HudSnap {
 		return others.get(t.index()).anchorX() == edge ? edge : null;
 	}
 
-	// middle of where 2 spans meet on the other axis, gap guide + editor link
+	// middle where 2 spans meet, gap guide + editor link
 	static int middle(double aStart, double aLength, double bStart, double bLength) {
 		return (int) Math.floor((Math.max(aStart, bStart) + Math.min(aStart + aLength, bStart + bLength)) / 2);
 	}

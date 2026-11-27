@@ -29,7 +29,6 @@ import static dev.skysurveyor.hud.EditorParts.pixels;
 import static dev.skysurveyor.hud.EditorParts.spacer;
 import static dev.skysurveyor.screen.ScreenParts.label;
 
-// line page in Advanced mode: text + rules fields, their hints, the value list. one per built page
 final class AdvancedPage {
 	private final EditHudScreen screen;
 	private final Box box;
@@ -43,7 +42,7 @@ final class AdvancedPage {
 	private ValueList list;
 	private String hintSource;
 	private boolean hintNoRoom;
-	// rule hints + placeholder redo only when text, rules or data change
+	// redone only on text, rules or data change
 	private String hintRules;
 	private HudData hintData;
 	private String placeholderSource;
@@ -86,7 +85,7 @@ final class AdvancedPage {
 
 		String start = line.advancedText(box);
 		textArea = new FreeTextArea(Sizing.fill(100), Sizing.fixed(3 * lineHeight + 8), false);
-		// never below whats there, setValue would cut a hand edit + it gets saved
+		// else setValue cuts a hand edit + saves it
 		textArea.setCharacterLimit(Math.max(TEXT_LIMIT, start.length()));
 		textArea.text(start);
 		textArea.margins(Insets.top(2));
@@ -153,7 +152,7 @@ final class AdvancedPage {
 		line.colorRules = AdvancedText.ruleLines(lead + now + " &c");
 		screen.typingRules(true);
 		screen.rebuildPanel();
-		// rebuilt, so the new page's field
+		// rebuilt, new page's field
 		AdvancedPage page = screen.advancedPage();
 		if (page == null) return;
 		page.rulesArea.select(lead.length(), lead.length() + now.length());
@@ -188,7 +187,7 @@ final class AdvancedPage {
 		screen.swallowDrag();
 	}
 
-	// every frame, the fields are polled
+	// every frame, fields are polled
 	void refresh(UIComponent focused) {
 		if (focused == textArea) screen.typingRules(false);
 		else if (focused == rulesArea) screen.typingRules(true);
@@ -197,7 +196,7 @@ final class AdvancedPage {
 		if (list != null) list.refresh(typingRules, source);
 		if (noRoomFor != null && !noRoomFor.equals(source) && !noRoomFor.equals(rulesArea.getValue())) noRoomFor = null;
 		boolean noRoom = noRoomFor != null;
-		// same object = same text, the poll only swaps it on change
+		// same object = same text
 		boolean textChanged = source != hintSource;
 		if (textChanged || noRoom != hintNoRoom) {
 			hintSource = source;
@@ -225,7 +224,7 @@ final class AdvancedPage {
 		}
 	}
 
-	// grey example in the empty rules field. top + bottom = the panels visible part
+	// top + bottom = panels visible part
 	void drawPlaceholder(GuiGraphicsExtractor graphics, int top, int bottom) {
 		if (!rulesArea.getValue().isEmpty()) return;
 		int y = rulesArea.y() + 4;

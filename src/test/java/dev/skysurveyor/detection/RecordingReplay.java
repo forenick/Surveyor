@@ -22,9 +22,9 @@ import dev.skysurveyor.recorder.RecordingFiles;
 public final class RecordingReplay {
 	// not in git (player names), tests skip w/o them
 	public static final Path RECORDINGS = Path.of("..", "Recordings");
-	// world change + the live ShaftLeft it causes land in the same tick
+	// world change + its live ShaftLeft, same tick
 	private static final long SAME_TICK_MILLIS = 50;
-	// event added after live lines -> 1st version that writes it. older recordings cant have it, so replay skips it there
+	// event -> 1st version writing it, replay skips it in older recs
 	static final Map<Class<? extends ShaftEvent>, String> NEWER_EVENTS = Map.of(RareDrop.class, "0.25.0-alpha.16",
 			AbilityExpired.class, "0.26.0-alpha.1", WarpFailed.class, "0.26.0-alpha.21", FossilEssence.class, "0.26.0-alpha.22");
 
@@ -34,7 +34,7 @@ public final class RecordingReplay {
 	public record Timed(long t, String text) {
 	}
 
-	// live = what the game saw, replayed = what the code does now. both from the 1st world change on
+	// live = what the game saw, replayed = code now. both from the 1st world change
 	public record LiveCheck(boolean hasLive, List<Timed> live, List<Timed> replayed) {
 		// -1 = same
 		public int firstDifference() {
@@ -67,7 +67,7 @@ public final class RecordingReplay {
 		return records;
 	}
 
-	// recorded w/ skysurveyor/patterns.txt overrides (0.26.0-alpha.9+) = replay w/ them too
+	// replay w/ the recs own overrides (0.26.0-alpha.9+)
 	static TextPatterns patterns(List<JsonObject> records) {
 		for (JsonObject record : records) {
 			if (!type(record).equals("start") || !record.has("patternOverrides")) continue;
@@ -85,7 +85,7 @@ public final class RecordingReplay {
 			case "scoreboard" -> tracker.onScoreboard(t, strings(record.getAsJsonArray("lines")));
 			case "tablist" -> tracker.onTabList(t, strings(record.getAsJsonArray("lines")));
 			case "actionbar" -> tracker.onActionBar(t, record.get("legacy").getAsString());
-			// 0.26.0-alpha.16+, older recordings have no fossil blocks
+			// 0.26.0-alpha.16+, older recs have none
 			case "block_break" -> tracker.onBlockBreak(record.get("block").getAsString(),
 					record.has("gone") ? strings(record.getAsJsonArray("gone")) : List.of());
 			case "block_hit" -> onBlockHit.accept(t);
@@ -94,7 +94,7 @@ public final class RecordingReplay {
 		}
 	}
 
-	// before the 1st world change the live tracker already knew things replay doesnt
+	// before the 1st world change live knew stuff replay doesnt
 	public static LiveCheck liveCheck(List<JsonObject> records) {
 		boolean hasLive = records.stream().anyMatch(record -> type(record).equals("start") && record.has("live"));
 		String version = records.stream().filter(record -> type(record).equals("start") && record.has("version")
@@ -114,7 +114,7 @@ public final class RecordingReplay {
 				case "live" -> {
 					if (!synced[0]) continue;
 					String text = record.get("event").getAsString();
-					// shaft from before the recording, replay never saw it start
+					// shaft from before the rec, replay never saw it start
 					boolean syncLeft = live.isEmpty() && text.startsWith(ShaftLeft.class.getSimpleName())
 							&& now[0] - syncedAt <= SAME_TICK_MILLIS;
 					if (!syncLeft) live.add(new Timed(now[0], text));
@@ -142,7 +142,7 @@ public final class RecordingReplay {
 		return since == null || version != null && compareVersions(version, since) >= 0;
 	}
 
-	// semver: x.y.z, a release beats its prereleases, prerelease parts numeric where both are
+	// semver, a release beats its prereleases
 	static int compareVersions(String a, String b) {
 		String[] aParts = a.split("-", 2);
 		String[] bParts = b.split("-", 2);

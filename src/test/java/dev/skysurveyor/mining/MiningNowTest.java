@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 
 import dev.skysurveyor.detection.Shaft;
 import dev.skysurveyor.detection.ShaftEvent.PickaxeAbility;
+import dev.skysurveyor.detection.ShaftEvent.PortalSpawned;
 import dev.skysurveyor.detection.ShaftEvent.ShaftEntered;
 import dev.skysurveyor.detection.ShaftEvent.ShaftLeft;
 import dev.skysurveyor.detection.TestShafts;
@@ -14,13 +15,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-// the hud line: this shaft or this tunnel loop (Docs/efficiency-design.md section 5)
+// hud line (efficiency-design.md s5)
 class MiningNowTest {
 	private static final String GEM = "lime_stained_glass";
 	private boolean mines = true;
 	private final MiningNow now = new MiningNow(() -> mines);
 
-	// a block every `every` ticks that takes `ticks`, from `at`. returns the time after the last one
+	// block takes `ticks`, one every `every`. returns time after the last
 	private long mine(long at, int blocks, int ticks, int every) {
 		long t = at;
 		for (int i = 0; i < blocks; i++) {
@@ -86,6 +87,32 @@ class MiningNowTest {
 	}
 
 	@Test
+	void theLoopsMainBlockIsTheSpawnBlock() {
+		assertNull(now.spawnBlock());
+		long end = mine(0, 50, 8, 16);
+		// stone last, like 3 of 39 recorded spawns
+		now.onBreak(end + 100, "infested_stone", 1, true, 0);
+		now.onEvent(new PortalSpawned(true), end + 200);
+		assertNull(now.spawnBlock(), "not in the shaft yet");
+		// the warp clears the loop before the shaft shows
+		now.onWorldChange();
+		Shaft shaft = TestShafts.entered(end + 3_000);
+		now.onEvent(new ShaftEntered(shaft), end + 3_000);
+		assertEquals(GEM, now.spawnBlock());
+		now.onEvent(new ShaftLeft(shaft), end + 60_000);
+		assertEquals(GEM, now.spawnBlock(), "still there for the journal entry");
+	}
+
+	@Test
+	void someoneElsesPortalHasNoSpawnBlock() {
+		long end = mine(0, 50, 8, 16);
+		now.onEvent(new PortalSpawned(false), end + 200);
+		now.onWorldChange();
+		now.onEvent(new ShaftEntered(TestShafts.entered(end + 3_000)), end + 3_000);
+		assertNull(now.spawnBlock());
+	}
+
+	@Test
 	void leavingStartsAFreshLoop() {
 		Shaft shaft = TestShafts.entered(0);
 		now.onEvent(new ShaftEntered(shaft), 0);
@@ -113,7 +140,7 @@ class MiningNowTest {
 		assertEquals(1, now.track(next).size());
 	}
 
-	// recording 9 (PERI_2, 2026-11-21 20:03): looting first, ~50 quartz blocks + slabs broken in 1 to 3 ticks
+	// rec 9 (PERI_2, 11-21 20:03): looting first, ~50 quartz blocks + slabs in 1 to 3 ticks
 	@Test
 	void instaBrokenBlocksWhileLootingShowNothing() {
 		Shaft shaft = TestShafts.entered(0);
@@ -125,7 +152,7 @@ class MiningNowTest {
 			now.onBreak(t, i % 2 == 0 ? "quartz_block" : "quartz_slab", 1 + i % 3, false, 0);
 		}
 		assertNull(now.percent(t), "no real mining yet");
-		// hard stone at the 4 tick minimum, 7 going w/ it (recording 9, AQUA_1)
+		// hard stone at the 4 tick min, 7 going w/ it (rec 9, AQUA_1)
 		for (int i = 0; i < 20; i++) {
 			t += 300;
 			now.onHit(t - 200);

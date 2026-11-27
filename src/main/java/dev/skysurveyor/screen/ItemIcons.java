@@ -18,9 +18,9 @@ import dev.skysurveyor.data.IconRules;
 import dev.skysurveyor.data.SkyblockItems;
 
 // screen only
-// skyblock id in custom_data like hypixel, so texture mods may find it??
+// sb id in custom_data like hypixel, texture mods might find it??
 final class ItemIcons {
-	// per screen so pack changes get picked up
+	// per screen, picks up pack changes
 	private final Map<String, ItemStack> cache = new HashMap<>();
 	private final IconRules standIns = IconRules.defaults();
 	private final SkyblockItems items = SkyblockItems.defaults();

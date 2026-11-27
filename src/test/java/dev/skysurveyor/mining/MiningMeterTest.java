@@ -12,12 +12,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-// hand-made ticks until a recording has block_break lines (Docs/efficiency-design.md, slice 1)
+// hand made ticks (efficiency-design.md slice 1)
 class MiningMeterTest {
 	private static final String GEM = "magenta_stained_glass";
 	private static final String STONE = "stone";
 
-	// a block every `every` ticks that takes `ticks`, from `at`. returns the time after the last one
+	// block takes `ticks`, one every `every`. returns time after the last
 	private static long mine(MiningMeter meter, long at, int blocks, int ticks, int every) {
 		long now = at;
 		for (int i = 0; i < blocks; i++) {
@@ -43,6 +43,20 @@ class MiningMeterTest {
 		assertNull(stats.boostTicks());
 		assertEquals(0, stats.setupMillis());
 		assertEquals(1.0, Efficiency.of(stats), 1e-9);
+	}
+
+	@Test
+	void blocksInBoostAreCountedApart() {
+		MiningMeter meter = new MiningMeter();
+		long end = mine(meter, 0, 100, 13, 13);
+		meter.onEvent(new PickaxeAbility(MiningMeter.BOOST), end);
+		end = mine(meter, end, 60, 4, 6);
+		meter.onEvent(new AbilityExpired(MiningMeter.BOOST), end);
+		end = mine(meter, end, 40, 13, 13);
+		MiningStats stats = meter.stats(0, end);
+		assertEquals(200, stats.blocks());
+		assertEquals(60, stats.boostBlocks());
+		assertEquals(60 * 6 * 50L, stats.boostMillis());
 	}
 
 	@Test
@@ -155,7 +169,7 @@ class MiningMeterTest {
 		assertEquals(1.0, Efficiency.of(stats), 1e-9);
 	}
 
-	// recording 7 (PERI_2, 2026-11-21): a peridot block is green_stained_glass or its pane, stone went w/ stone 9 times
+	// rec 7 (PERI_2, 11-21): gem = glass or pane, stone went w/ stone 9 times
 	@Test
 	void spreadIsTheSameGemOnly() {
 		assertEquals(1, MiningMeter.spread("green_stained_glass", List.of("green_stained_glass_pane")));
@@ -197,7 +211,7 @@ class MiningMeterTest {
 		assertEquals(21, stats.blocks());
 	}
 
-	// recording 7: 30 stone + snow pulled the average to 10.8, the gem took 11
+	// rec 7: 30 stone + snow pulled avg to 10.8, gem took 11
 	@Test
 	void theGemsOwnBreakTimeIsSavedApart() {
 		MiningMeter meter = new MiningMeter();
@@ -213,7 +227,7 @@ class MiningMeterTest {
 		assertEquals(11.0, stats.ticks(), "stone isnt counted since alpha.17");
 	}
 
-	// recording 8 (PERI_C, 2026-11-21): 821 insta-mined hard stone, 554 peridot blocks + 500 panes
+	// rec 8 (PERI_C, 11-21): 821 insta-mined hard stone, 554 peridot blocks + 500 panes
 	@Test
 	void instaMinedStoneIsNotTheMainBlock() {
 		MiningMeter meter = new MiningMeter();
