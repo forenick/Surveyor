@@ -155,5 +155,3 @@ Open an [issue](../../issues/new/choose). For bugs, add your Surveyor version an
 
 ### Credits
 Made by [forenick](https://github.com/forenick).
-
-It's coded with a lot of help from AI (Claude); I decide what goes in and test every build in-game.
